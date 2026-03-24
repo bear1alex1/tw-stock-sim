@@ -1,33 +1,38 @@
 const INITIAL_CASH = 1_000_000;
 const STORAGE_KEY = 'twStock_v1';
 const LOT_SIZE = 1000;
-const PRICE_CACHE_TTL = 60_000;
+const PRICE_CACHE_TTL = 90_000;
 
 let state = loadState();
 const priceCache = {};
+let twseAllCache = { data: null, ts: 0 };
+let tpexAllCache = { data: null, ts: 0 };
+
+// ── Utils ──────────────────────────────────────
 
 function num(value) {
-  const n = Number(String(value).replace(/,/g, '').trim());
+  if (value === null || value === undefined) return null;
+  const cleaned = String(value).replace(/,/g, '').replace(/＋/g, '+').trim();
+  if (!cleaned || /^[-–]{2,}$/.test(cleaned)) return null;
+  const n = Number(cleaned);
   return Number.isFinite(n) ? n : null;
 }
 
 function normalizeSymbol(symbol) {
-  return String(symbol || '')
-    .trim()
-    .toUpperCase()
-    .replace(/\.TW$|\.TWO$/i, '');
+  return String(symbol || '').trim().toUpperCase().replace(/\.TW$|\.TWO$/i, '');
 }
 
 function formatMoney(value) {
-  const n = Math.round(Number(value) || 0);
-  return n.toLocaleString('zh-TW');
+  return Math.round(Number(value) || 0).toLocaleString('zh-TW');
 }
 
 function formatPrice(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n <= 0) return '—';
+  const n = num(value);
+  if (n === null || n <= 0) return '—';
   return n.toFixed(2);
 }
+
+// ── State ──────────────────────────────────────
 
 function getEmptyState() {
   return {
@@ -44,7 +49,6 @@ function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return getEmptyState();
-
     const parsed = JSON.parse(raw);
     return {
       cash: num(parsed.cash) ?? INITIAL_CASH,
@@ -56,19 +60,14 @@ function loadState() {
       realizedPnL: num(parsed.realizedPnL) ?? 0,
       savedAt: parsed.savedAt || new Date().toISOString()
     };
-  } catch {
-    return getEmptyState();
-  }
+  } catch { return getEmptyState(); }
 }
 
-function saveState(currentState) {
-  currentState.savedAt = new Date().toISOString();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(currentState));
-
+function saveState(s) {
+  s.savedAt = new Date().toISOString();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
   const el = document.getElementById('lastSaved');
-  if (el) {
-    el.textContent = '最後儲存：' + new Date(currentState.savedAt).toLocaleString('zh-TW');
-  }
+  if (el) el.textContent = '最後儲存：' + new Date(s.savedAt).toLocaleString('zh-TW');
 }
 
 function updateLastSavedLabel() {
@@ -79,194 +78,193 @@ function updateLastSavedLabel() {
     : '最後儲存：—';
 }
 
+// ── 稅費計算 ───────────────────────────────────
+
 function calcFee(price, lots, side) {
   const amount = price * lots * LOT_SIZE;
   const broker = Math.max(Math.round(amount * 0.001425), 20);
   const tax = side === 'sell' ? Math.round(amount * 0.003) : 0;
-  return {
-    amount,
-    broker,
-    tax,
-    total: broker + tax
-  };
+  return { amount, broker, tax, total: broker + tax };
 }
 
-function parseTwseNumber(value) {
-  if (value === null || value === undefined) return null;
-  const cleaned = String(value).replace(/,/g, '').trim();
-  if (!cleaned || cleaned === '--' || cleaned === '---' || cleaned === '-') return null;
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
-}
+// ── TWSE OpenAPI（上市，原生支援 CORS）─────────
+// https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL
+// 每次回傳當日（或最近交易日）所有上市股票收盤行情
 
-function monthKey(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  return `${y}${m}01`;
-}
-
-async function fetchTwseRecentClose(symbol) {
-  if (!/^\d{4,6}$/.test(symbol)) return null;
-
-  const months = [
-    new Date(),
-    new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1)
-  ];
-
-  for (const d of months) {
-    try {
-      const url = `https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=${monthKey(d)}&stockNo=${symbol}&_=${Date.now()}`;
-      const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) continue;
-
-      const json = await res.json();
-      const rows = Array.isArray(json?.data) ? json.data : [];
-      if (!rows.length) continue;
-
-      for (let i = rows.length - 1; i >= 0; i--) {
-        const row = rows[i];
-        const close = parseTwseNumber(row?.[6]);
-        const diff = parseTwseNumber(String(row?.[7] || '').replace(/[^\d.-]/g, ''));
-        if (close && close > 0) {
-          const previousClose = diff !== null ? close - diff : null;
-          const change = previousClose !== null ? close - previousClose : null;
-          const changePct = previousClose ? (change / previousClose) * 100 : null;
-
-          return {
-            symbol,
-            source: 'twse_close',
-            price: close,
-            previousClose,
-            change,
-            changePct,
-            marketState: 'CLOSED',
-            isClosePrice: true
-          };
-        }
-      }
-    } catch (_) {}
+async function fetchTwseAll() {
+  if (twseAllCache.data && Date.now() - twseAllCache.ts < PRICE_CACHE_TTL) {
+    return twseAllCache.data;
   }
-
-  return null;
+  try {
+    const res = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL', {
+      cache: 'no-store'
+    });
+    if (!res.ok) throw new Error('TWSE status ' + res.status);
+    const json = await res.json();
+    if (!Array.isArray(json) || !json.length) throw new Error('TWSE empty');
+    const map = {};
+    for (const item of json) {
+      const code = String(item.Code || '').trim();
+      const close = num(item.ClosingPrice);
+      const open = num(item.OpeningPrice);
+      const prev = num(item.LastBestAskPrice) ?? num(item.HighestPrice);
+      if (code && close && close > 0) {
+        map[code] = { close, open, prev };
+      }
+    }
+    twseAllCache = { data: map, ts: Date.now() };
+    return map;
+  } catch (e) {
+    console.warn('[TWSE OpenAPI]', e.message);
+    return null;
+  }
 }
 
-async function fetchYahooQuote(symbol) {
+// ── TPEx OpenAPI（上櫃，原生支援 CORS）─────────
+// https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes
+
+async function fetchTpexAll() {
+  if (tpexAllCache.data && Date.now() - tpexAllCache.ts < PRICE_CACHE_TTL) {
+    return tpexAllCache.data;
+  }
+  try {
+    const res = await fetch('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes', {
+      cache: 'no-store'
+    });
+    if (!res.ok) throw new Error('TPEx status ' + res.status);
+    const json = await res.json();
+    if (!Array.isArray(json) || !json.length) throw new Error('TPEx empty');
+    const map = {};
+    for (const item of json) {
+      const code = String(item.SecuritiesCompanyCode || '').trim();
+      const close = num(item.Close);
+      if (code && close && close > 0) {
+        map[code] = { close };
+      }
+    }
+    tpexAllCache = { data: map, ts: Date.now() };
+    return map;
+  } catch (e) {
+    console.warn('[TPEx OpenAPI]', e.message);
+    return null;
+  }
+}
+
+// ── Yahoo Finance via allorigins CORS proxy ─────
+
+async function fetchYahooViaProxy(symbol) {
   const suffixes = ['.TW', '.TWO'];
-
-  for (const suffix of suffixes) {
+  for (const sfx of suffixes) {
     try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}${suffix}?range=5d&interval=1d&includePrePost=false&corsDomain=finance.yahoo.com`;
-      const res = await fetch(url, { cache: 'no-store' });
+      const target = encodeURIComponent(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}${sfx}?range=5d&interval=1d`
+      );
+      const res = await fetch(`https://api.allorigins.win/raw?url=${target}`, {
+        cache: 'no-store'
+      });
       if (!res.ok) continue;
-
       const json = await res.json();
       const result = json?.chart?.result?.[0];
       const meta = result?.meta;
-      const quote = result?.indicators?.quote?.[0];
-      if (!result || !meta || !quote) continue;
+      const quoteArr = result?.indicators?.quote?.[0];
+      if (!result || !meta || !quoteArr) continue;
 
-      const closes = Array.isArray(quote.close)
-        ? quote.close.map(v => num(v)).filter(v => v !== null && v > 0)
+      const closes = Array.isArray(quoteArr.close)
+        ? quoteArr.close.map(v => num(v)).filter(v => v !== null && v > 0)
         : [];
 
-      const regularMarketPrice = num(meta.regularMarketPrice);
-      const previousClose =
+      const marketState = String(meta.marketState || 'CLOSED').toUpperCase();
+      const regularPrice = num(meta.regularMarketPrice);
+      const prevClose =
         num(meta.regularMarketPreviousClose) ??
         num(meta.previousClose) ??
         num(meta.chartPreviousClose);
 
       const lastClose = closes.length ? closes[closes.length - 1] : null;
-      const prevCloseFromSeries = closes.length >= 2 ? closes[closes.length - 2] : previousClose;
-      const marketState = String(meta.marketState || 'CLOSED').toUpperCase();
-
-      let price = null;
-      if (marketState === 'REGULAR' && regularMarketPrice && regularMarketPrice > 0) {
-        price = regularMarketPrice;
-      } else {
-        price = lastClose ?? regularMarketPrice ?? previousClose;
-      }
+      const price = marketState === 'REGULAR'
+        ? (regularPrice ?? lastClose ?? prevClose)
+        : (lastClose ?? regularPrice ?? prevClose);
 
       if (!price || price <= 0) continue;
 
-      const compareBase = previousClose ?? prevCloseFromSeries ?? null;
-      const change = compareBase !== null ? price - compareBase : null;
-      const changePct = compareBase ? (change / compareBase) * 100 : null;
+      const base = prevClose ?? (closes.length >= 2 ? closes[closes.length - 2] : null);
+      const change = base !== null ? price - base : null;
+      const changePct = base ? (change / base) * 100 : null;
 
-      return {
-        symbol,
-        source: 'yahoo',
-        price,
-        previousClose: compareBase,
-        change,
-        changePct,
-        marketState,
-        isClosePrice: marketState !== 'REGULAR'
-      };
+      return { price, previousClose: base, change, changePct, marketState };
     } catch (_) {}
   }
-
   return null;
 }
+
+// ── 主要報價入口 ───────────────────────────────
+// 優先順序：TWSE OpenAPI → TPEx OpenAPI → Yahoo Proxy
 
 async function fetchQuote(symbol) {
   symbol = normalizeSymbol(symbol);
   if (!symbol) return null;
 
   const cached = priceCache[symbol];
-  if (cached && Date.now() - cached.ts < PRICE_CACHE_TTL) {
-    return cached.data;
+  if (cached && Date.now() - cached.ts < PRICE_CACHE_TTL) return cached.data;
+
+  let price = null;
+  let previousClose = null;
+  let change = null;
+  let changePct = null;
+  let marketState = 'CLOSED';
+  let source = null;
+
+  // 1. 嘗試 TWSE OpenAPI
+  const twseMap = await fetchTwseAll();
+  if (twseMap && twseMap[symbol]) {
+    const item = twseMap[symbol];
+    price = item.close;
+    previousClose = item.prev ?? null;
+    change = previousClose !== null ? price - previousClose : null;
+    changePct = previousClose ? (change / previousClose) * 100 : null;
+    source = 'twse';
   }
 
-  let yahoo = null;
-  let twseClose = null;
-
-  try {
-    yahoo = await fetchYahooQuote(symbol);
-  } catch (_) {}
-
-  if (yahoo && yahoo.marketState === 'REGULAR' && yahoo.price > 0) {
-    priceCache[symbol] = { data: yahoo, ts: Date.now() };
-    return yahoo;
+  // 2. 嘗試 TPEx OpenAPI
+  if (!price) {
+    const tpexMap = await fetchTpexAll();
+    if (tpexMap && tpexMap[symbol]) {
+      price = tpexMap[symbol].close;
+      source = 'tpex';
+    }
   }
 
-  try {
-    twseClose = await fetchTwseRecentClose(symbol);
-  } catch (_) {}
-
-  const finalQuote = twseClose || yahoo || null;
-
-  if (finalQuote && finalQuote.price > 0) {
-    priceCache[symbol] = { data: finalQuote, ts: Date.now() };
-    return finalQuote;
+  // 3. 嘗試 Yahoo Finance（透過 CORS proxy）
+  if (!price) {
+    const yahoo = await fetchYahooViaProxy(symbol);
+    if (yahoo && yahoo.price > 0) {
+      price = yahoo.price;
+      previousClose = yahoo.previousClose;
+      change = yahoo.change;
+      changePct = yahoo.changePct;
+      marketState = yahoo.marketState;
+      source = 'yahoo';
+    }
   }
 
-  return null;
+  if (!price || price <= 0) return null;
+
+  const data = { symbol, price, previousClose, change, changePct, marketState, source };
+  priceCache[symbol] = { data, ts: Date.now() };
+  return data;
 }
 
-function getMarketStateLabel(quote) {
-  if (!quote) return '離線';
-  return quote.marketState === 'REGULAR' ? '盤中' : '收盤';
-}
-
-function getMarketStateClass(quote) {
-  if (!quote) return '';
-  if (quote.marketState === 'REGULAR') {
-    return (quote.change ?? 0) >= 0 ? 'badge-up' : 'badge-down';
-  }
-  return 'badge-up';
-}
+// ── Watchlist ──────────────────────────────────
 
 function addToWatchlist() {
   const input = document.getElementById('searchInput');
   const symbol = normalizeSymbol(input.value);
-
   if (!symbol) return;
 
   if (!state.watchlist.includes(symbol)) {
     state.watchlist.push(symbol);
     saveState(state);
   }
-
   input.value = '';
   renderWatchlist();
 }
@@ -288,41 +286,38 @@ async function renderWatchlist() {
     const price = quote?.price ?? null;
     const change = quote?.change ?? null;
     const changePct = quote?.changePct ?? null;
-    const stateText = getMarketStateLabel(quote);
-    const stateClass = getMarketStateClass(quote);
+    const stateText = !quote ? '離線' : quote.marketState === 'REGULAR' ? '盤中' : '收盤';
+    const badgeClass = !quote ? '' : (change ?? 0) >= 0 ? 'badge-up' : 'badge-down';
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="font-mono font-bold">${symbol}</td>
       <td>${formatPrice(price)}</td>
       <td>
-        ${
-          change !== null && changePct !== null
-            ? `<div class="${change >= 0 ? 'text-up' : 'text-down'}">
-                 ${change >= 0 ? '+' : ''}${change.toFixed(2)}
-                 (${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%)
-               </div>`
-            : '—'
-        }
-        <div class="mt-1">
-          <span class="badge ${stateClass}">${stateText}</span>
-        </div>
+        ${change !== null && changePct !== null
+          ? `<div class="${change >= 0 ? 'text-up' : 'text-down'}">
+               ${change >= 0 ? '+' : ''}${change.toFixed(2)}
+               (${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%)
+             </div>`
+          : '<div>—</div>'}
+        <div class="mt-1"><span class="badge ${badgeClass}">${stateText}</span></div>
       </td>
       <td>
         <button class="text-xs text-blue-400 hover:underline mr-2"
           onclick="document.getElementById('tradeSymbol').value='${symbol}'">操盤</button>
         <button class="text-xs text-red-500 hover:underline"
           onclick="removeFromWatchlist('${symbol}')">移除</button>
-      </td>
-    `;
+      </td>`;
     tbody.appendChild(tr);
   }
 }
 
+// ── 虛擬交易 ───────────────────────────────────
+
 async function executeTrade(side) {
   const symbol = normalizeSymbol(document.getElementById('tradeSymbol').value);
   const lots = parseInt(document.getElementById('tradeQty').value, 10);
-  const tradePriceInput = document.getElementById('tradePrice').value.trim();
+  const priceInput = document.getElementById('tradePrice').value.trim();
   const msg = document.getElementById('tradeMsg');
 
   if (!symbol || !lots || lots < 1) {
@@ -330,11 +325,11 @@ async function executeTrade(side) {
     return;
   }
 
-  let price = num(tradePriceInput);
-  if (price === null || price <= 0) {
+  let price = num(priceInput);
+  if (!price || price <= 0) {
     const quote = await fetchQuote(symbol);
     price = quote?.price ?? null;
-    if (price === null || price <= 0) {
+    if (!price || price <= 0) {
       msg.textContent = '❌ 無法取得報價，請手動輸入成交價';
       return;
     }
@@ -348,53 +343,30 @@ async function executeTrade(side) {
       msg.textContent = `❌ 現金不足（需 ${formatMoney(totalCost)} 元）`;
       return;
     }
-
     state.cash -= totalCost;
-
-    if (!state.holdings[symbol]) {
-      state.holdings[symbol] = { shares: 0, avgPrice: 0 };
-    }
-
-    const holding = state.holdings[symbol];
-    const oldAmount = holding.avgPrice * holding.shares * LOT_SIZE;
-    const newAmount = price * lots * LOT_SIZE;
-    const newShares = holding.shares + lots;
-
-    holding.avgPrice = (oldAmount + newAmount) / (newShares * LOT_SIZE);
-    holding.shares = newShares;
-
+    if (!state.holdings[symbol]) state.holdings[symbol] = { shares: 0, avgPrice: 0 };
+    const h = state.holdings[symbol];
+    const oldAmt = h.avgPrice * h.shares * LOT_SIZE;
+    const newAmt = price * lots * LOT_SIZE;
+    const newShares = h.shares + lots;
+    h.avgPrice = (oldAmt + newAmt) / (newShares * LOT_SIZE);
+    h.shares = newShares;
     showToast(`✅ 買入 ${symbol} ${lots} 張，花費 ${formatMoney(totalCost)} 元`);
   } else {
-    const holding = state.holdings[symbol];
-
-    if (!holding || holding.shares < lots) {
-      msg.textContent = '❌ 持股不足';
-      return;
-    }
-
+    const h = state.holdings[symbol];
+    if (!h || h.shares < lots) { msg.textContent = '❌ 持股不足'; return; }
     const proceeds = fee.amount - fee.total;
-    const costBasis = holding.avgPrice * lots * LOT_SIZE;
-    const realized = proceeds - costBasis;
-
-    state.realizedPnL += realized;
+    state.realizedPnL += proceeds - h.avgPrice * lots * LOT_SIZE;
     state.cash += proceeds;
-    holding.shares -= lots;
-
-    if (holding.shares === 0) {
-      delete state.holdings[symbol];
-    }
-
+    h.shares -= lots;
+    if (h.shares === 0) delete state.holdings[symbol];
     showToast(`✅ 賣出 ${symbol} ${lots} 張，入帳 ${formatMoney(proceeds)} 元`);
   }
 
   state.history.unshift({
     time: new Date().toLocaleString('zh-TW'),
-    symbol,
-    side,
-    shares: lots,
-    price,
-    amount: fee.amount,
-    fee: fee.total
+    symbol, side, shares: lots, price,
+    amount: fee.amount, fee: fee.total
   });
 
   if (!state.watchlist.includes(symbol)) {
@@ -404,10 +376,11 @@ async function executeTrade(side) {
 
   saveState(state);
   msg.textContent = '';
-  await renderAll();
-
   document.getElementById('tradePrice').value = '';
+  await renderAll();
 }
+
+// ── 持股庫存 ───────────────────────────────────
 
 async function renderHoldings() {
   const tbody = document.getElementById('holdingsBody');
@@ -415,30 +388,28 @@ async function renderHoldings() {
   tbody.innerHTML = '';
 
   const symbols = Object.keys(state.holdings);
-  if (symbols.length === 0) {
+  if (!symbols.length) {
     empty.style.display = '';
     document.getElementById('holdingsValue').textContent = '$ 0';
     return 0;
   }
 
   empty.style.display = 'none';
-  let totalHoldVal = 0;
+  let total = 0;
 
   for (const symbol of symbols) {
-    const holding = state.holdings[symbol];
+    const h = state.holdings[symbol];
     const quote = await fetchQuote(symbol);
-    const price = quote?.price && quote.price > 0 ? quote.price : holding.avgPrice;
-    const marketValue = price * holding.shares * LOT_SIZE;
-    const costValue = holding.avgPrice * holding.shares * LOT_SIZE;
-    const pnl = marketValue - costValue;
-
-    totalHoldVal += marketValue;
+    const price = quote?.price > 0 ? quote.price : h.avgPrice;
+    const mktVal = price * h.shares * LOT_SIZE;
+    const pnl = mktVal - h.avgPrice * h.shares * LOT_SIZE;
+    total += mktVal;
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="font-mono font-bold">${symbol}</td>
-      <td>${holding.shares} 張</td>
-      <td>${formatPrice(holding.avgPrice)}</td>
+      <td>${h.shares} 張</td>
+      <td>${formatPrice(h.avgPrice)}</td>
       <td>
         ${formatPrice(price)}
         <span class="text-xs ${quote?.marketState === 'REGULAR' ? 'text-green-400' : 'text-gray-400'}">
@@ -451,57 +422,49 @@ async function renderHoldings() {
       <td>
         <button class="text-xs text-blue-400 hover:underline"
           onclick="document.getElementById('tradeSymbol').value='${symbol}'">快速賣出</button>
-      </td>
-    `;
+      </td>`;
     tbody.appendChild(tr);
   }
 
-  document.getElementById('holdingsValue').textContent = '$ ' + formatMoney(totalHoldVal);
-  return totalHoldVal;
+  document.getElementById('holdingsValue').textContent = '$ ' + formatMoney(total);
+  return total;
 }
+
+// ── 交易紀錄 ───────────────────────────────────
 
 function renderHistory() {
   const tbody = document.getElementById('tradeHistoryBody');
   const empty = document.getElementById('historyEmpty');
   tbody.innerHTML = '';
 
-  if (state.history.length === 0) {
-    empty.style.display = '';
-    return;
-  }
-
+  if (!state.history.length) { empty.style.display = ''; return; }
   empty.style.display = 'none';
 
-  state.history.slice(0, 50).forEach(record => {
+  state.history.slice(0, 50).forEach(r => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td class="text-xs text-gray-500">${record.time}</td>
-      <td class="font-mono font-bold">${record.symbol}</td>
-      <td>
-        <span class="badge ${record.side === 'buy' ? 'badge-up' : 'badge-down'}">
-          ${record.side === 'buy' ? '買入' : '賣出'}
-        </span>
-      </td>
-      <td>${record.shares} 張</td>
-      <td>${formatPrice(record.price)}</td>
-      <td>${formatMoney(record.amount)}</td>
-      <td class="text-gray-500 text-xs">${formatMoney(record.fee)}</td>
-    `;
+      <td class="text-xs text-gray-500">${r.time}</td>
+      <td class="font-mono font-bold">${r.symbol}</td>
+      <td><span class="badge ${r.side === 'buy' ? 'badge-up' : 'badge-down'}">${r.side === 'buy' ? '買入' : '賣出'}</span></td>
+      <td>${r.shares} 張</td>
+      <td>${formatPrice(r.price)}</td>
+      <td>${formatMoney(r.amount)}</td>
+      <td class="text-gray-500 text-xs">${formatMoney(r.fee)}</td>`;
     tbody.appendChild(tr);
   });
 }
 
+// ── 儀表板 ─────────────────────────────────────
+
 function renderDashboard(holdingsValue = 0) {
   document.getElementById('cashDisplay').textContent = '$ ' + formatMoney(state.cash);
   document.getElementById('holdingsValue').textContent = '$ ' + formatMoney(holdingsValue);
+  document.getElementById('totalAsset').textContent = '$ ' + formatMoney(state.cash + holdingsValue);
 
-  const totalAsset = state.cash + holdingsValue;
-  document.getElementById('totalAsset').textContent = '$ ' + formatMoney(totalAsset);
-
-  const pnlEl = document.getElementById('totalPnL');
   const pnl = num(state.realizedPnL) ?? 0;
-  pnlEl.textContent = `${pnl >= 0 ? '+' : ''}${formatMoney(pnl)} 元`;
-  pnlEl.className = `text-xl font-bold ${pnl >= 0 ? 'text-up' : 'text-down'}`;
+  const el = document.getElementById('totalPnL');
+  el.textContent = `${pnl >= 0 ? '+' : ''}${formatMoney(pnl)} 元`;
+  el.className = `text-xl font-bold ${pnl >= 0 ? 'text-up' : 'text-down'}`;
 }
 
 async function renderAll() {
@@ -512,36 +475,21 @@ async function renderAll() {
   await renderWatchlist();
 }
 
-function exportDataToJson() {
-  const payload = {
-    exportedAt: new Date().toISOString(),
-    version: '1.2',
-    data: loadState()
-  };
+// ── JSON 備份 / 還原 ───────────────────────────
 
-  const json = JSON.stringify(payload, null, 2);
-  const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+function exportDataToJson() {
+  const payload = { exportedAt: new Date().toISOString(), version: '1.3', data: loadState() };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-
   const a = document.createElement('a');
   a.href = url;
   a.download = `stock_backup_${today}.json`;
   document.body.appendChild(a);
   a.click();
   a.remove();
-
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   showToast(`💾 備份已下載：stock_backup_${today}.json`);
-}
-
-function isValidImportedState(data) {
-  return data &&
-    typeof data === 'object' &&
-    typeof data.cash !== 'undefined' &&
-    typeof data.holdings === 'object' &&
-    Array.isArray(data.history) &&
-    Array.isArray(data.watchlist);
 }
 
 function importDataFromJson(event) {
@@ -553,12 +501,10 @@ function importDataFromJson(event) {
     try {
       const parsed = JSON.parse(e.target.result);
       const imported = parsed.data || parsed;
-
-      if (!isValidImportedState(imported)) {
-        alert('❌ 無效的備份檔案格式，請確認是否為本系統匯出的 JSON。');
+      if (!imported || typeof imported.cash === 'undefined' || !Array.isArray(imported.watchlist)) {
+        alert('❌ 無效的備份檔案格式');
         return;
       }
-
       imported.watchlist = [...new Set(imported.watchlist.map(normalizeSymbol).filter(Boolean))];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(imported));
       showToast('✅ 備份載入成功！正在重新整理…');
@@ -569,61 +515,55 @@ function importDataFromJson(event) {
       event.target.value = '';
     }
   };
-
   reader.readAsText(file, 'utf-8');
 }
 
 function resetAllData() {
-  const ok = confirm('⚠️ 確定要清除所有資料並重置為初始 100 萬嗎？');
-  if (!ok) return;
-
+  if (!confirm('⚠️ 確定要清除所有資料並重置為初始 100 萬嗎？')) return;
   localStorage.removeItem(STORAGE_KEY);
   location.reload();
 }
 
+// ── Toast ──────────────────────────────────────
+
 function showToast(message) {
   const el = document.getElementById('toast');
   if (!el) return;
-
   el.textContent = message;
   el.style.display = 'block';
-
-  clearTimeout(showToast._timer);
-  showToast._timer = setTimeout(() => {
-    el.style.display = 'none';
-  }, 3000);
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
-async function refreshQuotes() {
-  Object.keys(priceCache).forEach(key => delete priceCache[key]);
-  await renderAll();
-}
+// ── 啟動 ───────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
   updateLastSavedLabel();
 
   const searchInput = document.getElementById('searchInput');
-  const tradeSymbol = document.getElementById('tradeSymbol');
-  const tradeQty = document.getElementById('tradeQty');
-
   if (searchInput) {
-    searchInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') addToWatchlist();
-    });
+    searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') addToWatchlist(); });
   }
 
+  const tradeSymbol = document.getElementById('tradeSymbol');
   if (tradeSymbol) {
     tradeSymbol.addEventListener('blur', () => {
       tradeSymbol.value = normalizeSymbol(tradeSymbol.value);
     });
   }
 
+  const tradeQty = document.getElementById('tradeQty');
   if (tradeQty) {
-    tradeQty.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') executeTrade('buy');
-    });
+    tradeQty.addEventListener('keydown', e => { if (e.key === 'Enter') executeTrade('buy'); });
   }
 
   await renderAll();
-  setInterval(refreshQuotes, 60_000);
+
+  // 每 90 秒強制清快取並刷新一次
+  setInterval(async () => {
+    twseAllCache = { data: null, ts: 0 };
+    tpexAllCache = { data: null, ts: 0 };
+    Object.keys(priceCache).forEach(k => delete priceCache[k]);
+    await renderAll();
+  }, 90_000);
 });
