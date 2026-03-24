@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-  <title>台股虛擬操盤 v2.1</title>
+  <title>台股虛擬操盤 v2.2</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
@@ -14,228 +14,112 @@
       --blue:#388bfd;--amber:#d29922;--nav-h:64px;
     }
     *{box-sizing:border-box;margin:0;padding:0;}
-    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;
-      min-height:100vh;overflow-x:hidden;}
-
-    /* ── Bottom Nav (mobile) ── */
-    #bottomNav{
-      position:fixed;bottom:0;left:0;right:0;height:var(--nav-h);
-      background:#161b22;border-top:1px solid var(--border);
-      display:flex;z-index:100;
-    }
-    .nav-item{
-      flex:1;display:flex;flex-direction:column;align-items:center;
-      justify-content:center;gap:3px;cursor:pointer;
-      color:var(--muted);font-size:.65rem;font-weight:600;
-      transition:color .15s;border:none;background:transparent;
-      padding:4px 0;
-    }
-    .nav-item .icon{font-size:1.35rem;line-height:1;}
+    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;overflow-x:hidden;}
+    #bottomNav{position:fixed;bottom:0;left:0;right:0;height:var(--nav-h);
+      background:#161b22;border-top:1px solid var(--border);display:flex;z-index:100;}
+    .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;
+      justify-content:center;gap:3px;cursor:pointer;color:var(--muted);
+      font-size:.6rem;font-weight:600;transition:color .15s;border:none;background:transparent;}
+    .nav-item .icon{font-size:1.25rem;line-height:1;}
     .nav-item.active{color:var(--blue);}
-    .nav-item.active .icon{filter:drop-shadow(0 0 6px #388bfd88);}
-
-    /* ── Main content area ── */
-    #appMain{
-      padding:12px 12px calc(var(--nav-h) + 12px) 12px;
-      max-width:1200px;margin:0 auto;
-    }
-
-    /* ── Pages ── */
-    .page{display:none;}
-    .page.active{display:block;}
-
-    /* ── Cards ── */
+    #appMain{padding:12px 12px calc(var(--nav-h) + 12px) 12px;max-width:1200px;margin:0 auto;}
+    .page{display:none;} .page.active{display:block;}
     .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;}
     .card-sm{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;}
-
-    /* ── Stat big ── */
     .stat-big{text-align:center;padding:20px 12px 16px;}
-    .stat-big .label{font-size:.75rem;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;}
-    .stat-big .value{font-size:2rem;font-weight:800;margin-top:4px;line-height:1.1;}
-    .stat-big .sub{font-size:.8rem;color:var(--muted);margin-top:4px;}
-
-    /* ── Section title ── */
-    .sec-title{font-size:.72rem;color:var(--muted);text-transform:uppercase;
-      letter-spacing:.08em;font-weight:700;margin-bottom:10px;}
-
-    /* ── Tables ── */
+    .stat-big .label{font-size:.72rem;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;}
+    .stat-big .value{font-size:1.9rem;font-weight:800;margin-top:4px;line-height:1.1;}
+    .stat-big .sub{font-size:.78rem;color:var(--muted);margin-top:4px;}
+    .sec-title{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:10px;}
     table{width:100%;border-collapse:collapse;}
-    th{color:var(--muted);font-size:.68rem;text-transform:uppercase;
-      padding:7px 10px;text-align:left;border-bottom:1px solid var(--border2);white-space:nowrap;}
-    td{padding:10px 10px;border-bottom:1px solid var(--border2);font-size:.85rem;vertical-align:middle;}
-    tr:last-child td{border-bottom:none;}
-    tr:hover td{background:#1c2128;}
-
-    /* ── Inputs ── */
-    .inp{background:var(--bg);border:1px solid var(--border);color:var(--text);
-      border-radius:8px;padding:9px 12px;outline:none;width:100%;font-size:.9rem;}
-    .inp:focus{border-color:var(--blue);}
-    .inp::placeholder{color:var(--muted);}
-
-    /* ── Buttons ── */
-    .btn{border:none;border-radius:8px;padding:10px 18px;font-weight:700;
-      cursor:pointer;font-size:.88rem;transition:all .15s;white-space:nowrap;}
+    th{color:var(--muted);font-size:.67rem;text-transform:uppercase;padding:7px 10px;text-align:left;border-bottom:1px solid var(--border2);white-space:nowrap;}
+    td{padding:9px 10px;border-bottom:1px solid var(--border2);font-size:.84rem;vertical-align:middle;}
+    tr:last-child td{border-bottom:none;} tr:hover td{background:#1c2128;}
+    .inp{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 12px;outline:none;width:100%;font-size:.9rem;}
+    .inp:focus{border-color:var(--blue);} .inp::placeholder{color:var(--muted);}
+    .btn{border:none;border-radius:8px;padding:10px 18px;font-weight:700;cursor:pointer;font-size:.88rem;transition:all .15s;white-space:nowrap;}
     .btn-red{background:#8b1a1a;color:#fff;} .btn-red:hover{background:#c0392b;}
     .btn-green{background:#0a4a2a;color:#fff;} .btn-green:hover{background:#1a7a3a;}
     .btn-blue{background:#1f6feb;color:#fff;} .btn-blue:hover{background:var(--blue);}
     .btn-amber{background:#9e6a03;color:#fff;} .btn-amber:hover{background:var(--amber);}
     .btn-danger{background:#da3633;color:#fff;} .btn-danger:hover{background:#f85149;}
-    .btn-ghost{background:var(--border2);color:var(--text);border:1px solid var(--border);}
-    .btn-ghost:hover{background:var(--border);}
-    .btn-xs{padding:3px 10px;font-size:.72rem;border-radius:5px;border:none;
-      cursor:pointer;font-weight:700;transition:all .15s;}
+    .btn-ghost{background:var(--border2);color:var(--text);border:1px solid var(--border);} .btn-ghost:hover{background:var(--border);}
+    .btn-xs{padding:3px 10px;font-size:.72rem;border-radius:5px;border:none;cursor:pointer;font-weight:700;transition:all .15s;}
     .btn-xs-blue{background:#1a2d4a;color:var(--blue);} .btn-xs-blue:hover{background:#1f6feb;color:#fff;}
     .btn-xs-amber{background:#2d2200;color:var(--amber);} .btn-xs-amber:hover{background:#9e6a03;color:#fff;}
-    .btn-xs-red{background:#1a0d0d;color:var(--up);border:1px solid #8b1a1a;}
-    .btn-xs-red:hover{background:#8b1a1a;}
-    .btn-xs-gray{background:#21262d;color:var(--muted);border:1px solid var(--border);}
-    .btn-xs-gray:hover{background:var(--border);color:var(--text);}
+    .btn-xs-red{background:#1a0d0d;color:var(--up);border:1px solid #8b1a1a;} .btn-xs-red:hover{background:#8b1a1a;}
+    .btn-xs-gray{background:#21262d;color:var(--muted);border:1px solid var(--border);} .btn-xs-gray:hover{background:var(--border);color:var(--text);}
     .btn:disabled,.btn-xs:disabled{opacity:.45;cursor:not-allowed;}
-
-    /* ── Badges ── */
-    .badge{display:inline-block;padding:2px 8px;border-radius:9999px;
-      font-size:.68rem;font-weight:700;white-space:nowrap;}
-    .badge-buy{background:#2d0a0a;color:var(--up);}
-    .badge-sell{background:#0a2d1a;color:var(--down);}
-    .badge-rise{background:#2d0a0a;color:var(--up);}
-    .badge-fall{background:#0a2d1a;color:var(--down);}
-    .badge-open{background:#0a1a2d;color:var(--blue);}
-    .badge-post{background:#2d2200;color:var(--amber);}
-    .badge-closed{background:#1c2128;color:var(--muted);}
-
-    /* ── Color helpers ── */
-    .up{color:var(--up);font-weight:700;} .down{color:var(--down);font-weight:700;}
-    .muted{color:var(--muted);}
-
-    /* ── Source buttons ── */
-    .src-btn{background:#21262d;border:1px solid var(--border);color:var(--muted);
-      padding:7px 10px;border-radius:8px;cursor:pointer;font-size:.78rem;font-weight:600;
-      text-align:center;transition:all .15s;width:100%;}
-    .src-btn:hover{border-color:var(--blue);color:var(--text);}
-    .src-btn.active{background:#1a2d4a;border-color:var(--blue);color:var(--blue);}
-
-    /* ── Toast ── */
-    #toast{position:fixed;bottom:calc(var(--nav-h) + 12px);right:12px;
-      background:#21262d;border:1px solid var(--border);padding:10px 16px;
-      border-radius:8px;font-size:.85rem;z-index:9999;display:none;
-      max-width:320px;box-shadow:0 4px 24px #0009;}
-
-    /* ── Clock bar ── */
-    #clockBar{background:#161b22;border-bottom:1px solid var(--border2);
-      padding:8px 16px;display:flex;align-items:center;justify-content:space-between;
-      font-size:.75rem;color:var(--muted);position:sticky;top:0;z-index:50;}
-    @media(min-width:768px){
-      #clockBar{left:200px;position:fixed;right:0;top:0;z-index:90;}
-      #appMain{padding-top:60px;}
-      #btnExportTop,#btnImportTop{display:inline-flex!important;}
-    }
-
-    /* ── K-line panel ── */
-    #klinePanel{background:var(--surface);border:1px solid var(--border);
-      border-radius:12px;padding:14px;margin-top:12px;display:none;}
-
-    /* ═══════════════════════════
-       DESKTOP overrides (≥ 768px)
-    ═══════════════════════════ */
+    .badge{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:.68rem;font-weight:700;white-space:nowrap;}
+    .badge-buy{background:#2d0a0a;color:var(--up);} .badge-sell{background:#0a2d1a;color:var(--down);}
+    .badge-market-open{background:#0a1a2d;color:var(--blue);} .badge-market-post{background:#2d2200;color:var(--amber);} .badge-wait{background:#1c2128;color:var(--muted);}
+    .up{color:var(--up);font-weight:700;} .down{color:var(--down);font-weight:700;} .muted{color:var(--muted);}
+    .src-btn{background:#21262d;border:1px solid var(--border);color:var(--muted);padding:7px 10px;border-radius:8px;cursor:pointer;font-size:.78rem;font-weight:600;text-align:center;transition:all .15s;width:100%;}
+    .src-btn:hover{border-color:var(--blue);color:var(--text);} .src-btn.active{background:#1a2d4a;border-color:var(--blue);color:var(--blue);}
+    #toast{position:fixed;bottom:calc(var(--nav-h) + 12px);right:12px;background:#21262d;border:1px solid var(--border);padding:10px 16px;border-radius:8px;font-size:.85rem;z-index:9999;display:none;max-width:320px;box-shadow:0 4px 24px #0009;}
+    #clockBar{background:#161b22;border-bottom:1px solid var(--border2);padding:8px 16px;display:flex;align-items:center;justify-content:space-between;font-size:.75rem;color:var(--muted);position:sticky;top:0;z-index:90;}
+    #klinePanel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:12px;display:none;}
+    .vtag{background:#1f6feb22;color:var(--blue);border:1px solid #1f6feb55;font-size:.65rem;font-weight:700;padding:1px 7px;border-radius:9999px;}
+    .tbl-wrap{overflow-x:auto;overflow-y:auto;max-height:360px;}
+    .setting-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border2);}
+    .setting-row:last-child{border-bottom:none;}
+    .setting-label{font-size:.88rem;font-weight:600;} .setting-desc{font-size:.72rem;color:var(--muted);margin-top:2px;}
     @media(min-width:768px){
       #bottomNav{display:none;}
-      #sideNav{
-        display:flex;flex-direction:column;gap:4px;
-        position:fixed;left:0;top:0;bottom:0;width:200px;
-        background:#161b22;border-right:1px solid var(--border);
-        padding:20px 12px;z-index:100;
-      }
-      .side-item{
-        display:flex;align-items:center;gap:10px;padding:10px 14px;
-        border-radius:8px;cursor:pointer;color:var(--muted);font-size:.88rem;
-        font-weight:600;border:none;background:transparent;transition:all .15s;
-        text-align:left;width:100%;
-      }
-      .side-item .icon{font-size:1.1rem;}
-      .side-item:hover{background:var(--border2);color:var(--text);}
-      .side-item.active{background:#1a2d4a;color:var(--blue);}
-      .side-logo{padding:12px 14px 20px;font-weight:800;font-size:.95rem;
-        color:var(--text);letter-spacing:.02em;}
+      #sideNav{display:flex;flex-direction:column;gap:4px;position:fixed;left:0;top:0;bottom:0;width:200px;background:#161b22;border-right:1px solid var(--border);padding:20px 12px;z-index:100;}
+      .side-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;cursor:pointer;color:var(--muted);font-size:.88rem;font-weight:600;border:none;background:transparent;transition:all .15s;text-align:left;width:100%;}
+      .side-item .icon{font-size:1.1rem;} .side-item:hover{background:var(--border2);color:var(--text);} .side-item.active{background:#1a2d4a;color:var(--blue);}
+      .side-logo{padding:12px 14px 20px;font-weight:800;font-size:.95rem;color:var(--text);}
       .side-logo span{color:var(--blue);}
-
-      #appMain{margin-left:200px;padding:16px 20px 20px;}
-      #clockBar{left:200px;}
-
-      /* Desktop grid layouts per page */
-      .desk-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-      .desk-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+      #clockBar{left:200px;position:fixed;right:0;top:0;z-index:90;}
+      #appMain{margin-left:200px;padding:68px 20px 20px;}
       :root{--nav-h:0px;}
       #toast{bottom:20px;}
+      .desk-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+      .desk-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+      #btnExportTop,#btnImportTop{display:inline-flex!important;}
     }
-    @media(max-width:767px){
-      #sideNav{display:none;}
-    }
-
-    /* ── Version tag ── */
-    .vtag{background:#1f6feb22;color:var(--blue);border:1px solid #1f6feb55;
-      font-size:.65rem;font-weight:700;padding:1px 7px;border-radius:9999px;}
-
-    /* ── Scrollable table wrapper ── */
-    .tbl-wrap{overflow-x:auto;overflow-y:auto;max-height:360px;}
-
-    /* ── Setting rows ── */
-    .setting-row{display:flex;align-items:center;justify-content:space-between;
-      padding:12px 0;border-bottom:1px solid var(--border2);}
-    .setting-row:last-child{border-bottom:none;}
-    .setting-label{font-size:.88rem;font-weight:600;}
-    .setting-desc{font-size:.72rem;color:var(--muted);margin-top:2px;}
+    @media(max-width:767px){#sideNav{display:none;}}
   </style>
 </head>
 <body>
 
-<!-- Clock Bar -->
 <div id="clockBar">
   <div style="display:flex;align-items:center;gap:10px;">
-    <span style="font-size:1.25rem;">📈</span>
+    <span style="font-size:1.2rem;">📈</span>
     <div>
       <div style="font-weight:800;color:var(--text);font-size:.92rem;line-height:1.2;">
-        台股虛擬操盤系統 <span class="vtag">v2.1</span>
+        台股虛擬操盤系統 <span class="vtag">v2.2</span>
       </div>
-      <div id="lastSaved" style="font-size:.65rem;color:#444;line-height:1.2;">最後儲存：—</div>
+      <div id="lastSaved" style="font-size:.65rem;color:#555;line-height:1.2;">最後儲存：—</div>
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
     <span id="twClock" style="font-size:.78rem;">—</span>
-    <span id="marketBadge" class="badge badge-closed">—</span>
-    <!-- 桌面版快捷備份按鈕 -->
+    <span id="marketBadge" class="badge badge-wait">—</span>
     <button id="btnExportTop" class="btn-xs btn-xs-blue" style="display:none;">💾 匯出</button>
     <label id="btnImportTop" class="btn-xs btn-xs-gray" style="display:none;cursor:pointer;">
       📂 匯入<input type="file" accept=".json" id="importFileTop" style="display:none;"/>
     </label>
+    <button id="btnCloudLogin" class="btn-xs" style="background:#1a2d1a;color:#2ecc71;border:1px solid #1a4a1a;">☁️ 雲端</button>
   </div>
 </div>
 
-<!-- Desktop Side Nav -->
 <nav id="sideNav">
   <div class="side-logo">📈 台股<span>操盤</span></div>
-  <button class="side-item active" data-page="overview">
-    <span class="icon">🏠</span>資產總覽
-  </button>
-  <button class="side-item" data-page="market">
-    <span class="icon">📡</span>行情追蹤
-  </button>
-  <button class="side-item" data-page="portfolio">
-    <span class="icon">📦</span>持股帳務
-  </button>
-  <button class="side-item" data-page="trade">
-    <span class="icon">⚙️</span>交易設定
+  <button class="side-item active" data-page="overview"><span class="icon">🏠</span>資產總覽</button>
+  <button class="side-item" data-page="market"><span class="icon">📡</span>行情追蹤</button>
+  <button class="side-item" data-page="portfolio"><span class="icon">📦</span>持股帳務</button>
+  <button class="side-item" data-page="trade"><span class="icon">💹</span>交易設定</button>
+  <button class="side-item" data-page="cloud" style="margin-top:auto;border:1px solid #1a4a1a;color:#2ecc71;background:#0a1a0a;">
+    <span class="icon">☁️</span>雲端備份
   </button>
 </nav>
 
-<!-- Main -->
 <main id="appMain">
 
-  <!-- ══════════════════════════════
-       PAGE 1: 資產總覽
-  ══════════════════════════════ -->
+  <!-- PAGE 1: 資產總覽 -->
   <div id="page-overview" class="page active">
-
-    <!-- Big stats row -->
     <div class="desk-grid-3" style="margin-bottom:14px;">
       <div class="card stat-big">
         <div class="label">總資產</div>
@@ -245,11 +129,12 @@
       <div class="card stat-big">
         <div class="label">虛擬現金</div>
         <div class="value up" id="cashDisplay">—</div>
-        <div class="sub" style="display:flex;gap:6px;justify-content:center;margin-top:6px;">
+        <div class="sub" style="display:flex;gap:6px;justify-content:center;margin-top:6px;flex-wrap:wrap;">
           <button class="btn-xs btn-xs-red" id="btnAddCash">＋充值</button>
           <button class="btn-xs btn-xs-gray" id="btnSetCash">✏️ 設定</button>
-          <button class="btn-xs" id="btnCloudLogin" style="margin-top:4px;background:#1a2d1a;color:#2ecc71;border:1px solid #1a4a1a;width:100%;">☁️ 雲端登入</button>
+          <button class="btn-xs" id="btnFee" style="background:#0a1a0a;color:#2ecc71;border:1px solid #1a4a1a;">⚙️ 手續費</button>
         </div>
+        <div id="feeLabel" class="muted" style="font-size:.7rem;margin-top:6px;"></div>
       </div>
       <div class="card stat-big">
         <div class="label">累計已實現損益</div>
@@ -257,9 +142,7 @@
         <div class="sub" id="totalPnLSub">歷史買賣結算</div>
       </div>
     </div>
-
-    <!-- Charts row -->
-    <div class="desk-grid-2" style="gap:14px;">
+    <div class="desk-grid-2" style="gap:14px;margin-bottom:14px;">
       <div class="card">
         <div class="sec-title">🥧 資產配置</div>
         <div style="position:relative;height:220px;"><canvas id="chartPie"></canvas></div>
@@ -269,26 +152,8 @@
         <div style="position:relative;height:220px;"><canvas id="chartLine"></canvas></div>
       </div>
     </div>
-
-    <!-- Backup quick row (首頁也可備份) -->
-    <div class="card" style="margin-top:14px;margin-bottom:0;">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-        <div>
-          <div class="setting-label" style="font-size:.88rem;">💾 資料備份 / 還原</div>
-          <div class="setting-desc" id="backupNote" style="font-size:.72rem;color:var(--muted);">定期匯出 JSON 備份，避免資料遺失</div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-blue" id="btnExportHome" style="font-size:.8rem;padding:7px 14px;">💾 匯出 JSON</button>
-          <label class="btn btn-amber" style="font-size:.8rem;padding:7px 14px;cursor:pointer;">
-            📂 匯入 JSON<input type="file" accept=".json" id="importFileHome" style="display:none;"/>
-          </label>
-        </div>
-      </div>
-    </div>
-
-    <!-- Holdings mini summary -->
-    <div class="card" style="margin-top:12px;">
-      <div class="sec-title">📦 持股概況（點此查看詳情）</div>
+    <div class="card">
+      <div class="sec-title" style="cursor:pointer;" onclick="window.__navigate&&window.__navigate('portfolio')">📦 持股概況（點此查看詳情）</div>
       <div class="tbl-wrap">
         <table>
           <thead><tr>
@@ -297,7 +162,7 @@
           <tbody id="holdingsBodyOverview"></tbody>
         </table>
       </div>
-      <div id="holdingsEmptyOverview" style="text-align:center;padding:20px 12px;">
+      <div id="holdingsEmptyOverview" style="text-align:center;padding:24px 12px;display:none;">
         <div style="font-size:2rem;margin-bottom:8px;">📭</div>
         <p class="muted" style="font-size:.85rem;margin-bottom:12px;">目前尚無持股</p>
         <button class="btn btn-blue" id="btnGoMarket" style="font-size:.82rem;padding:8px 18px;">
@@ -307,21 +172,15 @@
     </div>
   </div>
 
-  <!-- ══════════════════════════════
-       PAGE 2: 行情追蹤
-  ══════════════════════════════ -->
+  <!-- PAGE 2: 行情追蹤 -->
   <div id="page-market" class="page">
-
-    <!-- Search -->
     <div class="card" style="margin-bottom:12px;">
       <div class="sec-title">🔍 股票搜尋</div>
       <div style="display:flex;gap:8px;">
-        <input id="searchInput" class="inp" placeholder="輸入代號 (e.g. 2330) 後 Enter 加入追蹤" style="flex:1;"/>
+        <input id="searchInput" class="inp" placeholder="輸入代號 (e.g. 2330) 後 Enter" style="flex:1;"/>
         <button class="btn btn-blue" id="btnAddWatch" style="padding:9px 14px;">＋</button>
       </div>
     </div>
-
-    <!-- Watchlist -->
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
         <div class="sec-title" style="margin-bottom:0;">📋 追蹤清單</div>
@@ -329,18 +188,14 @@
       </div>
       <div class="tbl-wrap">
         <table>
-          <thead><tr>
-            <th>代號 / 名稱</th><th>現價</th><th>漲跌</th><th>來源</th><th></th>
-          </tr></thead>
+          <thead><tr><th>代號 / 名稱</th><th>現價</th><th>漲跌</th><th>來源</th><th></th></tr></thead>
           <tbody id="watchlistBody"></tbody>
         </table>
       </div>
-      <p id="watchlistEmpty" class="muted" style="text-align:center;padding:16px;font-size:.85rem;display:none;">
+      <p id="watchlistEmpty" class="muted" style="text-align:center;padding:16px;font-size:.85rem;">
         尚未追蹤任何股票，請在上方搜尋加入
       </p>
     </div>
-
-    <!-- K-line panel -->
     <div id="klinePanel">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <span class="sec-title" id="klineTitle" style="margin-bottom:0;">K 線圖</span>
@@ -350,33 +205,24 @@
     </div>
   </div>
 
-  <!-- ══════════════════════════════
-       PAGE 3: 持股帳務
-  ══════════════════════════════ -->
+  <!-- PAGE 3: 持股帳務 -->
   <div id="page-portfolio" class="page">
-
-    <!-- Holdings -->
     <div class="card" style="margin-bottom:12px;">
       <div class="sec-title">📦 持股庫存</div>
       <div class="tbl-wrap">
         <table>
-          <thead><tr>
-            <th>代號 / 名稱</th><th>股數</th><th>均價</th><th>現價</th><th>損益</th><th>報酬率</th><th></th>
-          </tr></thead>
+          <thead><tr><th>代號 / 名稱</th><th>股數</th><th>均價</th><th>現價</th><th>損益</th><th>報酬率</th><th></th></tr></thead>
           <tbody id="holdingsBody"></tbody>
         </table>
       </div>
       <p id="holdingsEmpty" class="muted" style="text-align:center;padding:16px;font-size:.85rem;">目前無持股</p>
     </div>
-
-    <!-- Realized PnL -->
     <div class="card">
-      <!-- Stats row -->
       <div class="sec-title">💰 已實現損益統計</div>
       <div class="desk-grid-3" style="margin-bottom:12px;gap:8px;">
         <div class="card-sm" style="text-align:center;">
           <div style="font-size:.7rem;color:var(--muted);">已實現損益</div>
-          <div class="value" style="font-size:1.1rem;font-weight:800;margin-top:4px;" id="rTotalPnl">—</div>
+          <div style="font-size:1.1rem;font-weight:800;margin-top:4px;" id="rTotalPnl">—</div>
         </div>
         <div class="card-sm" style="text-align:center;">
           <div style="font-size:.7rem;color:var(--muted);">筆數 / 勝率</div>
@@ -384,30 +230,21 @@
         </div>
         <div class="card-sm" style="text-align:center;">
           <div style="font-size:.7rem;color:var(--muted);">平均損益/筆</div>
-          <div class="value" style="font-size:.95rem;font-weight:700;margin-top:4px;" id="rAvgPnl">—</div>
+          <div style="font-size:.95rem;font-weight:700;margin-top:4px;" id="rAvgPnl">—</div>
         </div>
       </div>
-      <!-- Table -->
       <div class="tbl-wrap">
         <table>
-          <thead><tr>
-            <th>時間</th><th>代號 / 名稱</th><th>股數</th><th>買均價</th><th>賣價</th><th>淨損益</th><th>報酬率</th>
-          </tr></thead>
+          <thead><tr><th>時間</th><th>代號 / 名稱</th><th>股數</th><th>買均價</th><th>賣價</th><th>淨損益</th><th>報酬率</th></tr></thead>
           <tbody id="realizedBody"></tbody>
         </table>
       </div>
       <p id="realizedEmpty" class="muted" style="text-align:center;padding:16px;font-size:.85rem;">尚無已結案部位</p>
-
-      <!-- Trade history (collapsed) -->
       <details style="margin-top:12px;">
-        <summary class="sec-title" style="cursor:pointer;user-select:none;margin-bottom:0;">
-          📋 完整交易紀錄（展開）
-        </summary>
+        <summary class="sec-title" style="cursor:pointer;user-select:none;margin-bottom:0;">📋 完整交易紀錄（展開）</summary>
         <div class="tbl-wrap" style="margin-top:8px;">
           <table>
-            <thead><tr>
-              <th>時間</th><th>代號 / 名稱</th><th>方向</th><th>股數</th><th>成交價</th><th>金額</th><th>稅費</th>
-            </tr></thead>
+            <thead><tr><th>時間</th><th>代號 / 名稱</th><th>方向</th><th>股數</th><th>成交價</th><th>金額</th><th>稅費</th></tr></thead>
             <tbody id="tradeHistoryBody"></tbody>
           </table>
         </div>
@@ -416,13 +253,9 @@
     </div>
   </div>
 
-  <!-- ══════════════════════════════
-       PAGE 4: 交易 & 設定
-  ══════════════════════════════ -->
+  <!-- PAGE 4: 交易設定 -->
   <div id="page-trade" class="page">
     <div class="desk-grid-2">
-
-      <!-- Trade Panel -->
       <div class="card" style="margin-bottom:12px;">
         <div class="sec-title">💹 虛擬交易（零股）</div>
         <div style="display:flex;flex-direction:column;gap:10px;">
@@ -443,25 +276,18 @@
             <button class="btn btn-green" id="btnSell" style="flex:1;">賣出 ▼</button>
           </div>
           <p id="tradeMsg" class="muted" style="font-size:.82rem;min-height:1.2em;"></p>
-          <div id="feePreview" class="muted" style="font-size:.75rem;background:var(--bg);
-            border:1px solid var(--border2);border-radius:6px;padding:8px;display:none;"></div>
+          <div id="feePreview" class="muted" style="font-size:.75rem;background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:8px;display:none;"></div>
         </div>
       </div>
-
-      <!-- Settings Panel -->
       <div class="card">
         <div class="sec-title">⚙️ 系統設定</div>
-
-        <!-- Fee -->
         <div class="setting-row">
           <div>
             <div class="setting-label">手續費折數</div>
-            <div class="setting-desc" id="feeLabel">預設 6 折（0.0855%）</div>
+            <div class="setting-desc" id="feeLabel2">預設 6 折（0.0855%）</div>
           </div>
-          <button class="btn-xs btn-xs-gray" id="btnFee">設定</button>
+          <button class="btn-xs btn-xs-gray" id="btnFee2">設定</button>
         </div>
-
-        <!-- Price source -->
         <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
           <div class="setting-label">📡 報價來源</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%;">
@@ -472,149 +298,125 @@
           </div>
           <p id="sourceNote" class="muted" style="font-size:.72rem;"></p>
         </div>
-
-        <!-- Backup -->
-        <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
-          <div class="setting-label">💾 資料備份 / 還原</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-blue" id="btnExport" style="font-size:.8rem;padding:8px 14px;">匯出 JSON</button>
-            <label class="btn btn-amber" style="font-size:.8rem;padding:8px 14px;cursor:pointer;">
-              匯入 JSON<input type="file" accept=".json" id="importFile" style="display:none;"/>
-            </label>
-            <button class="btn btn-danger" id="btnReset" style="font-size:.8rem;padding:8px 14px;">🗑 重置</button>
-          </div>
-        </div>
-
-        <!-- Holding value info -->
         <div class="setting-row">
-          <div>
-            <div class="setting-label">持股市值</div>
-            <div class="setting-desc">即時報價計算</div>
-          </div>
+          <div><div class="setting-label">持股市值</div><div class="setting-desc">即時報價計算</div></div>
           <div style="font-size:1rem;font-weight:700;color:var(--blue);" id="holdingsValue">$ 0</div>
         </div>
+      </div>
+    </div>
+  </div>
 
+  <!-- PAGE 5: 雲端備份 -->
+  <div id="page-cloud" class="page">
+    <div class="card" style="margin-bottom:14px;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+        <span style="font-size:2.2rem;">☁️</span>
+        <div>
+          <div style="font-weight:800;font-size:1rem;">Firebase 雲端同步</div>
+          <div class="muted" style="font-size:.78rem;margin-top:3px;">Google 帳號登入後，買賣操作即時同步至 Firestore<br/>跨裝置保留走勢連續紀錄</div>
+        </div>
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;font-size:.85rem;">
+          <span id="cloudStatusDot" style="width:10px;height:10px;border-radius:50%;background:#555;flex-shrink:0;display:inline-block;"></span>
+          <span id="cloudStatusText">尚未登入</span>
+        </div>
+        <div id="cloudUserInfo" style="font-size:.82rem;color:var(--muted);"></div>
+      </div>
+      <div id="cloudLoginForm" style="display:flex;flex-direction:column;gap:10px;">
+        <button id="btnCloudSignIn" style="display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#3c4043;border:1px solid #dadce0;border-radius:8px;padding:12px 16px;font-size:.92rem;font-weight:600;cursor:pointer;width:100%;transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 2px 8px #0004'" onmouseout="this.style.boxShadow='none'">
+          <svg width="18" height="18" viewBox="0 0 48 48">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.02 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-3.52-13.47-8.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          </svg>
+          使用 Google 帳號登入
+        </button>
+        <p id="cloudMsg" class="muted" style="font-size:.78rem;text-align:center;min-height:1em;"></p>
+      </div>
+      <div id="cloudLoggedIn" style="display:none;flex-direction:column;gap:10px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-blue" id="btnCloudSync" style="flex:1;">☁️ 立即同步</button>
+          <button class="btn btn-ghost" id="btnCloudFetch" style="flex:1;">📥 從雲端還原</button>
+          <button class="btn btn-danger" id="btnCloudLogout" style="padding:10px 14px;">登出</button>
+        </div>
+        <p id="cloudSyncMsg" class="muted" style="font-size:.78rem;text-align:center;min-height:1em;"></p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px;">
+      <div class="sec-title">💾 本地備份 / 還原</div>
+      <p class="muted" style="font-size:.8rem;margin-bottom:12px;">定期匯出 JSON 以防資料遺失，可搭配雲端同步雙重保障</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-blue" id="btnExportCloud">💾 匯出 JSON</button>
+        <label class="btn btn-amber" style="cursor:pointer;">📂 匯入 JSON<input type="file" accept=".json" id="importFileCloud" style="display:none;"/></label>
+        <button class="btn btn-danger" id="btnResetCloud">🗑 重置資料</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="sec-title">📋 Firebase 設定說明</div>
+      <ol style="font-size:.82rem;color:var(--muted);line-height:2.2;padding-left:1.2em;">
+        <li>前往 <a href="https://console.firebase.google.com/" target="_blank" style="color:var(--blue);">Firebase Console</a> 建立專案</li>
+        <li>Authentication → Sign-in method → 啟用 <b style="color:var(--text);">Google</b></li>
+        <li>Firestore Database → 建立資料庫 → 套用安全規則</li>
+        <li>專案設定 → 新增 Web 應用程式 → 複製 Config 物件</li>
+        <li>將 Config 填入 <code style="color:var(--blue);">app.js</code> 頂部的 <code style="color:var(--blue);">FIREBASE_CONFIG</code></li>
+        <li>Authentication → 已授權網域 → 加入你的網域（或 localhost）</li>
+      </ol>
+      <div style="margin-top:14px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:12px;font-size:.78rem;color:var(--muted);">
+        <b style="color:var(--text);">Firestore 安全規則：</b>
+        <pre style="margin-top:8px;line-height:1.6;color:#aaa;overflow-x:auto;">rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read, write: if request.auth != null
+                         &amp;&amp; request.auth.uid == uid;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}</pre>
       </div>
     </div>
   </div>
 
 </main>
 
-<!-- Bottom Nav (mobile) -->
 <nav id="bottomNav">
-  <button class="nav-item active" data-page="overview">
-    <span class="icon">🏠</span>資產總覽
-  </button>
-  <button class="nav-item" data-page="market">
-    <span class="icon">📡</span>行情
-  </button>
-  <button class="nav-item" data-page="portfolio">
-    <span class="icon">📦</span>帳務
-  </button>
-  <button class="nav-item" data-page="trade">
-    <span class="icon">⚙️</span>交易設定
-  </button>
+  <button class="nav-item active" data-page="overview"><span class="icon">🏠</span>總覽</button>
+  <button class="nav-item" data-page="market"><span class="icon">📡</span>行情</button>
+  <button class="nav-item" data-page="portfolio"><span class="icon">📦</span>帳務</button>
+  <button class="nav-item" data-page="trade"><span class="icon">💹</span>交易</button>
+  <button class="nav-item" data-page="cloud"><span class="icon">☁️</span>雲端</button>
 </nav>
-
-
-<!-- ── 雲端登入 Modal ────────────────────── -->
-<div id="cloudModal" style="display:none;position:fixed;inset:0;z-index:200;
-  background:#000a;display:none;align-items:center;justify-content:center;padding:16px;">
-  <div class="card" style="width:100%;max-width:380px;padding:24px;position:relative;">
-    <button onclick="closeCloudModal()" style="position:absolute;top:12px;right:14px;
-      background:transparent;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;">✕</button>
-    <div style="text-align:center;margin-bottom:20px;">
-      <div style="font-size:2rem;">☁️</div>
-      <h2 style="font-size:1rem;font-weight:800;margin-top:6px;">Firebase 雲端同步</h2>
-      <p class="muted" style="font-size:.78rem;margin-top:4px;">Google 帳號登入後，買賣操作即時同步至 Firestore<br/>跨裝置保留資產走勢連續紀錄</p>
-    </div>
-    <!-- 登入狀態 -->
-    <div id="cloudStatus" style="background:var(--bg);border:1px solid var(--border2);
-      border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:.82rem;
-      display:flex;align-items:center;gap:8px;">
-      <span id="cloudStatusDot" style="width:8px;height:8px;border-radius:50%;
-        background:#555;display:inline-block;flex-shrink:0;"></span>
-      <span id="cloudStatusText">尚未登入</span>
-    </div>
-    <!-- Google Sign-In -->
-    <div id="cloudLoginForm" style="display:flex;flex-direction:column;gap:10px;">
-      <button id="btnCloudSignIn" style="
-        display:flex;align-items:center;justify-content:center;gap:10px;
-        background:#fff;color:#3c4043;border:1px solid #dadce0;border-radius:8px;
-        padding:11px 16px;font-size:.9rem;font-weight:600;cursor:pointer;width:100%;
-        transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 2px 8px #0004'"
-        onmouseout="this.style.boxShadow='none'">
-        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.02 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-3.52-13.47-8.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
-        使用 Google 帳號登入
-      </button>
-      <button id="btnCloudSignUp" style="display:none;"></button>
-      <p id="cloudMsg" class="muted" style="font-size:.78rem;min-height:1.2em;text-align:center;"></p>
-    </div>
-    <!-- 已登入狀態 -->
-    <div id="cloudLoggedIn" style="display:none;flex-direction:column;gap:10px;">
-      <p style="font-size:.85rem;text-align:center;" id="cloudUserInfo">—</p>
-      <button class="btn btn-blue" id="btnCloudSync" style="font-size:.85rem;">☁️ 立即同步快照</button>
-      <button class="btn btn-ghost" id="btnCloudFetch" style="font-size:.85rem;">📥 從雲端還原走勢</button>
-      <button class="btn btn-danger" id="btnCloudLogout" style="font-size:.85rem;">登出</button>
-      <p id="cloudSyncMsg" class="muted" style="font-size:.78rem;text-align:center;min-height:1em;"></p>
-    </div>
-  </div>
-</div>
 
 <div id="toast"></div>
 
-<!-- Firebase SDK v9 compat (CDN) -->
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-<script src="app.js?v=2.1"></script>
-
-<!-- Navigation SPA logic -->
+<script src="app.js?v=2.2"></script>
 <script>
 (function(){
-  let _currentPage = 'overview';
-
-  function navigateTo(page){
-    if(page===_currentPage)return;
-    _currentPage=page;
-
-    // hide all pages
+  let _cur='overview';
+  function go(page){
+    if(page===_cur)return;_cur=page;
     document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-    const target=document.getElementById('page-'+page);
-    if(target)target.classList.add('active');
-
-    // update bottom nav
-    document.querySelectorAll('#bottomNav .nav-item').forEach(b=>{
-      b.classList.toggle('active', b.dataset.page===page);
+    const t=document.getElementById('page-'+page);if(t)t.classList.add('active');
+    document.querySelectorAll('#bottomNav .nav-item,#sideNav .side-item').forEach(b=>{
+      b.classList.toggle('active',b.dataset.page===page);
     });
-    // update side nav
-    document.querySelectorAll('#sideNav .side-item').forEach(b=>{
-      b.classList.toggle('active', b.dataset.page===page);
-    });
-
-    // trigger page-specific refresh
-    if(typeof window.__onPageEnter==='function') window.__onPageEnter(page);
+    if(typeof window.__onPageEnter==='function')window.__onPageEnter(page);
   }
-
-  // Bind bottom nav
-  document.querySelectorAll('#bottomNav .nav-item').forEach(btn=>{
-    btn.addEventListener('click',()=>navigateTo(btn.dataset.page));
+  document.querySelectorAll('#bottomNav .nav-item,#sideNav .side-item').forEach(b=>{
+    b.addEventListener('click',()=>go(b.dataset.page));
   });
-  // Bind side nav
-  document.querySelectorAll('#sideNav .side-item').forEach(btn=>{
-    btn.addEventListener('click',()=>navigateTo(btn.dataset.page));
-  });
-
-  // Holdings overview card → navigate to portfolio
-  const overviewHoldings=document.getElementById('holdingsBodyOverview');
-  if(overviewHoldings){
-    overviewHoldings.addEventListener('click',()=>navigateTo('portfolio'));
-  }
-
-  window.__navigate = navigateTo;
-  window.__currentPage = ()=>_currentPage;
+  window.__navigate=go;
+  window.__currentPage=()=>_cur;
 })();
 </script>
-
 </body>
 </html>
