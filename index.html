@@ -125,8 +125,8 @@
       padding:8px 16px;display:flex;align-items:center;justify-content:space-between;
       font-size:.75rem;color:var(--muted);position:sticky;top:0;z-index:50;}
     @media(min-width:768px){
-      #clockBar{left:200px;position:fixed;right:0;top:0;}
-      #appMain{padding-top:56px;}
+      #clockBar{left:200px;position:fixed;right:0;top:0;z-index:90;}
+      #appMain{padding-top:60px;}
       #btnExportTop,#btnImportTop{display:inline-flex!important;}
     }
 
@@ -525,8 +525,8 @@
       background:transparent;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;">✕</button>
     <div style="text-align:center;margin-bottom:20px;">
       <div style="font-size:2rem;">☁️</div>
-      <h2 style="font-size:1rem;font-weight:800;margin-top:6px;">雲端同步登入</h2>
-      <p class="muted" style="font-size:.78rem;margin-top:4px;">登入後資產快照將每日自動上傳<br/>跨裝置保留連續走勢紀錄</p>
+      <h2 style="font-size:1rem;font-weight:800;margin-top:6px;">Firebase 雲端同步</h2>
+      <p class="muted" style="font-size:.78rem;margin-top:4px;">Google 帳號登入後，買賣操作即時同步至 Firestore<br/>跨裝置保留資產走勢連續紀錄</p>
     </div>
     <!-- 登入狀態 -->
     <div id="cloudStatus" style="background:var(--bg);border:1px solid var(--border2);
@@ -536,15 +536,19 @@
         background:#555;display:inline-block;flex-shrink:0;"></span>
       <span id="cloudStatusText">尚未登入</span>
     </div>
-    <!-- Email / Password -->
+    <!-- Google Sign-In -->
     <div id="cloudLoginForm" style="display:flex;flex-direction:column;gap:10px;">
-      <input id="cloudEmail" class="inp" type="email" placeholder="Email"/>
-      <input id="cloudPassword" class="inp" type="password" placeholder="密碼"/>
-      <div style="display:flex;gap:8px;">
-        <button class="btn btn-blue" id="btnCloudSignIn" style="flex:1;font-size:.85rem;">登入</button>
-        <button class="btn btn-ghost" id="btnCloudSignUp" style="flex:1;font-size:.85rem;">註冊</button>
-      </div>
-      <p id="cloudMsg" class="muted" style="font-size:.78rem;min-height:1em;text-align:center;"></p>
+      <button id="btnCloudSignIn" style="
+        display:flex;align-items:center;justify-content:center;gap:10px;
+        background:#fff;color:#3c4043;border:1px solid #dadce0;border-radius:8px;
+        padding:11px 16px;font-size:.9rem;font-weight:600;cursor:pointer;width:100%;
+        transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 2px 8px #0004'"
+        onmouseout="this.style.boxShadow='none'">
+        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.02 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-3.52-13.47-8.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+        使用 Google 帳號登入
+      </button>
+      <button id="btnCloudSignUp" style="display:none;"></button>
+      <p id="cloudMsg" class="muted" style="font-size:.78rem;min-height:1.2em;text-align:center;"></p>
     </div>
     <!-- 已登入狀態 -->
     <div id="cloudLoggedIn" style="display:none;flex-direction:column;gap:10px;">
@@ -559,6 +563,10 @@
 
 <div id="toast"></div>
 
+<!-- Firebase SDK v9 compat (CDN) -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 <script src="app.js?v=2.1"></script>
 
 <!-- Navigation SPA logic -->
