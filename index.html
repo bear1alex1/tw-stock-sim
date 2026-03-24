@@ -14,76 +14,133 @@
       --blue:#388bfd;--amber:#d29922;--nav-h:64px;
     }
     *{box-sizing:border-box;margin:0;padding:0;}
-    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;overflow-x:hidden;}
+    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;}
+
+    /* ── 底部導覽（手機）── */
     #bottomNav{position:fixed;bottom:0;left:0;right:0;height:var(--nav-h);
       background:#161b22;border-top:1px solid var(--border);display:flex;z-index:100;}
-    .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;
-      justify-content:center;gap:3px;cursor:pointer;color:var(--muted);
-      font-size:.6rem;font-weight:600;transition:color .15s;border:none;background:transparent;}
-    .nav-item .icon{font-size:1.25rem;line-height:1;}
+    .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:3px;cursor:pointer;color:var(--muted);font-size:.6rem;font-weight:600;
+      border:none;background:transparent;transition:color .15s;}
+    .nav-item .icon{font-size:1.25rem;}
     .nav-item.active{color:var(--blue);}
-    #appMain{padding:12px 12px calc(var(--nav-h) + 12px) 12px;max-width:1200px;margin:0 auto;}
+
+    /* ── 頁面 ── */
+    #appMain{padding:12px 12px calc(var(--nav-h)+12px);max-width:1200px;margin:0 auto;}
     .page{display:none;} .page.active{display:block;}
+
+    /* ── 卡片 ── */
     .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;}
     .card-sm{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;}
+
+    /* ── Stat ── */
     .stat-big{text-align:center;padding:20px 12px 16px;}
-    .stat-big .label{font-size:.72rem;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;}
+    .stat-big .label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
     .stat-big .value{font-size:1.9rem;font-weight:800;margin-top:4px;line-height:1.1;}
     .stat-big .sub{font-size:.78rem;color:var(--muted);margin-top:4px;}
-    .sec-title{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:10px;}
+
+    /* ── Section title ── */
+    .sec-title{font-size:.72rem;color:var(--muted);text-transform:uppercase;
+      letter-spacing:.08em;font-weight:700;margin-bottom:10px;}
+
+    /* ── Table ── */
     table{width:100%;border-collapse:collapse;}
-    th{color:var(--muted);font-size:.67rem;text-transform:uppercase;padding:7px 10px;text-align:left;border-bottom:1px solid var(--border2);white-space:nowrap;}
+    th{color:var(--muted);font-size:.67rem;text-transform:uppercase;padding:7px 10px;
+      text-align:left;border-bottom:1px solid var(--border2);white-space:nowrap;}
     td{padding:9px 10px;border-bottom:1px solid var(--border2);font-size:.84rem;vertical-align:middle;}
     tr:last-child td{border-bottom:none;} tr:hover td{background:#1c2128;}
-    .inp{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 12px;outline:none;width:100%;font-size:.9rem;}
+
+    /* ── Inputs ── */
+    .inp{background:var(--bg);border:1px solid var(--border);color:var(--text);
+      border-radius:8px;padding:9px 12px;outline:none;width:100%;font-size:.9rem;}
     .inp:focus{border-color:var(--blue);} .inp::placeholder{color:var(--muted);}
-    .btn{border:none;border-radius:8px;padding:10px 18px;font-weight:700;cursor:pointer;font-size:.88rem;transition:all .15s;white-space:nowrap;}
+
+    /* ── Buttons ── */
+    .btn{border:none;border-radius:8px;padding:10px 18px;font-weight:700;
+      cursor:pointer;font-size:.88rem;transition:all .15s;white-space:nowrap;}
     .btn-red{background:#8b1a1a;color:#fff;} .btn-red:hover{background:#c0392b;}
     .btn-green{background:#0a4a2a;color:#fff;} .btn-green:hover{background:#1a7a3a;}
-    .btn-blue{background:#1f6feb;color:#fff;} .btn-blue:hover{background:var(--blue);}
-    .btn-amber{background:#9e6a03;color:#fff;} .btn-amber:hover{background:var(--amber);}
+    .btn-blue{background:#1f6feb;color:#fff;} .btn-blue:hover{background:#388bfd;}
+    .btn-amber{background:#9e6a03;color:#fff;} .btn-amber:hover{background:#d29922;}
     .btn-danger{background:#da3633;color:#fff;} .btn-danger:hover{background:#f85149;}
-    .btn-ghost{background:var(--border2);color:var(--text);border:1px solid var(--border);} .btn-ghost:hover{background:var(--border);}
+    .btn-ghost{background:var(--border2);color:var(--text);border:1px solid var(--border);}
+    .btn-ghost:hover{background:var(--border);}
     .btn-xs{padding:3px 10px;font-size:.72rem;border-radius:5px;border:none;cursor:pointer;font-weight:700;transition:all .15s;}
     .btn-xs-blue{background:#1a2d4a;color:var(--blue);} .btn-xs-blue:hover{background:#1f6feb;color:#fff;}
-    .btn-xs-amber{background:#2d2200;color:var(--amber);} .btn-xs-amber:hover{background:#9e6a03;color:#fff;}
-    .btn-xs-red{background:#1a0d0d;color:var(--up);border:1px solid #8b1a1a;} .btn-xs-red:hover{background:#8b1a1a;}
     .btn-xs-gray{background:#21262d;color:var(--muted);border:1px solid var(--border);} .btn-xs-gray:hover{background:var(--border);color:var(--text);}
+    .btn-xs-red{background:#1a0d0d;color:var(--up);border:1px solid #8b1a1a;} .btn-xs-red:hover{background:#8b1a1a;color:#fff;}
     .btn:disabled,.btn-xs:disabled{opacity:.45;cursor:not-allowed;}
-    .badge{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:.68rem;font-weight:700;white-space:nowrap;}
-    .badge-buy{background:#2d0a0a;color:var(--up);} .badge-sell{background:#0a2d1a;color:var(--down);}
-    .badge-market-open{background:#0a1a2d;color:var(--blue);} .badge-market-post{background:#2d2200;color:var(--amber);} .badge-wait{background:#1c2128;color:var(--muted);}
-    .up{color:var(--up);font-weight:700;} .down{color:var(--down);font-weight:700;} .muted{color:var(--muted);}
-    .src-btn{background:#21262d;border:1px solid var(--border);color:var(--muted);padding:7px 10px;border-radius:8px;cursor:pointer;font-size:.78rem;font-weight:600;text-align:center;transition:all .15s;width:100%;}
-    .src-btn:hover{border-color:var(--blue);color:var(--text);} .src-btn.active{background:#1a2d4a;border-color:var(--blue);color:var(--blue);}
-    #toast{position:fixed;bottom:calc(var(--nav-h) + 12px);right:12px;background:#21262d;border:1px solid var(--border);padding:10px 16px;border-radius:8px;font-size:.85rem;z-index:9999;display:none;max-width:320px;box-shadow:0 4px 24px #0009;}
-    #clockBar{background:#161b22;border-bottom:1px solid var(--border2);padding:8px 16px;display:flex;align-items:center;justify-content:space-between;font-size:.75rem;color:var(--muted);position:sticky;top:0;z-index:90;}
-    #klinePanel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-top:12px;display:none;}
-    .vtag{background:#1f6feb22;color:var(--blue);border:1px solid #1f6feb55;font-size:.65rem;font-weight:700;padding:1px 7px;border-radius:9999px;}
+
+    /* ── Badge ── */
+    .badge{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:.68rem;font-weight:700;}
+    .badge-market-open{background:#0a1a2d;color:var(--blue);}
+    .badge-market-post{background:#2d2200;color:var(--amber);}
+    .badge-wait{background:#1c2128;color:var(--muted);}
+    .text-up{color:var(--up);font-weight:700;} .text-down{color:var(--down);font-weight:700;}
+    .muted{color:var(--muted);}
+
+    /* ── Source btn ── */
+    .source-btn,.src-btn{background:#21262d;border:1px solid var(--border);color:var(--muted);
+      padding:7px 10px;border-radius:8px;cursor:pointer;font-size:.78rem;font-weight:600;
+      text-align:center;transition:all .15s;width:100%;}
+    .source-btn:hover,.src-btn:hover{border-color:var(--blue);color:var(--text);}
+    .source-btn.active,.src-btn.active{background:#1a2d4a;border-color:var(--blue);color:var(--blue);}
+
+    /* ── Tab (帳務頁內部) ── */
+    .tab-btn{padding:6px 16px;border-radius:6px 6px 0 0;cursor:pointer;font-size:.82rem;font-weight:600;
+      background:var(--bg);color:var(--muted);border:1px solid var(--border);border-bottom:none;}
+    .tab-btn.active{background:#161b22;color:#e6edf3;border-color:#388bfd;border-bottom:1px solid #161b22;}
+    .tab-panel{display:none;} .tab-panel.active{display:block;}
+
+    /* ── Toast ── */
+    #toast{position:fixed;bottom:calc(var(--nav-h)+12px);right:12px;background:#21262d;
+      border:1px solid var(--border);padding:10px 16px;border-radius:8px;font-size:.85rem;
+      z-index:9999;display:none;max-width:320px;box-shadow:0 4px 24px #0009;}
+
+    /* ── Top bar ── */
+    #clockBar{background:#161b22;border-bottom:1px solid var(--border2);padding:8px 16px;
+      display:flex;align-items:center;justify-content:space-between;
+      position:sticky;top:0;z-index:90;font-size:.75rem;color:var(--muted);}
+    #klinePanel{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+      padding:14px;margin-top:12px;display:none;}
+    .vtag{background:#1f6feb22;color:var(--blue);border:1px solid #1f6feb55;
+      font-size:.65rem;font-weight:700;padding:1px 7px;border-radius:9999px;}
     .tbl-wrap{overflow-x:auto;overflow-y:auto;max-height:360px;}
-    .setting-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border2);}
+    .setting-row{display:flex;align-items:center;justify-content:space-between;
+      padding:12px 0;border-bottom:1px solid var(--border2);}
     .setting-row:last-child{border-bottom:none;}
-    .setting-label{font-size:.88rem;font-weight:600;} .setting-desc{font-size:.72rem;color:var(--muted);margin-top:2px;}
+    .setting-label{font-size:.88rem;font-weight:600;}
+    .setting-desc{font-size:.72rem;color:var(--muted);margin-top:2px;}
+
+    /* ══ Desktop ≥768px ══ */
     @media(min-width:768px){
       #bottomNav{display:none;}
-      #sideNav{display:flex;flex-direction:column;gap:4px;position:fixed;left:0;top:0;bottom:0;width:200px;background:#161b22;border-right:1px solid var(--border);padding:20px 12px;z-index:100;}
-      .side-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;cursor:pointer;color:var(--muted);font-size:.88rem;font-weight:600;border:none;background:transparent;transition:all .15s;text-align:left;width:100%;}
-      .side-item .icon{font-size:1.1rem;} .side-item:hover{background:var(--border2);color:var(--text);} .side-item.active{background:#1a2d4a;color:var(--blue);}
+      #sideNav{display:flex;flex-direction:column;gap:4px;
+        position:fixed;left:0;top:0;bottom:0;width:200px;
+        background:#161b22;border-right:1px solid var(--border);
+        padding:20px 12px;z-index:100;}
+      .side-item{display:flex;align-items:center;gap:10px;padding:10px 14px;
+        border-radius:8px;cursor:pointer;color:var(--muted);font-size:.88rem;font-weight:600;
+        border:none;background:transparent;transition:all .15s;text-align:left;width:100%;}
+      .side-item .icon{font-size:1.1rem;}
+      .side-item:hover{background:var(--border2);color:var(--text);}
+      .side-item.active{background:#1a2d4a;color:var(--blue);}
       .side-logo{padding:12px 14px 20px;font-weight:800;font-size:.95rem;color:var(--text);}
       .side-logo span{color:var(--blue);}
-      #clockBar{left:200px;position:fixed;right:0;top:0;z-index:90;}
+      #clockBar{left:200px;position:fixed;right:0;top:0;}
       #appMain{margin-left:200px;padding:68px 20px 20px;}
       :root{--nav-h:0px;}
       #toast{bottom:20px;}
+      #btnExportTop,#btnImportTop{display:inline-flex!important;}
       .desk-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
       .desk-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
-      #btnExportTop,#btnImportTop{display:inline-flex!important;}
     }
     @media(max-width:767px){#sideNav{display:none;}}
   </style>
 </head>
 <body>
 
+<!-- ── Top Bar ── -->
 <div id="clockBar">
   <div style="display:flex;align-items:center;gap:10px;">
     <span style="font-size:1.2rem;">📈</span>
@@ -94,52 +151,61 @@
       <div id="lastSaved" style="font-size:.65rem;color:#555;line-height:1.2;">最後儲存：—</div>
     </div>
   </div>
-  <div style="display:flex;align-items:center;gap:8px;">
+  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
     <span id="twClock" style="font-size:.78rem;">—</span>
     <span id="marketBadge" class="badge badge-wait">—</span>
-    <button id="btnExportTop" class="btn-xs btn-xs-blue" style="display:none;">💾 匯出</button>
+    <!-- 原始匯出/匯入/重置（桌面顯示） -->
+    <button id="btnExport" class="btn-xs btn-xs-blue" style="display:none;">💾 匯出</button>
     <label id="btnImportTop" class="btn-xs btn-xs-gray" style="display:none;cursor:pointer;">
-      📂 匯入<input type="file" accept=".json" id="importFileTop" style="display:none;"/>
+      📂 匯入<input type="file" accept=".json" id="importFile" style="display:none;"/>
     </label>
-    <button id="btnCloudLogin" class="btn-xs" style="background:#1a2d1a;color:#2ecc71;border:1px solid #1a4a1a;">☁️ 雲端</button>
+    <button id="btnReset" class="btn-xs" style="background:#2d0a0a;color:var(--up);border:1px solid #8b1a1a;display:none;">🗑 重置</button>
+    <button id="btnCloudLogin" class="btn-xs" style="background:#0a1a0a;color:#2ecc71;border:1px solid #1a4a1a;">☁️ 雲端</button>
   </div>
 </div>
+<style>
+  @media(min-width:768px){
+    #btnExport,#btnImportTop,#btnReset{display:inline-flex!important;}
+  }
+</style>
 
+<!-- ── Desktop Side Nav ── -->
 <nav id="sideNav">
   <div class="side-logo">📈 台股<span>操盤</span></div>
   <button class="side-item active" data-page="overview"><span class="icon">🏠</span>資產總覽</button>
   <button class="side-item" data-page="market"><span class="icon">📡</span>行情追蹤</button>
   <button class="side-item" data-page="portfolio"><span class="icon">📦</span>持股帳務</button>
   <button class="side-item" data-page="trade"><span class="icon">💹</span>交易設定</button>
-  <button class="side-item" data-page="cloud" style="margin-top:auto;border:1px solid #1a4a1a;color:#2ecc71;background:#0a1a0a;">
+  <button class="side-item" data-page="cloud"
+    style="margin-top:auto;border:1px solid #1a4a1a;color:#2ecc71;background:#0a1a0a;">
     <span class="icon">☁️</span>雲端備份
   </button>
 </nav>
 
 <main id="appMain">
 
-  <!-- PAGE 1: 資產總覽 -->
+  <!-- ════ PAGE 1: 資產總覽 ════ -->
   <div id="page-overview" class="page active">
     <div class="desk-grid-3" style="margin-bottom:14px;">
       <div class="card stat-big">
         <div class="label">總資產</div>
         <div class="value" id="totalAsset" style="color:var(--blue);">—</div>
-        <div class="sub" id="totalAssetSub">現金 + 持股</div>
+        <div class="sub">現金 + 持股</div>
       </div>
       <div class="card stat-big">
         <div class="label">虛擬現金</div>
-        <div class="value up" id="cashDisplay">—</div>
-        <div class="sub" style="display:flex;gap:6px;justify-content:center;margin-top:6px;flex-wrap:wrap;">
+        <div class="value text-up" id="cashDisplay">—</div>
+        <div class="sub" style="display:flex;gap:6px;justify-content:center;margin-top:8px;flex-wrap:wrap;">
           <button class="btn-xs btn-xs-red" id="btnAddCash">＋充值</button>
           <button class="btn-xs btn-xs-gray" id="btnSetCash">✏️ 設定</button>
           <button class="btn-xs" id="btnFee" style="background:#0a1a0a;color:#2ecc71;border:1px solid #1a4a1a;">⚙️ 手續費</button>
         </div>
-        <div id="feeLabel" class="muted" style="font-size:.7rem;margin-top:6px;"></div>
+        <div id="feeLabel" style="font-size:.7rem;color:var(--muted);margin-top:6px;"></div>
       </div>
       <div class="card stat-big">
         <div class="label">累計已實現損益</div>
         <div class="value" id="totalPnL">—</div>
-        <div class="sub" id="totalPnLSub">歷史買賣結算</div>
+        <div class="sub">歷史買賣結算</div>
       </div>
     </div>
     <div class="desk-grid-2" style="gap:14px;margin-bottom:14px;">
@@ -153,7 +219,10 @@
       </div>
     </div>
     <div class="card">
-      <div class="sec-title" style="cursor:pointer;" onclick="window.__navigate&&window.__navigate('portfolio')">📦 持股概況（點此查看詳情）</div>
+      <div class="sec-title" style="cursor:pointer;"
+        onclick="window.__navigate&&window.__navigate('portfolio')">
+        📦 持股概況（點此查看詳情）
+      </div>
       <div class="tbl-wrap">
         <table>
           <thead><tr>
@@ -162,7 +231,7 @@
           <tbody id="holdingsBodyOverview"></tbody>
         </table>
       </div>
-      <div id="holdingsEmptyOverview" style="text-align:center;padding:24px 12px;display:none;">
+      <div id="holdingsEmptyOverview" style="text-align:center;padding:24px;display:none;">
         <div style="font-size:2rem;margin-bottom:8px;">📭</div>
         <p class="muted" style="font-size:.85rem;margin-bottom:12px;">目前尚無持股</p>
         <button class="btn btn-blue" id="btnGoMarket" style="font-size:.82rem;padding:8px 18px;">
@@ -172,7 +241,7 @@
     </div>
   </div>
 
-  <!-- PAGE 2: 行情追蹤 -->
+  <!-- ════ PAGE 2: 行情追蹤 ════ -->
   <div id="page-market" class="page">
     <div class="card" style="margin-bottom:12px;">
       <div class="sec-title">🔍 股票搜尋</div>
@@ -193,9 +262,10 @@
         </table>
       </div>
       <p id="watchlistEmpty" class="muted" style="text-align:center;padding:16px;font-size:.85rem;">
-        尚未追蹤任何股票，請在上方搜尋加入
+        尚未追蹤任何股票
       </p>
     </div>
+    <!-- K線 -->
     <div id="klinePanel">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <span class="sec-title" id="klineTitle" style="margin-bottom:0;">K 線圖</span>
@@ -205,55 +275,71 @@
     </div>
   </div>
 
-  <!-- PAGE 3: 持股帳務 -->
+  <!-- ════ PAGE 3: 持股帳務 ════ -->
   <div id="page-portfolio" class="page">
     <div class="card" style="margin-bottom:12px;">
       <div class="sec-title">📦 持股庫存</div>
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th>代號 / 名稱</th><th>股數</th><th>均價</th><th>現價</th><th>損益</th><th>報酬率</th><th></th></tr></thead>
+          <thead><tr>
+            <th>代號 / 名稱</th><th>股數</th><th>均價</th><th>現價</th><th>損益</th><th>報酬率</th><th></th>
+          </tr></thead>
           <tbody id="holdingsBody"></tbody>
         </table>
       </div>
       <p id="holdingsEmpty" class="muted" style="text-align:center;padding:16px;font-size:.85rem;">目前無持股</p>
+      <!-- 持股市值（app.js 寫入此 ID） -->
+      <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;">
+        <span class="muted" style="font-size:.8rem;">持股市值合計</span>
+        <span id="holdingsValue" style="font-size:1rem;font-weight:700;color:var(--blue);">$ 0</span>
+      </div>
     </div>
     <div class="card">
-      <div class="sec-title">💰 已實現損益統計</div>
-      <div class="desk-grid-3" style="margin-bottom:12px;gap:8px;">
-        <div class="card-sm" style="text-align:center;">
-          <div style="font-size:.7rem;color:var(--muted);">已實現損益</div>
-          <div style="font-size:1.1rem;font-weight:800;margin-top:4px;" id="rTotalPnl">—</div>
-        </div>
-        <div class="card-sm" style="text-align:center;">
-          <div style="font-size:.7rem;color:var(--muted);">筆數 / 勝率</div>
-          <div style="font-size:.95rem;font-weight:700;margin-top:4px;" id="rWinRate">—</div>
-        </div>
-        <div class="card-sm" style="text-align:center;">
-          <div style="font-size:.7rem;color:var(--muted);">平均損益/筆</div>
-          <div style="font-size:.95rem;font-weight:700;margin-top:4px;" id="rAvgPnl">—</div>
-        </div>
+      <div class="sec-title">💰 損益紀錄</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <button class="tab-btn active" data-tab="history">📋 交易紀錄</button>
+        <button class="tab-btn"        data-tab="realized">💰 已實現損益</button>
       </div>
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr><th>時間</th><th>代號 / 名稱</th><th>股數</th><th>買均價</th><th>賣價</th><th>淨損益</th><th>報酬率</th></tr></thead>
-          <tbody id="realizedBody"></tbody>
-        </table>
-      </div>
-      <p id="realizedEmpty" class="muted" style="text-align:center;padding:16px;font-size:.85rem;">尚無已結案部位</p>
-      <details style="margin-top:12px;">
-        <summary class="sec-title" style="cursor:pointer;user-select:none;margin-bottom:0;">📋 完整交易紀錄（展開）</summary>
-        <div class="tbl-wrap" style="margin-top:8px;">
+      <div id="tab-history" class="tab-panel active" style="padding-top:8px;">
+        <div class="tbl-wrap">
           <table>
-            <thead><tr><th>時間</th><th>代號 / 名稱</th><th>方向</th><th>股數</th><th>成交價</th><th>金額</th><th>稅費</th></tr></thead>
+            <thead><tr>
+              <th>時間</th><th>代號 / 名稱</th><th>方向</th><th>股數</th><th>成交價</th><th>金額</th><th>稅費</th>
+            </tr></thead>
             <tbody id="tradeHistoryBody"></tbody>
           </table>
         </div>
         <p id="historyEmpty" class="muted" style="text-align:center;padding:12px;font-size:.85rem;">尚無交易紀錄</p>
-      </details>
+      </div>
+      <div id="tab-realized" class="tab-panel" style="padding-top:8px;">
+        <div class="desk-grid-3" style="margin-bottom:10px;gap:8px;">
+          <div class="card-sm" style="text-align:center;">
+            <div style="font-size:.7rem;color:var(--muted);">已實現損益</div>
+            <div style="font-size:1.1rem;font-weight:800;margin-top:4px;" id="rTotalPnl">—</div>
+          </div>
+          <div class="card-sm" style="text-align:center;">
+            <div style="font-size:.7rem;color:var(--muted);">筆數 / 勝率</div>
+            <div style="font-size:.95rem;font-weight:700;margin-top:4px;" id="rWinRate">—</div>
+          </div>
+          <div class="card-sm" style="text-align:center;">
+            <div style="font-size:.7rem;color:var(--muted);">平均損益/筆</div>
+            <div style="font-size:.95rem;font-weight:700;margin-top:4px;" id="rAvgPnl">—</div>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>時間</th><th>代號 / 名稱</th><th>股數</th><th>買均價</th><th>賣價</th><th>淨損益</th><th>報酬率</th>
+            </tr></thead>
+            <tbody id="realizedBody"></tbody>
+          </table>
+        </div>
+        <p id="realizedEmpty" class="muted" style="text-align:center;padding:12px;font-size:.85rem;">尚無已結案部位</p>
+      </div>
     </div>
   </div>
 
-  <!-- PAGE 4: 交易設定 -->
+  <!-- ════ PAGE 4: 交易設定 ════ -->
   <div id="page-trade" class="page">
     <div class="desk-grid-2">
       <div class="card" style="margin-bottom:12px;">
@@ -276,7 +362,8 @@
             <button class="btn btn-green" id="btnSell" style="flex:1;">賣出 ▼</button>
           </div>
           <p id="tradeMsg" class="muted" style="font-size:.82rem;min-height:1.2em;"></p>
-          <div id="feePreview" class="muted" style="font-size:.75rem;background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:8px;display:none;"></div>
+          <div id="feePreview" style="font-size:.75rem;color:var(--muted);background:var(--bg);
+            border:1px solid var(--border2);border-radius:6px;padding:8px;display:none;"></div>
         </div>
       </div>
       <div class="card">
@@ -291,40 +378,53 @@
         <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
           <div class="setting-label">📡 報價來源</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%;">
-            <button class="src-btn" data-source="auto">🤖 自動</button>
-            <button class="src-btn" data-source="twse">🏛️ 證交所</button>
-            <button class="src-btn" data-source="yahoo">📊 Yahoo</button>
-            <button class="src-btn" data-source="google">🔍 Google</button>
+            <button class="source-btn" data-source="auto">🤖 自動</button>
+            <button class="source-btn" data-source="twse">🏛️ 證交所</button>
+            <button class="source-btn" data-source="yahoo">📊 Yahoo</button>
+            <button class="source-btn" data-source="google">🔍 Google</button>
           </div>
           <p id="sourceNote" class="muted" style="font-size:.72rem;"></p>
         </div>
         <div class="setting-row">
-          <div><div class="setting-label">持股市值</div><div class="setting-desc">即時報價計算</div></div>
-          <div style="font-size:1rem;font-weight:700;color:var(--blue);" id="holdingsValue">$ 0</div>
+          <div><div class="setting-label">📋 資料操作</div></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;padding-top:4px;">
+          <button class="btn btn-blue" id="btnExportCloud">💾 匯出 JSON</button>
+          <label class="btn btn-amber" style="cursor:pointer;">
+            📂 匯入 JSON<input type="file" accept=".json" id="importFileCloud" style="display:none;"/>
+          </label>
+          <!-- 重置按鈕（此處為交易設定頁） -->
+          <button class="btn btn-danger" id="btnResetCloud">🗑 重置資料</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- PAGE 5: 雲端備份 -->
+  <!-- ════ PAGE 5: 雲端備份 ════ -->
   <div id="page-cloud" class="page">
     <div class="card" style="margin-bottom:14px;">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
         <span style="font-size:2.2rem;">☁️</span>
         <div>
           <div style="font-weight:800;font-size:1rem;">Firebase 雲端同步</div>
-          <div class="muted" style="font-size:.78rem;margin-top:3px;">Google 帳號登入後，買賣操作即時同步至 Firestore<br/>跨裝置保留走勢連續紀錄</div>
+          <div class="muted" style="font-size:.78rem;margin-top:3px;">
+            Google 帳號登入後，買賣操作即時同步至 Firestore
+          </div>
         </div>
       </div>
-      <div style="background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="background:var(--bg);border:1px solid var(--border2);border-radius:8px;
+        padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;">
         <div style="display:flex;align-items:center;gap:8px;font-size:.85rem;">
-          <span id="cloudStatusDot" style="width:10px;height:10px;border-radius:50%;background:#555;flex-shrink:0;display:inline-block;"></span>
+          <span id="cloudStatusDot" style="width:10px;height:10px;border-radius:50%;
+            background:#555;flex-shrink:0;display:inline-block;"></span>
           <span id="cloudStatusText">尚未登入</span>
         </div>
         <div id="cloudUserInfo" style="font-size:.82rem;color:var(--muted);"></div>
       </div>
       <div id="cloudLoginForm" style="display:flex;flex-direction:column;gap:10px;">
-        <button id="btnCloudSignIn" style="display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#3c4043;border:1px solid #dadce0;border-radius:8px;padding:12px 16px;font-size:.92rem;font-weight:600;cursor:pointer;width:100%;transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 2px 8px #0004'" onmouseout="this.style.boxShadow='none'">
+        <button id="btnCloudSignIn" style="display:flex;align-items:center;justify-content:center;
+          gap:10px;background:#fff;color:#3c4043;border:1px solid #dadce0;border-radius:8px;
+          padding:12px 16px;font-size:.92rem;font-weight:600;cursor:pointer;width:100%;">
           <svg width="18" height="18" viewBox="0 0 48 48">
             <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.02 17.74 9.5 24 9.5z"/>
             <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
@@ -345,13 +445,16 @@
       </div>
     </div>
 
+    <!-- 本地備份 + 重置（雲端備份頁） -->
     <div class="card" style="margin-bottom:14px;">
       <div class="sec-title">💾 本地備份 / 還原</div>
-      <p class="muted" style="font-size:.8rem;margin-bottom:12px;">定期匯出 JSON 以防資料遺失，可搭配雲端同步雙重保障</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-blue" id="btnExportCloud">💾 匯出 JSON</button>
-        <label class="btn btn-amber" style="cursor:pointer;">📂 匯入 JSON<input type="file" accept=".json" id="importFileCloud" style="display:none;"/></label>
-        <button class="btn btn-danger" id="btnResetCloud">🗑 重置資料</button>
+        <button class="btn btn-blue" id="btnExportTop">💾 匯出 JSON</button>
+        <label class="btn btn-amber" style="cursor:pointer;">
+          📂 匯入 JSON<input type="file" accept=".json" id="importFileTop" style="display:none;"/>
+        </label>
+        <!-- ★ 重置按鈕（雲端備份頁） -->
+        <button class="btn btn-danger" id="btnReset2">🗑 重置所有資料</button>
       </div>
     </div>
 
@@ -359,32 +462,17 @@
       <div class="sec-title">📋 Firebase 設定說明</div>
       <ol style="font-size:.82rem;color:var(--muted);line-height:2.2;padding-left:1.2em;">
         <li>前往 <a href="https://console.firebase.google.com/" target="_blank" style="color:var(--blue);">Firebase Console</a> 建立專案</li>
-        <li>Authentication → Sign-in method → 啟用 <b style="color:var(--text);">Google</b></li>
-        <li>Firestore Database → 建立資料庫 → 套用安全規則</li>
-        <li>專案設定 → 新增 Web 應用程式 → 複製 Config 物件</li>
-        <li>將 Config 填入 <code style="color:var(--blue);">app.js</code> 頂部的 <code style="color:var(--blue);">FIREBASE_CONFIG</code></li>
-        <li>Authentication → 已授權網域 → 加入你的網域（或 localhost）</li>
+        <li>Authentication → Sign-in method → 啟用 Google</li>
+        <li>Firestore Database → 建立資料庫</li>
+        <li>專案設定 → 新增 Web 應用程式 → 複製 Config</li>
+        <li>將 Config 填入 app.js 頂部的 FIREBASE_CONFIG</li>
       </ol>
-      <div style="margin-top:14px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:12px;font-size:.78rem;color:var(--muted);">
-        <b style="color:var(--text);">Firestore 安全規則：</b>
-        <pre style="margin-top:8px;line-height:1.6;color:#aaa;overflow-x:auto;">rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /users/{uid} {
-      allow read, write: if request.auth != null
-                         &amp;&amp; request.auth.uid == uid;
-    }
-    match /{document=**} {
-      allow read, write: if false;
-    }
-  }
-}</pre>
-      </div>
     </div>
   </div>
 
 </main>
 
+<!-- ── Bottom Nav（手機）── -->
 <nav id="bottomNav">
   <button class="nav-item active" data-page="overview"><span class="icon">🏠</span>總覽</button>
   <button class="nav-item" data-page="market"><span class="icon">📡</span>行情</button>
@@ -395,27 +483,41 @@ service cloud.firestore {
 
 <div id="toast"></div>
 
+<!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+<!-- App -->
 <script src="app.js?v=2.2"></script>
+
+<!-- SPA 導覽 -->
 <script>
 (function(){
-  let _cur='overview';
+  var cur = 'overview';
   function go(page){
-    if(page===_cur)return;_cur=page;
-    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-    const t=document.getElementById('page-'+page);if(t)t.classList.add('active');
-    document.querySelectorAll('#bottomNav .nav-item,#sideNav .side-item').forEach(b=>{
-      b.classList.toggle('active',b.dataset.page===page);
+    if(page===cur) return;
+    cur = page;
+    document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+    var t = document.getElementById('page-'+page);
+    if(t) t.classList.add('active');
+    document.querySelectorAll('#bottomNav .nav-item, #sideNav .side-item').forEach(function(b){
+      b.classList.toggle('active', b.dataset.page===page);
     });
-    if(typeof window.__onPageEnter==='function')window.__onPageEnter(page);
+    if(typeof window.__onPageEnter==='function') window.__onPageEnter(page);
   }
-  document.querySelectorAll('#bottomNav .nav-item,#sideNav .side-item').forEach(b=>{
-    b.addEventListener('click',()=>go(b.dataset.page));
+  document.querySelectorAll('#bottomNav .nav-item, #sideNav .side-item').forEach(function(b){
+    b.addEventListener('click', function(){ go(b.dataset.page); });
   });
-  window.__navigate=go;
-  window.__currentPage=()=>_cur;
+  // btnReset2（雲端備份頁重置）
+  document.addEventListener('DOMContentLoaded', function(){
+    var r2 = document.getElementById('btnReset2');
+    if(r2) r2.addEventListener('click', function(){
+      if(typeof resetAllData==='function') resetAllData();
+    });
+  });
+  window.__navigate = go;
+  window.__currentPage = function(){ return cur; };
 })();
 </script>
 </body>
