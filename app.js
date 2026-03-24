@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
-const STORAGE_KEY  = 'twStock_v3';
+const STORAGE_KEY  = 'twStock_v2';
 
 let state = loadState();
 const quoteCache    = {};
@@ -109,13 +109,16 @@ function loadState(){
     if(!raw)return getEmptyState();
     const p=JSON.parse(raw);
     return{
-      cash:        num(p.cash)??INITIAL_CASH,
-      holdings:    (p.holdings&&typeof p.holdings==='object')?p.holdings:{},
-      history:     Array.isArray(p.history)?p.history:[],
-      watchlist:   Array.isArray(p.watchlist)?[...new Set(p.watchlist.map(normalizeSymbol).filter(Boolean))]:[],
-      realizedPnL: num(p.realizedPnL)??0,
-      priceSource: p.priceSource||'auto',
-      savedAt:     p.savedAt||null
+      cash:          num(p.cash)??INITIAL_CASH,
+      holdings:      (p.holdings&&typeof p.holdings==='object')?p.holdings:{},
+      history:       Array.isArray(p.history)?p.history:[],
+      realizedTrades:Array.isArray(p.realizedTrades)?p.realizedTrades:[],
+      assetHistory:  Array.isArray(p.assetHistory)?p.assetHistory:[],
+      watchlist:     Array.isArray(p.watchlist)?[...new Set(p.watchlist.map(normalizeSymbol).filter(Boolean))]:[],
+      realizedPnL:   num(p.realizedPnL)??0,
+      feeDiscount:   num(p.feeDiscount)??0.6,
+      priceSource:   p.priceSource||'auto',
+      savedAt:       p.savedAt||null
     };
   }catch{return getEmptyState();}
 }
