@@ -2,255 +2,534 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>台股虛擬操盤系統 v2.0</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <title>台股虛擬操盤 v2.1</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body{background:#0d1117;color:#e6edf3;font-family:'Segoe UI',sans-serif;}
-    .card{background:#161b22;border:1px solid #30363d;border-radius:10px;}
-    .btn-primary{background:#8b1a1a;border:none;color:#fff;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;transition:background .15s;}
-    .btn-primary:hover{background:#c0392b;}
-    .btn-primary:disabled{opacity:.5;cursor:not-allowed;}
-    .btn-sell{background:#0a4a2a;border:none;color:#fff;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;transition:background .15s;}
-    .btn-sell:hover{background:#1a7a3a;}
-    .btn-sell:disabled{opacity:.5;cursor:not-allowed;}
-    .btn-blue{background:#1f6feb;border:none;color:#fff;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;}
-    .btn-blue:hover{background:#388bfd;}
-    .btn-amber{background:#9e6a03;border:none;color:#fff;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;}
-    .btn-amber:hover{background:#d29922;}
-    .btn-danger{background:#da3633;border:none;color:#fff;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;}
-    .btn-danger:hover{background:#f85149;}
-    .btn-xs-red{background:#1a0d0d;color:#ff4d4d;border:1px solid #8b1a1a;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:.72rem;font-weight:700;}
-    .btn-xs-red:hover{background:#8b1a1a;}
-    .btn-xs-gray{background:#21262d;color:#8b949e;border:1px solid #30363d;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:.72rem;font-weight:700;}
-    .btn-xs-gray:hover{background:#30363d;color:#e6edf3;}
-    /* 台灣慣例：紅漲綠跌 */
-    .text-up  {color:#ff4d4d;}
-    .text-down{color:#2ecc71;}
-    .badge-rise{background:#2d0a0a;color:#ff4d4d;}
-    .badge-fall{background:#0a2d1a;color:#2ecc71;}
-    .badge-buy {background:#2d0a0a;color:#ff4d4d;}
-    .badge-sell{background:#0a2d1a;color:#2ecc71;}
-    .badge-market-open{background:#0a1a2d;color:#388bfd;}
-    .badge-market-post{background:#2d2200;color:#d29922;}
-    .badge-wait{background:#1c2128;color:#8b949e;}
-    .badge{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:.75rem;font-weight:700;white-space:nowrap;}
-    .version-tag{background:#1f6feb22;color:#388bfd;border:1px solid #1f6feb55;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:9999px;margin-left:8px;vertical-align:middle;}
-    .source-btn{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:.78rem;font-weight:600;text-align:center;transition:all .15s;width:100%;}
-    .source-btn:hover{background:#2c3139;border-color:#388bfd;color:#e6edf3;}
-    .source-btn.active{background:#1a2d4a;border-color:#388bfd;color:#388bfd;}
-    .input-dark{background:#0d1117;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:7px 12px;outline:none;width:100%;box-sizing:border-box;}
-    .input-dark:focus{border-color:#388bfd;}
-    /* 分頁 */
-    .tab-btn{padding:6px 16px;border-radius:6px 6px 0 0;cursor:pointer;font-size:.82rem;font-weight:600;background:transparent;border:1px solid #30363d;border-bottom:none;color:#8b949e;transition:all .15s;}
-    .tab-btn.active{background:#161b22;color:#e6edf3;border-color:#388bfd;border-bottom:1px solid #161b22;}
-    .tab-panel{display:none;}
-    .tab-panel.active{display:block;}
-    table{width:100%;border-collapse:collapse;}
-    th{color:#8b949e;font-size:.75rem;text-transform:uppercase;padding:8px 12px;text-align:left;border-bottom:1px solid #21262d;white-space:nowrap;}
-    td{padding:10px 12px;border-bottom:1px solid #21262d;font-size:.9rem;vertical-align:middle;}
-    tr:last-child td{border-bottom:none;}
-    tr:hover td{background:#1c2128;}
-    /* 已實現損益統計卡 */
-    .stat-card{background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:12px 16px;text-align:center;}
-    .stat-card .val{font-size:1.2rem;font-weight:700;margin-top:4px;}
-    #toast{position:fixed;bottom:24px;right:24px;background:#21262d;border:1px solid #30363d;padding:12px 20px;border-radius:8px;font-size:.88rem;z-index:9999;display:none;max-width:340px;box-shadow:0 4px 24px #0009;}
-    @media(max-width:640px){th,td{padding:6px 8px;font-size:.8rem;}}
-  </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root{
+      --bg:#0d1117;--surface:#161b22;--border:#30363d;--border2:#21262d;
+      --text:#e6edf3;--muted:#8b949e;--up:#ff4d4d;--down:#2ecc71;
+      --blue:#388bfd;--amber:#d29922;--nav-h:64px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;
+      min-height:100vh;overflow-x:hidden;}
+
+    /* ── Bottom Nav (mobile) ── */
+    #bottomNav{
+      position:fixed;bottom:0;left:0;right:0;height:var(--nav-h);
+      background:#161b22;border-top:1px solid var(--border);
+      display:flex;z-index:100;
+    }
+    .nav-item{
+      flex:1;display:flex;flex-direction:column;align-items:center;
+      justify-content:center;gap:3px;cursor:pointer;
+      color:var(--muted);font-size:.65rem;font-weight:600;
+      transition:color .15s;border:none;background:transparent;
+      padding:4px 0;
+    }
+    .nav-item .icon{font-size:1.35rem;line-height:1;}
+    .nav-item.active{color:var(--blue);}
+    .nav-item.active .icon{filter:drop-shadow(0 0 6px #388bfd88);}
+
+    /* ── Main content area ── */
+    #appMain{
+      padding:12px 12px calc(var(--nav-h) + 12px) 12px;
+      max-width:1200px;margin:0 auto;
+    }
+
+    /* ── Pages ── */
+    .page{display:none;}
+    .page.active{display:block;}
+
+    /* ── Cards ── */
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;}
+    .card-sm{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;}
+
+    /* ── Stat big ── */
+    .stat-big{text-align:center;padding:20px 12px 16px;}
+    .stat-big .label{font-size:.75rem;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;}
+    .stat-big .value{font-size:2rem;font-weight:800;margin-top:4px;line-height:1.1;}
+    .stat-big .sub{font-size:.8rem;color:var(--muted);margin-top:4px;}
+
+    /* ── Section title ── */
+    .sec-title{font-size:.72rem;color:var(--muted);text-transform:uppercase;
+      letter-spacing:.08em;font-weight:700;margin-bottom:10px;}
+
+    /* ── Tables ── */
+    table{width:100%;border-collapse:collapse;}
+    th{color:var(--muted);font-size:.68rem;text-transform:uppercase;
+      padding:7px 10px;text-align:left;border-bottom:1px solid var(--border2);white-space:nowrap;}
+    td{padding:10px 10px;border-bottom:1px solid var(--border2);font-size:.85rem;vertical-align:middle;}
+    tr:last-child td{border-bottom:none;}
+    tr:hover td{background:#1c2128;}
+
+    /* ── Inputs ── */
+    .inp{background:var(--bg);border:1px solid var(--border);color:var(--text);
+      border-radius:8px;padding:9px 12px;outline:none;width:100%;font-size:.9rem;}
+    .inp:focus{border-color:var(--blue);}
+    .inp::placeholder{color:var(--muted);}
+
+    /* ── Buttons ── */
+    .btn{border:none;border-radius:8px;padding:10px 18px;font-weight:700;
+      cursor:pointer;font-size:.88rem;transition:all .15s;white-space:nowrap;}
+    .btn-red{background:#8b1a1a;color:#fff;} .btn-red:hover{background:#c0392b;}
+    .btn-green{background:#0a4a2a;color:#fff;} .btn-green:hover{background:#1a7a3a;}
+    .btn-blue{background:#1f6feb;color:#fff;} .btn-blue:hover{background:var(--blue);}
+    .btn-amber{background:#9e6a03;color:#fff;} .btn-amber:hover{background:var(--amber);}
+    .btn-danger{background:#da3633;color:#fff;} .btn-danger:hover{background:#f85149;}
+    .btn-ghost{background:var(--border2);color:var(--text);border:1px solid var(--border);}
+    .btn-ghost:hover{background:var(--border);}
+    .btn-xs{padding:3px 10px;font-size:.72rem;border-radius:5px;border:none;
+      cursor:pointer;font-weight:700;transition:all .15s;}
+    .btn-xs-blue{background:#1a2d4a;color:var(--blue);} .btn-xs-blue:hover{background:#1f6feb;color:#fff;}
+    .btn-xs-amber{background:#2d2200;color:var(--amber);} .btn-xs-amber:hover{background:#9e6a03;color:#fff;}
+    .btn-xs-red{background:#1a0d0d;color:var(--up);border:1px solid #8b1a1a;}
+    .btn-xs-red:hover{background:#8b1a1a;}
+    .btn-xs-gray{background:#21262d;color:var(--muted);border:1px solid var(--border);}
+    .btn-xs-gray:hover{background:var(--border);color:var(--text);}
+    .btn:disabled,.btn-xs:disabled{opacity:.45;cursor:not-allowed;}
+
+    /* ── Badges ── */
+    .badge{display:inline-block;padding:2px 8px;border-radius:9999px;
+      font-size:.68rem;font-weight:700;white-space:nowrap;}
+    .badge-buy{background:#2d0a0a;color:var(--up);}
+    .badge-sell{background:#0a2d1a;color:var(--down);}
+    .badge-rise{background:#2d0a0a;color:var(--up);}
+    .badge-fall{background:#0a2d1a;color:var(--down);}
+    .badge-open{background:#0a1a2d;color:var(--blue);}
+    .badge-post{background:#2d2200;color:var(--amber);}
+    .badge-closed{background:#1c2128;color:var(--muted);}
+
+    /* ── Color helpers ── */
+    .up{color:var(--up);font-weight:700;} .down{color:var(--down);font-weight:700;}
+    .muted{color:var(--muted);}
+
+    /* ── Source buttons ── */
+    .src-btn{background:#21262d;border:1px solid var(--border);color:var(--muted);
+      padding:7px 10px;border-radius:8px;cursor:pointer;font-size:.78rem;font-weight:600;
+      text-align:center;transition:all .15s;width:100%;}
+    .src-btn:hover{border-color:var(--blue);color:var(--text);}
+    .src-btn.active{background:#1a2d4a;border-color:var(--blue);color:var(--blue);}
+
+    /* ── Toast ── */
+    #toast{position:fixed;bottom:calc(var(--nav-h) + 12px);right:12px;
+      background:#21262d;border:1px solid var(--border);padding:10px 16px;
+      border-radius:8px;font-size:.85rem;z-index:9999;display:none;
+      max-width:320px;box-shadow:0 4px 24px #0009;}
+
+    /* ── Clock bar ── */
+    #clockBar{background:#161b22;border-bottom:1px solid var(--border2);
+      padding:6px 12px;display:flex;align-items:center;justify-content:space-between;
+      font-size:.75rem;color:var(--muted);position:sticky;top:0;z-index:50;}
+
+    /* ── K-line panel ── */
+    #klinePanel{background:var(--surface);border:1px solid var(--border);
+      border-radius:12px;padding:14px;margin-top:12px;display:none;}
+
+    /* ═══════════════════════════
+       DESKTOP overrides (≥ 768px)
+    ═══════════════════════════ */
+    @media(min-width:768px){
+      #bottomNav{display:none;}
+      #sideNav{
+        display:flex;flex-direction:column;gap:4px;
+        position:fixed;left:0;top:0;bottom:0;width:200px;
+        background:#161b22;border-right:1px solid var(--border);
+        padding:20px 12px;z-index:100;
+      }
+      .side-item{
+        display:flex;align-items:center;gap:10px;padding:10px 14px;
+        border-radius:8px;cursor:pointer;color:var(--muted);font-size:.88rem;
+        font-weight:600;border:none;background:transparent;transition:all .15s;
+        text-align:left;width:100%;
+      }
+      .side-item .icon{font-size:1.1rem;}
+      .side-item:hover{background:var(--border2);color:var(--text);}
+      .side-item.active{background:#1a2d4a;color:var(--blue);}
+      .side-logo{padding:12px 14px 20px;font-weight:800;font-size:.95rem;
+        color:var(--text);letter-spacing:.02em;}
+      .side-logo span{color:var(--blue);}
+
+      #appMain{margin-left:200px;padding:16px 20px 20px;}
+      #clockBar{left:200px;}
+
+      /* Desktop grid layouts per page */
+      .desk-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+      .desk-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+      :root{--nav-h:0px;}
+      #toast{bottom:20px;}
+    }
+    @media(max-width:767px){
+      #sideNav{display:none;}
+    }
+
+    /* ── Version tag ── */
+    .vtag{background:#1f6feb22;color:var(--blue);border:1px solid #1f6feb55;
+      font-size:.65rem;font-weight:700;padding:1px 7px;border-radius:9999px;}
+
+    /* ── Scrollable table wrapper ── */
+    .tbl-wrap{overflow-x:auto;overflow-y:auto;max-height:360px;}
+
+    /* ── Setting rows ── */
+    .setting-row{display:flex;align-items:center;justify-content:space-between;
+      padding:12px 0;border-bottom:1px solid var(--border2);}
+    .setting-row:last-child{border-bottom:none;}
+    .setting-label{font-size:.88rem;font-weight:600;}
+    .setting-desc{font-size:.72rem;color:var(--muted);margin-top:2px;}
+  </style>
 </head>
-<body class="min-h-screen p-4">
+<body>
 
-<!-- HEADER -->
-<header class="flex items-center justify-between mb-6 px-2 flex-wrap gap-3">
-  <div class="flex items-center gap-3">
-    <span class="text-2xl">📈</span>
-    <div>
-      <h1 class="text-xl font-bold tracking-wide">
-        台股虛擬操盤系統<span class="version-tag">v2.0</span>
-      </h1>
-      <div class="flex items-center gap-3 mt-1 flex-wrap">
-        <p class="text-xs text-gray-500" id="lastSaved">最後儲存：—</p>
-        <p class="text-xs font-mono" id="twClock" style="color:#8b949e;">—</p>
-        <span id="marketBadge" class="badge badge-wait" style="font-size:.7rem;">—</span>
-      </div>
-    </div>
+<!-- Clock Bar -->
+<div id="clockBar">
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span style="font-weight:800;color:var(--text);font-size:.82rem;">
+      台股虛擬操盤 <span class="vtag">v2.1</span>
+    </span>
   </div>
-  <div class="flex gap-2 flex-wrap justify-end">
-    <button class="btn-blue"  id="btnExport">💾 匯出備份</button>
-    <label  class="btn-amber" style="cursor:pointer;display:inline-block;padding:8px 16px;border-radius:6px;font-weight:600;">
-      📂 匯入備份<input type="file" accept=".json" id="importFile" style="display:none;"/>
-    </label>
-    <button class="btn-danger" id="btnReset">🗑 重置</button>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span id="twClock">—</span>
+    <span id="marketBadge" class="badge badge-closed">—</span>
+    <span id="lastSaved" style="font-size:.68rem;color:#444;"></span>
   </div>
-</header>
-
-<!-- DASHBOARD -->
-<section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-  <div class="card p-4">
-    <p class="text-xs text-gray-500 mb-1">虛擬現金</p>
-    <p class="text-xl font-bold text-up" id="cashDisplay">—</p>
-    <div class="flex gap-1 mt-2">
-      <button class="btn-xs-red"  id="btnAddCash">＋充值</button>
-      <button class="btn-xs-gray" id="btnSetCash">✏️ 設定</button>
-      <button class="btn-xs-gray" id="btnFee" style="margin-top:4px;background:#0a1a0a;color:#2ecc71;border-color:#1a4a0a;">⚙️ 手續費</button>
-      <p id="feeLabel" class="text-xs mt-1" style="color:#555;">手續費：6 折 (0.0855%)</p>
-    </div>
-  </div>
-  <div class="card p-4">
-    <p class="text-xs text-gray-500 mb-1">持股市值</p>
-    <p class="text-xl font-bold" style="color:#388bfd;" id="holdingsValue">—</p>
-  </div>
-  <div class="card p-4">
-    <p class="text-xs text-gray-500 mb-1">總資產</p>
-    <p class="text-xl font-bold" id="totalAsset">—</p>
-  </div>
-  <div class="card p-4">
-    <p class="text-xs text-gray-500 mb-1">累計已實現損益</p>
-    <p class="text-xl font-bold" id="totalPnL">—</p>
-  </div>
-</section>
-
-
-<!-- 圖表區 -->
-<section class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-  <div class="card p-4">
-    <h2 class="font-semibold mb-2 text-sm text-gray-400 uppercase tracking-widest">🥧 資產配置圖</h2>
-    <div style="position:relative;height:220px;"><canvas id="chartPie"></canvas></div>
-  </div>
-  <div class="card p-4">
-    <h2 class="font-semibold mb-2 text-sm text-gray-400 uppercase tracking-widest">📈 資產走勢圖</h2>
-    <div style="position:relative;height:220px;"><canvas id="chartLine"></canvas></div>
-  </div>
-</section>
-
-<!-- K 線面板 -->
-<div id="klinePanel" class="card p-4 mb-4" style="display:none;">
-  <div class="flex items-center justify-between mb-2">
-    <h2 class="font-semibold text-sm text-gray-400" id="klineTitle">K 線圖</h2>
-    <button id="btnCloseKLine" class="btn-xs-gray">✕ 關閉</button>
-  </div>
-  <div id="klineContainer" style="height:260px;width:100%;"></div>
 </div>
 
-<!-- MAIN -->
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+<!-- Desktop Side Nav -->
+<nav id="sideNav">
+  <div class="side-logo">📈 台股<span>操盤</span></div>
+  <button class="side-item active" data-page="overview">
+    <span class="icon">🏠</span>資產總覽
+  </button>
+  <button class="side-item" data-page="market">
+    <span class="icon">📡</span>行情追蹤
+  </button>
+  <button class="side-item" data-page="portfolio">
+    <span class="icon">📦</span>持股帳務
+  </button>
+  <button class="side-item" data-page="trade">
+    <span class="icon">⚙️</span>交易設定
+  </button>
+</nav>
 
-  <!-- LEFT -->
-  <div class="lg:col-span-1 flex flex-col gap-4">
+<!-- Main -->
+<main id="appMain">
 
-    <!-- 追蹤清單 -->
-    <div class="card p-4">
-      <h2 class="font-semibold mb-3 text-sm text-gray-400 uppercase tracking-widest">🔍 股票搜尋 / 追蹤清單</h2>
-      <div class="flex gap-2 mb-3">
-        <input id="searchInput" class="input-dark" placeholder="輸入股票代號 (e.g. 2330)"/>
-        <button class="btn-primary" id="btnAddWatch" style="white-space:nowrap;background:#1f6feb;">＋追蹤</button>
+  <!-- ══════════════════════════════
+       PAGE 1: 資產總覽
+  ══════════════════════════════ -->
+  <div id="page-overview" class="page active">
+
+    <!-- Big stats row -->
+    <div class="desk-grid-3" style="margin-bottom:14px;">
+      <div class="card stat-big">
+        <div class="label">總資產</div>
+        <div class="value" id="totalAsset" style="color:var(--blue);">—</div>
+        <div class="sub" id="totalAssetSub">現金 + 持股</div>
       </div>
-      <div style="overflow-x:auto;">
+      <div class="card stat-big">
+        <div class="label">虛擬現金</div>
+        <div class="value up" id="cashDisplay">—</div>
+        <div class="sub" style="display:flex;gap:6px;justify-content:center;margin-top:6px;">
+          <button class="btn-xs btn-xs-red" id="btnAddCash">＋充值</button>
+          <button class="btn-xs btn-xs-gray" id="btnSetCash">✏️ 設定</button>
+        </div>
+      </div>
+      <div class="card stat-big">
+        <div class="label">累計已實現損益</div>
+        <div class="value" id="totalPnL">—</div>
+        <div class="sub" id="totalPnLSub">歷史買賣結算</div>
+      </div>
+    </div>
+
+    <!-- Charts row -->
+    <div class="desk-grid-2" style="gap:14px;">
+      <div class="card">
+        <div class="sec-title">🥧 資產配置</div>
+        <div style="position:relative;height:220px;"><canvas id="chartPie"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="sec-title">📈 資產走勢</div>
+        <div style="position:relative;height:220px;"><canvas id="chartLine"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Holdings mini summary -->
+    <div class="card" style="margin-top:14px;">
+      <div class="sec-title">📦 持股概況（點此查看詳情）</div>
+      <div class="tbl-wrap">
         <table>
-          <thead><tr><th>代號 / 名稱</th><th>現價</th><th>漲跌</th><th></th></tr></thead>
+          <thead><tr>
+            <th>代號 / 名稱</th><th>股數</th><th>均價</th><th>現價</th><th>損益</th><th>報酬率</th>
+          </tr></thead>
+          <tbody id="holdingsBodyOverview"></tbody>
+        </table>
+      </div>
+      <p id="holdingsEmptyOverview" class="muted" style="text-align:center;padding:16px;font-size:.85rem;">目前無持股</p>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════
+       PAGE 2: 行情追蹤
+  ══════════════════════════════ -->
+  <div id="page-market" class="page">
+
+    <!-- Search -->
+    <div class="card" style="margin-bottom:12px;">
+      <div class="sec-title">🔍 股票搜尋</div>
+      <div style="display:flex;gap:8px;">
+        <input id="searchInput" class="inp" placeholder="輸入代號 (e.g. 2330) 後 Enter 加入追蹤" style="flex:1;"/>
+        <button class="btn btn-blue" id="btnAddWatch" style="padding:9px 14px;">＋</button>
+      </div>
+    </div>
+
+    <!-- Watchlist -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div class="sec-title" style="margin-bottom:0;">📋 追蹤清單</div>
+        <span id="mktRefreshHint" class="muted" style="font-size:.7rem;">—</span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>代號 / 名稱</th><th>現價</th><th>漲跌</th><th>來源</th><th></th>
+          </tr></thead>
           <tbody id="watchlistBody"></tbody>
         </table>
       </div>
+      <p id="watchlistEmpty" class="muted" style="text-align:center;padding:16px;font-size:.85rem;display:none;">
+        尚未追蹤任何股票，請在上方搜尋加入
+      </p>
     </div>
 
-    <!-- 價位來源 -->
-    <div class="card p-4">
-      <h2 class="font-semibold mb-3 text-sm text-gray-400 uppercase tracking-widest">📡 價位來源</h2>
-      <div class="grid grid-cols-2 gap-2 mb-2">
-        <button class="source-btn" data-source="auto">🤖 自動</button>
-        <button class="source-btn" data-source="twse">🏛️ 證交所</button>
-        <button class="source-btn" data-source="yahoo">📊 Yahoo</button>
-        <button class="source-btn" data-source="google">🔍 Google</button>
+    <!-- K-line panel -->
+    <div id="klinePanel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <span class="sec-title" id="klineTitle" style="margin-bottom:0;">K 線圖</span>
+        <button id="btnCloseKLine" class="btn-xs btn-xs-gray">✕ 關閉</button>
       </div>
-      <p class="text-xs mt-1" id="sourceNote" style="color:#8b949e;min-height:1.2rem;"></p>
+      <div id="klineContainer" style="height:260px;width:100%;"></div>
     </div>
-
-    <!-- 交易面板 -->
-    <div class="card p-4">
-      <h2 class="font-semibold mb-3 text-sm text-gray-400 uppercase tracking-widest">💹 虛擬交易面板（零股）</h2>
-      <div class="flex flex-col gap-3">
-        <input id="tradeSymbol" class="input-dark" placeholder="股票代號 (e.g. 0050)"/>
-        <input id="tradeQty"    class="input-dark" type="number" min="1" placeholder="股數（零股模式）"/>
-        <input id="tradePrice"  class="input-dark" type="number" step="0.01" placeholder="成交價（留空自動抓）"/>
-        <div class="flex gap-2">
-          <button class="btn-primary flex-1" id="btnBuy">買入 ▲</button>
-          <button class="btn-sell   flex-1" id="btnSell">賣出 ▼</button>
-        </div>
-        <p id="tradeMsg" class="text-xs mt-1" style="color:#ff4d4d;min-height:1.2rem;"></p>
-      </div>
-    </div>
-
   </div>
 
-  <!-- RIGHT -->
-  <div class="lg:col-span-2 flex flex-col gap-4">
+  <!-- ══════════════════════════════
+       PAGE 3: 持股帳務
+  ══════════════════════════════ -->
+  <div id="page-portfolio" class="page">
 
-    <!-- 持股庫存 -->
-    <div class="card p-4">
-      <h2 class="font-semibold mb-3 text-sm text-gray-400 uppercase tracking-widest">📦 持股庫存</h2>
-      <div style="overflow-x:auto;">
+    <!-- Holdings -->
+    <div class="card" style="margin-bottom:12px;">
+      <div class="sec-title">📦 持股庫存</div>
+      <div class="tbl-wrap">
         <table>
-          <thead>
-            <tr>
-              <th>代號 / 名稱</th><th>股數</th><th>均價</th>
-              <th>現價</th><th>損益</th><th>報酬率</th><th>操作</th>
-            </tr>
-          </thead>
+          <thead><tr>
+            <th>代號 / 名稱</th><th>股數</th><th>均價</th><th>現價</th><th>損益</th><th>報酬率</th><th></th>
+          </tr></thead>
           <tbody id="holdingsBody"></tbody>
         </table>
       </div>
-      <p id="holdingsEmpty" class="text-center py-4" style="color:#555;font-size:.9rem;">目前無持股</p>
+      <p id="holdingsEmpty" class="muted" style="text-align:center;padding:16px;font-size:.85rem;">目前無持股</p>
     </div>
 
-    <!-- 分頁：交易紀錄 / 已實現損益 -->
-    <div class="card p-4">
-      <!-- 分頁按鈕 -->
-      <div class="flex gap-1 mb-0" style="border-bottom:1px solid #30363d;margin-bottom:-1px;">
-        <button class="tab-btn active" data-tab="history">📋 交易紀錄</button>
-        <button class="tab-btn"        data-tab="realized">💰 已實現損益</button>
+    <!-- Realized PnL -->
+    <div class="card">
+      <!-- Stats row -->
+      <div class="sec-title">💰 已實現損益統計</div>
+      <div class="desk-grid-3" style="margin-bottom:12px;gap:8px;">
+        <div class="card-sm" style="text-align:center;">
+          <div style="font-size:.7rem;color:var(--muted);">已實現損益</div>
+          <div class="value" style="font-size:1.1rem;font-weight:800;margin-top:4px;" id="rTotalPnl">—</div>
+        </div>
+        <div class="card-sm" style="text-align:center;">
+          <div style="font-size:.7rem;color:var(--muted);">筆數 / 勝率</div>
+          <div style="font-size:.95rem;font-weight:700;margin-top:4px;" id="rWinRate">—</div>
+        </div>
+        <div class="card-sm" style="text-align:center;">
+          <div style="font-size:.7rem;color:var(--muted);">平均損益/筆</div>
+          <div class="value" style="font-size:.95rem;font-weight:700;margin-top:4px;" id="rAvgPnl">—</div>
+        </div>
       </div>
+      <!-- Table -->
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>時間</th><th>代號 / 名稱</th><th>股數</th><th>買均價</th><th>賣價</th><th>淨損益</th><th>報酬率</th>
+          </tr></thead>
+          <tbody id="realizedBody"></tbody>
+        </table>
+      </div>
+      <p id="realizedEmpty" class="muted" style="text-align:center;padding:16px;font-size:.85rem;">尚無已結案部位</p>
 
-      <!-- 交易紀錄 -->
-      <div id="tab-history" class="tab-panel active" style="padding-top:12px;">
-        <div style="max-height:280px;overflow-y:auto;overflow-x:auto;">
+      <!-- Trade history (collapsed) -->
+      <details style="margin-top:12px;">
+        <summary class="sec-title" style="cursor:pointer;user-select:none;margin-bottom:0;">
+          📋 完整交易紀錄（展開）
+        </summary>
+        <div class="tbl-wrap" style="margin-top:8px;">
           <table>
-            <thead>
-              <tr><th>時間</th><th>代號 / 名稱</th><th>方向</th><th>股數</th><th>單價</th><th>金額</th><th>稅費</th></tr>
-            </thead>
+            <thead><tr>
+              <th>時間</th><th>代號 / 名稱</th><th>方向</th><th>股數</th><th>成交價</th><th>金額</th><th>稅費</th>
+            </tr></thead>
             <tbody id="tradeHistoryBody"></tbody>
           </table>
         </div>
-        <p id="historyEmpty" class="text-center py-4" style="color:#555;font-size:.9rem;">尚無交易紀錄</p>
-      </div>
-
-      <!-- 已實現損益 -->
-      <div id="tab-realized" class="tab-panel" style="padding-top:12px;">
-        <!-- 統計卡 -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" id="realizedStats">
-          <div class="stat-card"><p class="text-xs" style="color:#8b949e;">已實現損益</p><p class="val" id="rTotalPnl">—</p></div>
-          <div class="stat-card"><p class="text-xs" style="color:#8b949e;">總交易次數</p><p class="val" id="rTotalTrades">—</p></div>
-          <div class="stat-card"><p class="text-xs" style="color:#8b949e;">勝率</p><p class="val" id="rWinRate">—</p></div>
-          <div class="stat-card"><p class="text-xs" style="color:#8b949e;">平均損益 / 筆</p><p class="val" id="rAvgPnl">—</p></div>
-        </div>
-        <!-- 結案部位明細 -->
-        <div style="max-height:240px;overflow-y:auto;overflow-x:auto;">
-          <table>
-            <thead>
-              <tr><th>時間</th><th>代號 / 名稱</th><th>股數</th><th>買均價</th><th>賣價</th><th>淨損益</th><th>報酬率</th></tr>
-            </thead>
-            <tbody id="realizedBody"></tbody>
-          </table>
-        </div>
-        <p id="realizedEmpty" class="text-center py-4" style="color:#555;font-size:.9rem;">尚無已結案部位</p>
-      </div>
-
+        <p id="historyEmpty" class="muted" style="text-align:center;padding:12px;font-size:.85rem;">尚無交易紀錄</p>
+      </details>
     </div>
   </div>
-</div>
+
+  <!-- ══════════════════════════════
+       PAGE 4: 交易 & 設定
+  ══════════════════════════════ -->
+  <div id="page-trade" class="page">
+    <div class="desk-grid-2">
+
+      <!-- Trade Panel -->
+      <div class="card" style="margin-bottom:12px;">
+        <div class="sec-title">💹 虛擬交易（零股）</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div>
+            <label class="sec-title" style="display:block;margin-bottom:4px;">股票代號</label>
+            <input id="tradeSymbol" class="inp" placeholder="e.g. 2330"/>
+          </div>
+          <div>
+            <label class="sec-title" style="display:block;margin-bottom:4px;">股數（零股）</label>
+            <input id="tradeQty" class="inp" type="number" min="1" placeholder="e.g. 100"/>
+          </div>
+          <div>
+            <label class="sec-title" style="display:block;margin-bottom:4px;">成交價（留空自動取得）</label>
+            <input id="tradePrice" class="inp" type="number" step="0.01" placeholder="自動取得現價"/>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-red" id="btnBuy" style="flex:1;">買入 ▲</button>
+            <button class="btn btn-green" id="btnSell" style="flex:1;">賣出 ▼</button>
+          </div>
+          <p id="tradeMsg" class="muted" style="font-size:.82rem;min-height:1.2em;"></p>
+          <div id="feePreview" class="muted" style="font-size:.75rem;background:var(--bg);
+            border:1px solid var(--border2);border-radius:6px;padding:8px;display:none;"></div>
+        </div>
+      </div>
+
+      <!-- Settings Panel -->
+      <div class="card">
+        <div class="sec-title">⚙️ 系統設定</div>
+
+        <!-- Fee -->
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">手續費折數</div>
+            <div class="setting-desc" id="feeLabel">預設 6 折（0.0855%）</div>
+          </div>
+          <button class="btn-xs btn-xs-gray" id="btnFee">設定</button>
+        </div>
+
+        <!-- Price source -->
+        <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
+          <div class="setting-label">📡 報價來源</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%;">
+            <button class="src-btn" data-source="auto">🤖 自動</button>
+            <button class="src-btn" data-source="twse">🏛️ 證交所</button>
+            <button class="src-btn" data-source="yahoo">📊 Yahoo</button>
+            <button class="src-btn" data-source="google">🔍 Google</button>
+          </div>
+          <p id="sourceNote" class="muted" style="font-size:.72rem;"></p>
+        </div>
+
+        <!-- Backup -->
+        <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
+          <div class="setting-label">💾 資料備份 / 還原</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-blue" id="btnExport" style="font-size:.8rem;padding:8px 14px;">匯出 JSON</button>
+            <label class="btn btn-amber" style="font-size:.8rem;padding:8px 14px;cursor:pointer;">
+              匯入 JSON<input type="file" accept=".json" id="importFile" style="display:none;"/>
+            </label>
+            <button class="btn btn-danger" id="btnReset" style="font-size:.8rem;padding:8px 14px;">🗑 重置</button>
+          </div>
+        </div>
+
+        <!-- Holding value info -->
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">持股市值</div>
+            <div class="setting-desc">即時報價計算</div>
+          </div>
+          <div style="font-size:1rem;font-weight:700;color:var(--blue);" id="holdingsValue">$ 0</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Bottom Nav (mobile) -->
+<nav id="bottomNav">
+  <button class="nav-item active" data-page="overview">
+    <span class="icon">🏠</span>資產總覽
+  </button>
+  <button class="nav-item" data-page="market">
+    <span class="icon">📡</span>行情
+  </button>
+  <button class="nav-item" data-page="portfolio">
+    <span class="icon">📦</span>帳務
+  </button>
+  <button class="nav-item" data-page="trade">
+    <span class="icon">⚙️</span>交易設定
+  </button>
+</nav>
 
 <div id="toast"></div>
+
 <script src="app.js?v=2.1"></script>
+
+<!-- Navigation SPA logic -->
+<script>
+(function(){
+  let _currentPage = 'overview';
+
+  function navigateTo(page){
+    if(page===_currentPage)return;
+    _currentPage=page;
+
+    // hide all pages
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    const target=document.getElementById('page-'+page);
+    if(target)target.classList.add('active');
+
+    // update bottom nav
+    document.querySelectorAll('#bottomNav .nav-item').forEach(b=>{
+      b.classList.toggle('active', b.dataset.page===page);
+    });
+    // update side nav
+    document.querySelectorAll('#sideNav .side-item').forEach(b=>{
+      b.classList.toggle('active', b.dataset.page===page);
+    });
+
+    // trigger page-specific refresh
+    if(typeof window.__onPageEnter==='function') window.__onPageEnter(page);
+  }
+
+  // Bind bottom nav
+  document.querySelectorAll('#bottomNav .nav-item').forEach(btn=>{
+    btn.addEventListener('click',()=>navigateTo(btn.dataset.page));
+  });
+  // Bind side nav
+  document.querySelectorAll('#sideNav .side-item').forEach(btn=>{
+    btn.addEventListener('click',()=>navigateTo(btn.dataset.page));
+  });
+
+  // Holdings overview card → navigate to portfolio
+  const overviewHoldings=document.getElementById('holdingsBodyOverview');
+  if(overviewHoldings){
+    overviewHoldings.addEventListener('click',()=>navigateTo('portfolio'));
+  }
+
+  window.__navigate = navigateTo;
+  window.__currentPage = ()=>_currentPage;
+})();
+</script>
+
 </body>
 </html>
