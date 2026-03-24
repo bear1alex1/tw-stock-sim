@@ -57,6 +57,8 @@
     #toast{position:fixed;bottom:24px;right:24px;background:#21262d;border:1px solid #30363d;padding:12px 20px;border-radius:8px;font-size:.88rem;z-index:9999;display:none;max-width:340px;box-shadow:0 4px 24px #0009;}
     @media(max-width:640px){th,td{padding:6px 8px;font-size:.8rem;}}
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body class="min-h-screen p-4">
 
@@ -92,6 +94,8 @@
     <div class="flex gap-1 mt-2">
       <button class="btn-xs-red"  id="btnAddCash">＋充值</button>
       <button class="btn-xs-gray" id="btnSetCash">✏️ 設定</button>
+      <button class="btn-xs-gray" id="btnFee" style="margin-top:4px;background:#0a1a0a;color:#2ecc71;border-color:#1a4a0a;">⚙️ 手續費</button>
+      <p id="feeLabel" class="text-xs mt-1" style="color:#555;">手續費：6 折 (0.0855%)</p>
     </div>
   </div>
   <div class="card p-4">
@@ -107,6 +111,28 @@
     <p class="text-xl font-bold" id="totalPnL">—</p>
   </div>
 </section>
+
+
+<!-- 圖表區 -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+  <div class="card p-4">
+    <h2 class="font-semibold mb-2 text-sm text-gray-400 uppercase tracking-widest">🥧 資產配置圖</h2>
+    <div style="position:relative;height:220px;"><canvas id="chartPie"></canvas></div>
+  </div>
+  <div class="card p-4">
+    <h2 class="font-semibold mb-2 text-sm text-gray-400 uppercase tracking-widest">📈 資產走勢圖</h2>
+    <div style="position:relative;height:220px;"><canvas id="chartLine"></canvas></div>
+  </div>
+</section>
+
+<!-- K 線面板 -->
+<div id="klinePanel" class="card p-4 mb-4" style="display:none;">
+  <div class="flex items-center justify-between mb-2">
+    <h2 class="font-semibold text-sm text-gray-400" id="klineTitle">K 線圖</h2>
+    <button id="btnCloseKLine" class="btn-xs-gray">✕ 關閉</button>
+  </div>
+  <div id="klineContainer" style="height:260px;width:100%;"></div>
+</div>
 
 <!-- MAIN -->
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -225,6 +251,6 @@
 </div>
 
 <div id="toast"></div>
-<script src="app.js?v=2.0"></script>
+<script src="app.js?v=2.1"></script>
 </body>
 </html>
