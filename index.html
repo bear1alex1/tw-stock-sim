@@ -8,60 +8,72 @@
   <style>
     body { background:#0d1117; color:#e6edf3; font-family:'Segoe UI',sans-serif; }
     .card { background:#161b22; border:1px solid #30363d; border-radius:10px; }
+
+    /* ── 按鈕 ── */
     .btn-primary { background:#238636; border:none; color:#fff; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600; transition:background .15s; }
     .btn-primary:hover { background:#2ea043; }
     .btn-primary:disabled { background:#2d4a2d; cursor:not-allowed; opacity:.6; }
-    .btn-danger  { background:#da3633; border:none; color:#fff; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600; }
+    .btn-danger  { background:#da3633; border:none; color:#fff; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600; transition:background .15s; }
     .btn-danger:hover  { background:#f85149; }
     .btn-danger:disabled { background:#4a2d2d; cursor:not-allowed; opacity:.6; }
-    .btn-blue  { background:#1f6feb; border:none; color:#fff; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600; }
+    .btn-blue  { background:#1f6feb; border:none; color:#fff; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600; transition:background .15s; }
     .btn-blue:hover  { background:#388bfd; }
-    .btn-amber { background:#9e6a03; border:none; color:#fff; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600; }
+    .btn-amber { background:#9e6a03; border:none; color:#fff; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600; transition:background .15s; }
     .btn-amber:hover { background:#d29922; }
-    .text-up   { color:#3fb950; }
-    .text-down { color:#f85149; }
-    .input-dark { background:#0d1117; border:1px solid #30363d; color:#e6edf3; border-radius:6px; padding:7px 12px; outline:none; width:100%; box-sizing:border-box; }
-    .input-dark:focus { border-color:#388bfd; }
-    table { width:100%; border-collapse:collapse; }
-    th { color:#8b949e; font-size:.75rem; text-transform:uppercase; padding:8px 12px; text-align:left; border-bottom:1px solid #21262d; white-space:nowrap; }
-    td { padding:10px 12px; border-bottom:1px solid #21262d; font-size:.9rem; }
-    tr:last-child td { border-bottom:none; }
-    tr:hover td { background:#1c2128; }
+    .btn-xs-green { background:#1a0d0d; color:#ff4d4d; border:1px solid #8b1a1a; padding:2px 8px; border-radius:4px; cursor:pointer; font-size:.72rem; font-weight:700; }
+    .btn-xs-green:hover { background:#8b1a1a; }
+    .btn-xs-gray  { background:#21262d; color:#8b949e; border:1px solid #30363d; padding:2px 8px; border-radius:4px; cursor:pointer; font-size:.72rem; font-weight:700; }
+    .btn-xs-gray:hover  { background:#30363d; color:#e6edf3; }
+
+    /* ── 台灣慣例：紅漲綠跌 ── */
+    .text-up   { color:#ff4d4d; }
+    .text-down { color:#2ecc71; }
+
+    /* 漲跌幅標籤 */
+    .badge-rise { background:#2d0a0a; color:#ff4d4d; }
+    .badge-fall { background:#0a2d1a; color:#2ecc71; }
+
+    /* 買賣方向標籤 */
+    .badge-buy  { background:#2d0a0a; color:#ff4d4d; }
+    .badge-sell { background:#0a2d1a; color:#2ecc71; }
+
+    /* 市場狀態標籤 */
+    .badge-market-open { background:#0a1a2d; color:#388bfd; }
+    .badge-market-post { background:#2d2200; color:#d29922; }
+    .badge-wait        { background:#1c2128; color:#8b949e; }
+
+    /* 通用 badge */
     .badge { display:inline-block; padding:2px 8px; border-radius:9999px; font-size:.75rem; font-weight:700; white-space:nowrap; }
-    .badge-up   { background:#0f2d1a; color:#3fb950; }
-    .badge-down { background:#2d0f0f; color:#f85149; }
-    .badge-wait { background:#1c2128; color:#8b949e; }
+
     .version-tag { background:#1f6feb22; color:#388bfd; border:1px solid #1f6feb55; font-size:.7rem; font-weight:700; padding:2px 8px; border-radius:9999px; margin-left:8px; vertical-align:middle; }
 
     /* 來源選擇按鈕 */
-    .source-btn {
-      background:#21262d; border:1px solid #30363d; color:#8b949e;
-      padding:6px 8px; border-radius:6px; cursor:pointer;
-      font-size:.78rem; font-weight:600; text-align:center;
-      transition:all .15s; width:100%;
-    }
-    .source-btn:hover { background:#2c3139; border-color:#388bfd; color:#e6edf3; }
+    .source-btn { background:#21262d; border:1px solid #30363d; color:#8b949e; padding:6px 8px; border-radius:6px; cursor:pointer; font-size:.78rem; font-weight:600; text-align:center; transition:all .15s; width:100%; }
+    .source-btn:hover  { background:#2c3139; border-color:#388bfd; color:#e6edf3; }
     .source-btn.active { background:#1a2d4a; border-color:#388bfd; color:#388bfd; }
 
-    /* 小按鈕 */
-    .btn-xs-green { background:#0f2d1a; color:#3fb950; border:1px solid #238636; padding:2px 8px; border-radius:4px; cursor:pointer; font-size:.72rem; font-weight:700; }
-    .btn-xs-green:hover { background:#238636; }
-    .btn-xs-gray  { background:#21262d; color:#8b949e; border:1px solid #30363d; padding:2px 8px; border-radius:4px; cursor:pointer; font-size:.72rem; font-weight:700; }
-    .btn-xs-gray:hover  { background:#30363d; color:#e6edf3; }
+    .input-dark { background:#0d1117; border:1px solid #30363d; color:#e6edf3; border-radius:6px; padding:7px 12px; outline:none; width:100%; box-sizing:border-box; }
+    .input-dark:focus { border-color:#388bfd; }
+
+    table { width:100%; border-collapse:collapse; }
+    th { color:#8b949e; font-size:.75rem; text-transform:uppercase; padding:8px 12px; text-align:left; border-bottom:1px solid #21262d; white-space:nowrap; }
+    td { padding:10px 12px; border-bottom:1px solid #21262d; font-size:.9rem; vertical-align:middle; }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:#1c2128; }
 
     #toast {
       position:fixed; bottom:24px; right:24px;
       background:#21262d; border:1px solid #30363d;
       padding:12px 20px; border-radius:8px; font-size:.88rem;
-      z-index:9999; display:none; max-width:320px;
-      box-shadow:0 4px 16px #0008;
+      z-index:9999; display:none; max-width:340px;
+      box-shadow:0 4px 24px #0009;
     }
-    @media(max-width:640px){ th,td{padding:7px 8px;font-size:.8rem;} }
+    @media(max-width:640px){ th,td{padding:6px 8px;font-size:.8rem;} }
   </style>
 </head>
 <body class="min-h-screen p-4">
 
-  <!-- HEADER -->
+  <!-- ── HEADER ────────────────────────────────────── -->
   <header class="flex items-center justify-between mb-6 px-2 flex-wrap gap-3">
     <div class="flex items-center gap-3">
       <span class="text-2xl">📈</span>
@@ -87,22 +99,19 @@
     </div>
   </header>
 
-  <!-- DASHBOARD -->
+  <!-- ── DASHBOARD ─────────────────────────────────── -->
   <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-
-    <!-- 虛擬現金（可充值） -->
     <div class="card p-4">
       <p class="text-xs text-gray-500 mb-1">虛擬現金</p>
-      <p class="text-xl font-bold text-green-400" id="cashDisplay">—</p>
+      <p class="text-xl font-bold text-up" id="cashDisplay">—</p>
       <div class="flex gap-1 mt-2">
         <button class="btn-xs-green" id="btnAddCash">＋充值</button>
         <button class="btn-xs-gray"  id="btnSetCash">✏️ 設定</button>
       </div>
     </div>
-
     <div class="card p-4">
       <p class="text-xs text-gray-500 mb-1">持股市值</p>
-      <p class="text-xl font-bold text-blue-400" id="holdingsValue">—</p>
+      <p class="text-xl font-bold" style="color:#388bfd;" id="holdingsValue">—</p>
     </div>
     <div class="card p-4">
       <p class="text-xs text-gray-500 mb-1">總資產</p>
@@ -114,10 +123,10 @@
     </div>
   </section>
 
-  <!-- MAIN GRID -->
+  <!-- ── MAIN GRID ─────────────────────────────────── -->
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-    <!-- LEFT -->
+    <!-- ── LEFT ─────────────────────────────────────── -->
     <div class="lg:col-span-1 flex flex-col gap-4">
 
       <!-- 追蹤清單 -->
@@ -129,13 +138,13 @@
         </div>
         <div style="overflow-x:auto;">
           <table>
-            <thead><tr><th>代號</th><th>現價</th><th>漲跌</th><th></th></tr></thead>
+            <thead><tr><th>代號 / 名稱</th><th>現價</th><th>漲跌</th><th></th></tr></thead>
             <tbody id="watchlistBody"></tbody>
           </table>
         </div>
       </div>
 
-      <!-- 價位來源選擇 -->
+      <!-- 價位來源 -->
       <div class="card p-4">
         <h2 class="font-semibold mb-3 text-sm text-gray-400 uppercase tracking-widest">📡 價位來源</h2>
         <div class="grid grid-cols-2 gap-2 mb-2">
@@ -152,19 +161,19 @@
         <h2 class="font-semibold mb-3 text-sm text-gray-400 uppercase tracking-widest">💹 虛擬交易面板（零股）</h2>
         <div class="flex flex-col gap-3">
           <input id="tradeSymbol" class="input-dark" placeholder="股票代號 (e.g. 0050)"/>
-          <input id="tradeQty"    class="input-dark" type="number" min="1" placeholder="股數（1 = 1 股，零股模式）"/>
-          <input id="tradePrice"  class="input-dark" type="number" step="0.01" placeholder="成交價（留空則自動抓）"/>
+          <input id="tradeQty"    class="input-dark" type="number" min="1" placeholder="股數（零股模式）"/>
+          <input id="tradePrice"  class="input-dark" type="number" step="0.01" placeholder="成交價（留空自動抓）"/>
           <div class="flex gap-2">
-            <button class="btn-primary flex-1" id="btnBuy">買入 ▲</button>
-            <button class="btn-danger  flex-1" id="btnSell">賣出 ▼</button>
+            <button class="btn-primary flex-1" id="btnBuy" style="background:#8b1a1a;">買入 ▲</button>
+            <button class="btn-danger  flex-1" id="btnSell" style="background:#0a4a2a;">賣出 ▼</button>
           </div>
-          <p id="tradeMsg" class="text-xs text-red-400 mt-1 min-h-[1.2rem]"></p>
+          <p id="tradeMsg" class="text-xs mt-1" style="color:#ff4d4d;min-height:1.2rem;"></p>
         </div>
       </div>
 
     </div>
 
-    <!-- RIGHT -->
+    <!-- ── RIGHT ─────────────────────────────────────── -->
     <div class="lg:col-span-2 flex flex-col gap-4">
 
       <!-- 持股庫存 -->
@@ -172,23 +181,33 @@
         <h2 class="font-semibold mb-3 text-sm text-gray-400 uppercase tracking-widest">📦 持股庫存</h2>
         <div style="overflow-x:auto;">
           <table>
-            <thead><tr><th>代號</th><th>股數</th><th>均價</th><th>現價</th><th>損益</th><th>操作</th></tr></thead>
+            <thead>
+              <tr>
+                <th>代號 / 名稱</th><th>股數</th><th>均價</th>
+                <th>現價</th><th>損益</th><th>操作</th>
+              </tr>
+            </thead>
             <tbody id="holdingsBody"></tbody>
           </table>
         </div>
-        <p id="holdingsEmpty" class="text-gray-600 text-sm text-center py-4">目前無持股</p>
+        <p id="holdingsEmpty" class="text-center py-4" style="color:#555;font-size:.9rem;">目前無持股</p>
       </div>
 
       <!-- 交易紀錄 -->
       <div class="card p-4">
         <h2 class="font-semibold mb-3 text-sm text-gray-400 uppercase tracking-widest">📋 交易紀錄</h2>
-        <div style="max-height:280px;overflow-y:auto;overflow-x:auto;">
+        <div style="max-height:300px;overflow-y:auto;overflow-x:auto;">
           <table>
-            <thead><tr><th>時間</th><th>代號</th><th>方向</th><th>股數</th><th>單價</th><th>金額</th><th>稅費</th></tr></thead>
+            <thead>
+              <tr>
+                <th>時間</th><th>代號 / 名稱</th><th>方向</th>
+                <th>股數</th><th>單價</th><th>金額</th><th>稅費</th>
+              </tr>
+            </thead>
             <tbody id="tradeHistoryBody"></tbody>
           </table>
         </div>
-        <p id="historyEmpty" class="text-gray-600 text-sm text-center py-4">尚無交易紀錄</p>
+        <p id="historyEmpty" class="text-center py-4" style="color:#555;font-size:.9rem;">尚無交易紀錄</p>
       </div>
 
     </div>
