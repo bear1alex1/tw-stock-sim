@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v2.1  |  圖表 + 手續費自訂 + K線
+//  台股虛擬操盤系統 v2.1  |  SPA分頁 + 圖表 + 手續費 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -140,13 +140,13 @@ function calcFee(price,shares,side){
 }
 
 
-// ── 手續費折數設定 ─────────────────────────────────────
+// ── 手續費設定 ─────────────────────────────────────────
 function setFeeDiscount(){
   const cur=((state.feeDiscount??0.6)*10).toFixed(1);
-  const input=prompt(`手續費折數（預設 6 折 = 0.1425% × 0.6）\n請輸入折數（1~10，如 6=六折）：`,cur);
+  const input=prompt(`手續費折數（預設 6 折）\n請輸入折數（1~10，如 6=六折）：`,cur);
   if(input===null)return;
   const d=parseFloat(input);
-  if(isNaN(d)||d<1||d>10){alert('❌ 請輸入 1~10 之間的數字');return;}
+  if(isNaN(d)||d<1||d>10){alert('❌ 請輸入 1~10');return;}
   state.feeDiscount=parseFloat((d/10).toFixed(2));
   saveState(state);
   showToast(`✅ 手續費設為 ${d} 折（${(state.feeDiscount*0.1425).toFixed(4)}%）`);
@@ -154,7 +154,19 @@ function setFeeDiscount(){
 }
 function updateFeeLabel(){
   const el=document.getElementById('feeLabel');
-  if(el){const d=state.feeDiscount??0.6;el.textContent=`手續費：${(d*10).toFixed(0)} 折 (${(d*0.1425).toFixed(4)}%)`;}
+  if(el){const d=state.feeDiscount??0.6;el.textContent=`${(d*10).toFixed(0)} 折（${(d*0.1425).toFixed(4)}%）`;}
+}
+function updateFeePreview(){
+  const preview=document.getElementById('feePreview');if(!preview)return;
+  const symbol=normalizeSymbol(document.getElementById('tradeSymbol')?.value||'');
+  const shares=parseInt(document.getElementById('tradeQty')?.value||'0',10);
+  const pInput=document.getElementById('tradePrice')?.value||'';
+  const price=num(pInput)||(symbol&&quoteCache[symbol]?.data?.price)||0;
+  if(!price||!shares){preview.style.display='none';return;}
+  const feeB=calcFee(price,shares,'buy');
+  const feeS=calcFee(price,shares,'sell');
+  preview.style.display='block';
+  preview.innerHTML=`買入總額 <b>$${formatMoney(feeB.amount+feeB.total)}</b>（手續費 ${formatMoney(feeB.broker)}）&nbsp;|&nbsp; 賣出到手 <b>$${formatMoney(feeS.amount-feeS.total)}</b>（交稅 ${formatMoney(feeS.tax)}）`;
 }
 
 // ── 每日資產快照 ───────────────────────────────────────
@@ -589,9 +601,9 @@ function buildWatchRow(symbol,q){
       </div>
     </td>
     <td>
-      <button class="text-xs text-blue-400 hover:underline mr-1" data-trade="${symbol}">操盤</button>
-      <button class="text-xs hover:underline mr-1" style="color:#d29922;" data-kline="${symbol}">K線</button>
-      <button class="text-xs hover:underline" style="color:#ff4d4d;" data-remove="${symbol}">移除</button>
+      <button class="btn-xs btn-xs-blue mr-1" data-trade="${symbol}">操盤</button>
+      <button class="btn-xs btn-xs-amber mr-1" data-kline="${symbol}">K線</button>
+      <button class="btn-xs btn-xs-red" data-remove="${symbol}">移除</button>
     </td>`;
 }
 
@@ -677,10 +689,9 @@ async function executeTrade(side){
   if(!state.watchlist.includes(symbol)){state.watchlist.unshift(symbol);state.watchlist=[...new Set(state.watchlist)];}
   saveState(state);msg.textContent='';document.getElementById('tradePrice').value='';
   renderDashboardQuick();renderHistory();renderRealized();
-  setTimeout(recordAssetSnapshot,500);
-  renderCharts();
   renderWatchlistImmediate();renderHoldingsImmediate();
   refreshWatchlistPrices();refreshHoldingsPrices();
+  setTimeout(()=>{renderCharts();recordAssetSnapshot();},600);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -727,8 +738,9 @@ function renderHoldingsImmediate(){
     const tr=document.createElement('tr');tr.dataset.hsymbol=symbol;
     tr.innerHTML=buildHoldingRow(symbol,h,q);tbody.appendChild(tr);
   }
-  tbody.querySelectorAll('[data-sell]').forEach(btn=>{btn.onclick=()=>{document.getElementById('tradeSymbol').value=btn.dataset.sell;};});
+  tbody.querySelectorAll('[data-sell]').forEach(btn=>{btn.onclick=()=>{document.getElementById('tradeSymbol').value=btn.dataset.sell;if(typeof window.__navigate==='function')window.__navigate('trade');};});
   document.getElementById('holdingsValue').textContent='$ '+formatMoney(total);
+  renderHoldingsOverview();
   return total;
 }
 
@@ -912,6 +924,36 @@ function initTabs(){
 
 
 // ══════════════════════════════════════════════════════
+//  Holdings Overview (分頁一 mini table)
+// ══════════════════════════════════════════════════════
+function renderHoldingsOverview(){
+  const tbody=document.getElementById('holdingsBodyOverview');
+  const empty=document.getElementById('holdingsEmptyOverview');
+  if(!tbody)return;
+  tbody.innerHTML='';
+  const symbols=Object.keys(state.holdings);
+  if(!symbols.length){if(empty)empty.style.display='';return;}
+  if(empty)empty.style.display='none';
+  for(const symbol of symbols){
+    const h=state.holdings[symbol];const q=quoteCache[symbol]?.data??null;
+    const name=getStockName(symbol);
+    const price=(q?.price>0)?q.price:h.avgPrice;
+    const pnl=price*h.shares-h.avgPrice*h.shares;
+    const isUp=pnl>=0;
+    const retPct=h.avgPrice>0?((price-h.avgPrice)/h.avgPrice*100):0;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><div class="font-mono" style="font-weight:700;">${symbol}</div>${name?`<div style="font-size:.7rem;color:var(--muted);">${name}</div>`:''}</td>
+      <td>${h.shares}</td>
+      <td>${formatPrice(h.avgPrice)}</td>
+      <td style="font-weight:600;">${formatPrice(price)}</td>
+      <td class="${isUp?'up':'down'}">${isUp?'+':''}${formatMoney(pnl)}</td>
+      <td class="${retPct>=0?'up':'down'}">${retPct>=0?'+':''}${retPct.toFixed(2)}%</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+// ══════════════════════════════════════════════════════
 //  圖表系統（Chart.js）
 // ══════════════════════════════════════════════════════
 let _pieChart=null,_lineChart=null;
@@ -938,8 +980,8 @@ function renderPieChart(){
       plugins:{
         legend:{position:'right',labels:{color:'#8b949e',font:{size:11},boxWidth:12}},
         tooltip:{callbacks:{label:ctx=>{
-          const total=ctx.dataset.data.reduce((a,b)=>a+b,0);
-          const pct=total?((ctx.parsed/total)*100).toFixed(1):'0';
+          const t=ctx.dataset.data.reduce((a,b)=>a+b,0);
+          const pct=t?((ctx.parsed/t)*100).toFixed(1):'0';
           return ` ${ctx.label}: $${Math.round(ctx.parsed).toLocaleString()} (${pct}%)`;
         }}}
       }
@@ -970,10 +1012,8 @@ function renderLineChart(){
         x:{ticks:{color:'#8b949e',maxRotation:45,font:{size:10}},grid:{color:'#21262d'}},
         y:{ticks:{color:'#8b949e',callback:v=>'$'+Math.round(v/10000)+'萬'},grid:{color:'#21262d'}}
       },
-      plugins:{
-        legend:{labels:{color:'#8b949e'}},
-        tooltip:{callbacks:{label:ctx=>`總資產：$${Math.round(ctx.parsed.y).toLocaleString()}`}}
-      }
+      plugins:{legend:{labels:{color:'#8b949e'}},
+        tooltip:{callbacks:{label:ctx=>`總資產：$${Math.round(ctx.parsed.y).toLocaleString()}`}}}
     }
   });
 }
@@ -985,17 +1025,18 @@ let _kwChart=null;
 
 async function showKLine(symbol){
   symbol=normalizeSymbol(symbol);
+  // navigate to market page
+  if(typeof window.__navigate==='function')window.__navigate('market');
   const panel=document.getElementById('klinePanel');
   const title=document.getElementById('klineTitle');
   if(!panel)return;
   panel.style.display='block';
   if(title)title.textContent=`📊 ${symbol} ${getStockName(symbol)} K線（近3個月）`;
-  const container=document.getElementById('klineContainer');
-  if(!container)return;
+  const container=document.getElementById('klineContainer');if(!container)return;
   if(typeof LightweightCharts==='undefined'){
-    container.innerHTML='<p style="color:#555;text-align:center;padding:20px;">⏳ 圖表庫載入中…請稍後再試</p>';return;
+    container.innerHTML='<p style="color:var(--muted);text-align:center;padding:20px;">⏳ 圖表庫載入中…</p>';return;
   }
-  container.innerHTML='<p style="color:#8b949e;text-align:center;padding:20px;">⏳ 載入K線資料…</p>';
+  container.innerHTML='<p style="color:var(--muted);text-align:center;padding:20px;">⏳ 載入K線資料…</p>';
   if(_kwChart){try{_kwChart.remove();}catch(_){}_kwChart=null;}
   const data=await fetchKLineData(symbol);
   container.innerHTML='';
@@ -1003,19 +1044,15 @@ async function showKLine(symbol){
     width:container.clientWidth||600,height:260,
     layout:{background:{color:'#0d1117'},textColor:'#8b949e'},
     grid:{vertLines:{color:'#21262d'},horzLines:{color:'#21262d'}},
-    rightPriceScale:{borderColor:'#30363d'},
-    timeScale:{borderColor:'#30363d'}
+    rightPriceScale:{borderColor:'#30363d'},timeScale:{borderColor:'#30363d'}
   });
   const series=_kwChart.addCandlestickSeries({
     upColor:'#ff4d4d',downColor:'#2ecc71',
     borderUpColor:'#ff4d4d',borderDownColor:'#2ecc71',
     wickUpColor:'#ff4d4d',wickDownColor:'#2ecc71'
   });
-  if(data&&data.length){
-    series.setData(data);_kwChart.timeScale().fitContent();
-  }else{
-    container.innerHTML='<p style="color:#555;text-align:center;padding:20px;">❌ 無法取得K線資料（可能為假日或代號錯誤）</p>';
-  }
+  if(data&&data.length){series.setData(data);_kwChart.timeScale().fitContent();}
+  else{container.innerHTML='<p style="color:var(--muted);text-align:center;padding:20px;">❌ 無法取得K線資料</p>';}
 }
 
 async function fetchKLineData(symbol){
@@ -1030,11 +1067,7 @@ async function fetchKLineData(symbol){
       const json=await r.json();if(json.status!==200)continue;
       const raw=json.data;if(!Array.isArray(raw)||!raw.length)continue;
       raw.sort((a,b)=>a.date.localeCompare(b.date));
-      return raw.map(d=>({
-        time:d.date,
-        open:parseFloat(d.open),high:parseFloat(d.max),
-        low:parseFloat(d.min),close:parseFloat(d.close)
-      })).filter(d=>d.open&&d.high&&d.low&&d.close);
+      return raw.map(d=>({time:d.date,open:parseFloat(d.open),high:parseFloat(d.max),low:parseFloat(d.min),close:parseFloat(d.close)})).filter(d=>d.open&&d.high&&d.low&&d.close);
     }catch(e){console.warn('[KLine-FM]',e.message);}
   }
   for(const sfx of['.TW','.TWO']){
@@ -1061,6 +1094,16 @@ function closeKLine(){
   if(_kwChart){try{_kwChart.remove();}catch(_){}_kwChart=null;}
 }
 
+// ══════════════════════════════════════════════════════
+//  SPA page-enter hook
+// ══════════════════════════════════════════════════════
+window.__onPageEnter=function(page){
+  if(page==='overview'){renderCharts();renderHoldingsOverview();}
+  if(page==='market'){renderWatchlistImmediate();refreshWatchlistPrices();}
+  if(page==='portfolio'){renderHoldingsImmediate();renderRealized();renderHistory();}
+  if(page==='trade'){renderSourceSelector();updateFeeLabel();}
+};
+
 // ═══════════════════════════════════════════════════════
 //  Init
 // ═══════════════════════════════════════════════════════
@@ -1079,6 +1122,9 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('btnSetCash').addEventListener('click',setVirtualCash);
   document.getElementById('btnFee')?.addEventListener('click',setFeeDiscount);
   document.getElementById('btnCloseKLine')?.addEventListener('click',closeKLine);
+  ['tradeSymbol','tradeQty','tradePrice'].forEach(id=>{
+    document.getElementById(id)?.addEventListener('input',updateFeePreview);
+  });
 
   document.querySelectorAll('.source-btn').forEach(btn=>{
     btn.addEventListener('click',()=>setSource(btn.dataset.source));
@@ -1097,6 +1143,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   renderHoldingsImmediate();
   renderHistory();
   renderRealized();
+  renderHoldingsOverview();
   renderWatchlistImmediate();
   renderSourceSelector();
   renderCharts();
