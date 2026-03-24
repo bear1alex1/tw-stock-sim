@@ -7,7 +7,7 @@ let state = loadState();
 const priceCache = {};
 
 function num(value) {
-  const n = Number(value);
+  const n = Number(String(value).replace(/,/g, '').trim());
   return Number.isFinite(n) ? n : null;
 }
 
@@ -19,12 +19,14 @@ function normalizeSymbol(symbol) {
 }
 
 function formatMoney(value) {
-  return Math.round(value || 0).toLocaleString('zh-TW');
+  const n = Math.round(Number(value) || 0);
+  return n.toLocaleString('zh-TW');
 }
 
 function formatPrice(value) {
-  const n = num(value);
-  return n === null ? '—' : n.toFixed(2);
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return '—';
+  return n.toFixed(2);
 }
 
 function getEmptyState() {
@@ -48,7 +50,9 @@ function loadState() {
       cash: num(parsed.cash) ?? INITIAL_CASH,
       holdings: parsed.holdings && typeof parsed.holdings === 'object' ? parsed.holdings : {},
       history: Array.isArray(parsed.history) ? parsed.history : [],
-      watchlist: Array.isArray(parsed.watchlist) ? parsed.watchlist.map(normalizeSymbol) : [],
+      watchlist: Array.isArray(parsed.watchlist)
+        ? [...new Set(parsed.watchlist.map(normalizeSymbol).filter(Boolean))]
+        : [],
       realizedPnL: num(parsed.realizedPnL) ?? 0,
       savedAt: parsed.savedAt || new Date().toISOString()
     };
@@ -87,21 +91,72 @@ function calcFee(price, lots, side) {
   };
 }
 
-async function fetchQuote(symbol) {
-  symbol = normalizeSymbol(symbol);
-  if (!symbol) return null;
+function parseTwseNumber(value) {
+  if (value === null || value === undefined) return null;
+  const cleaned = String(value).replace(/,/g, '').trim();
+  if (!cleaned || cleaned === '--' || cleaned === '---' || cleaned === '-') return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
 
-  const cached = priceCache[symbol];
-  if (cached && Date.now() - cached.ts < PRICE_CACHE_TTL) {
-    return cached.data;
+function monthKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  return `${y}${m}01`;
+}
+
+async function fetchTwseRecentClose(symbol) {
+  if (!/^\d{4,6}$/.test(symbol)) return null;
+
+  const months = [
+    new Date(),
+    new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1)
+  ];
+
+  for (const d of months) {
+    try {
+      const url = `https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=${monthKey(d)}&stockNo=${symbol}&_=${Date.now()}`;
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) continue;
+
+      const json = await res.json();
+      const rows = Array.isArray(json?.data) ? json.data : [];
+      if (!rows.length) continue;
+
+      for (let i = rows.length - 1; i >= 0; i--) {
+        const row = rows[i];
+        const close = parseTwseNumber(row?.[6]);
+        const diff = parseTwseNumber(String(row?.[7] || '').replace(/[^\d.-]/g, ''));
+        if (close && close > 0) {
+          const previousClose = diff !== null ? close - diff : null;
+          const change = previousClose !== null ? close - previousClose : null;
+          const changePct = previousClose ? (change / previousClose) * 100 : null;
+
+          return {
+            symbol,
+            source: 'twse_close',
+            price: close,
+            previousClose,
+            change,
+            changePct,
+            marketState: 'CLOSED',
+            isClosePrice: true
+          };
+        }
+      }
+    } catch (_) {}
   }
 
+  return null;
+}
+
+async function fetchYahooQuote(symbol) {
   const suffixes = ['.TW', '.TWO'];
 
   for (const suffix of suffixes) {
     try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}${suffix}?interval=1d&range=5d`;
-      const res = await fetch(url);
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}${suffix}?range=5d&interval=1d&includePrePost=false&corsDomain=finance.yahoo.com`;
+      const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) continue;
 
       const json = await res.json();
@@ -111,7 +166,7 @@ async function fetchQuote(symbol) {
       if (!result || !meta || !quote) continue;
 
       const closes = Array.isArray(quote.close)
-        ? quote.close.filter(v => typeof v === 'number' && !Number.isNaN(v))
+        ? quote.close.map(v => num(v)).filter(v => v !== null && v > 0)
         : [];
 
       const regularMarketPrice = num(meta.regularMarketPrice);
@@ -121,37 +176,68 @@ async function fetchQuote(symbol) {
         num(meta.chartPreviousClose);
 
       const lastClose = closes.length ? closes[closes.length - 1] : null;
-      const prevCloseFromSeries = closes.length >= 2 ? closes[closes.length - 2] : null;
+      const prevCloseFromSeries = closes.length >= 2 ? closes[closes.length - 2] : previousClose;
       const marketState = String(meta.marketState || 'CLOSED').toUpperCase();
 
-      let displayPrice = null;
-      if (marketState === 'REGULAR') {
-        displayPrice = regularMarketPrice ?? lastClose ?? previousClose;
+      let price = null;
+      if (marketState === 'REGULAR' && regularMarketPrice && regularMarketPrice > 0) {
+        price = regularMarketPrice;
       } else {
-        displayPrice = lastClose ?? regularMarketPrice ?? previousClose;
+        price = lastClose ?? regularMarketPrice ?? previousClose;
       }
 
-      if (displayPrice === null) continue;
+      if (!price || price <= 0) continue;
 
-      const compareBase = previousClose ?? prevCloseFromSeries;
-      const change = compareBase !== null ? displayPrice - compareBase : null;
+      const compareBase = previousClose ?? prevCloseFromSeries ?? null;
+      const change = compareBase !== null ? price - compareBase : null;
       const changePct = compareBase ? (change / compareBase) * 100 : null;
 
-      const data = {
+      return {
         symbol,
-        suffix,
-        price: displayPrice,
+        source: 'yahoo',
+        price,
         previousClose: compareBase,
-        rawPreviousClose: previousClose,
-        marketState,
-        isClosePrice: marketState !== 'REGULAR',
         change,
-        changePct
+        changePct,
+        marketState,
+        isClosePrice: marketState !== 'REGULAR'
       };
-
-      priceCache[symbol] = { data, ts: Date.now() };
-      return data;
     } catch (_) {}
+  }
+
+  return null;
+}
+
+async function fetchQuote(symbol) {
+  symbol = normalizeSymbol(symbol);
+  if (!symbol) return null;
+
+  const cached = priceCache[symbol];
+  if (cached && Date.now() - cached.ts < PRICE_CACHE_TTL) {
+    return cached.data;
+  }
+
+  let yahoo = null;
+  let twseClose = null;
+
+  try {
+    yahoo = await fetchYahooQuote(symbol);
+  } catch (_) {}
+
+  if (yahoo && yahoo.marketState === 'REGULAR' && yahoo.price > 0) {
+    priceCache[symbol] = { data: yahoo, ts: Date.now() };
+    return yahoo;
+  }
+
+  try {
+    twseClose = await fetchTwseRecentClose(symbol);
+  } catch (_) {}
+
+  const finalQuote = twseClose || yahoo || null;
+
+  if (finalQuote && finalQuote.price > 0) {
+    priceCache[symbol] = { data: finalQuote, ts: Date.now() };
+    return finalQuote;
   }
 
   return null;
@@ -165,8 +251,7 @@ function getMarketStateLabel(quote) {
 function getMarketStateClass(quote) {
   if (!quote) return '';
   if (quote.marketState === 'REGULAR') {
-    if ((quote.change ?? 0) < 0) return 'badge-down';
-    return 'badge-up';
+    return (quote.change ?? 0) >= 0 ? 'badge-up' : 'badge-down';
   }
   return 'badge-up';
 }
@@ -246,10 +331,10 @@ async function executeTrade(side) {
   }
 
   let price = num(tradePriceInput);
-  if (price === null) {
+  if (price === null || price <= 0) {
     const quote = await fetchQuote(symbol);
     price = quote?.price ?? null;
-    if (price === null) {
+    if (price === null || price <= 0) {
       msg.textContent = '❌ 無法取得報價，請手動輸入成交價';
       return;
     }
@@ -272,7 +357,7 @@ async function executeTrade(side) {
 
     const holding = state.holdings[symbol];
     const oldAmount = holding.avgPrice * holding.shares * LOT_SIZE;
-    const newAmount = fee.amount;
+    const newAmount = price * lots * LOT_SIZE;
     const newShares = holding.shares + lots;
 
     holding.avgPrice = (oldAmount + newAmount) / (newShares * LOT_SIZE);
@@ -332,6 +417,7 @@ async function renderHoldings() {
   const symbols = Object.keys(state.holdings);
   if (symbols.length === 0) {
     empty.style.display = '';
+    document.getElementById('holdingsValue').textContent = '$ 0';
     return 0;
   }
 
@@ -341,7 +427,7 @@ async function renderHoldings() {
   for (const symbol of symbols) {
     const holding = state.holdings[symbol];
     const quote = await fetchQuote(symbol);
-    const price = quote?.price ?? holding.avgPrice;
+    const price = quote?.price && quote.price > 0 ? quote.price : holding.avgPrice;
     const marketValue = price * holding.shares * LOT_SIZE;
     const costValue = holding.avgPrice * holding.shares * LOT_SIZE;
     const pnl = marketValue - costValue;
@@ -429,7 +515,7 @@ async function renderAll() {
 function exportDataToJson() {
   const payload = {
     exportedAt: new Date().toISOString(),
-    version: '1.1',
+    version: '1.2',
     data: loadState()
   };
 
@@ -473,7 +559,7 @@ function importDataFromJson(event) {
         return;
       }
 
-      imported.watchlist = imported.watchlist.map(normalizeSymbol);
+      imported.watchlist = [...new Set(imported.watchlist.map(normalizeSymbol).filter(Boolean))];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(imported));
       showToast('✅ 備份載入成功！正在重新整理…');
       setTimeout(() => location.reload(), 1000);
@@ -509,6 +595,7 @@ function showToast(message) {
 }
 
 async function refreshQuotes() {
+  Object.keys(priceCache).forEach(key => delete priceCache[key]);
   await renderAll();
 }
 
