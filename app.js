@@ -122,8 +122,15 @@ function loadState(){
 function saveState(s){
   s.savedAt=new Date().toISOString();
   localStorage.setItem(STORAGE_KEY,JSON.stringify(s));
+  // 有登入時同步至 Firestore（debounced 3s）
+  if(typeof _saveToFirestoreDebounced==='function') _saveToFirestoreDebounced();
   const el=document.getElementById('lastSaved');
   if(el) el.textContent='最後儲存：'+new Date(s.savedAt).toLocaleString('zh-TW');
+}
+let _fsTimer=null;
+function _saveToFirestoreDebounced(){
+  if(_fsTimer)clearTimeout(_fsTimer);
+  _fsTimer=setTimeout(saveToFirestore,3000);
 }
 
 function updateLastSavedLabel(){
@@ -549,6 +556,7 @@ function setSource(src){
 // ═══════════════════════════════════════════════════════
 
 function addVirtualCash(){
+  // (cloud sync happens via saveState wrapper below)
   const input=prompt('輸入充值金額（元）：','1000000');
   if(input===null)return;
   const amount=num(input.replace(/,/g,''));
@@ -693,7 +701,7 @@ async function executeTrade(side){
   renderDashboardQuick();renderHistory();renderRealized();
   renderWatchlistImmediate();renderHoldingsImmediate();
   refreshWatchlistPrices();refreshHoldingsPrices();
-  setTimeout(()=>{renderCharts();recordAssetSnapshot();},600);
+  setTimeout(()=>{renderCharts();recordAssetSnapshot();saveToFirestore();},600);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1108,174 +1116,217 @@ window.__onPageEnter=function(page){
 
 
 // ══════════════════════════════════════════════════════
-//  雲端同步（Firebase / 自訂後端介面）
-//  ★ 架構說明：
-//    - 使用 Supabase REST API（無需 SDK，純 fetch）
-//    - 免費方案即可儲存每日快照
-//    - 使用者需自行填入 SUPABASE_URL + ANON_KEY
-//    - 若未設定則停留在「本地模式」，功能不受影響
+//  Firebase Authentication + Firestore 雲端同步
+//  使用 Firebase JS SDK v9+ (modular, via CDN compat)
 // ══════════════════════════════════════════════════════
+//  ▼▼▼ 請至 Firebase Console 取得設定後填入 ▼▼▼
+const FIREBASE_CONFIG = {
+  apiKey:            "",   // Web API Key
+  authDomain:        "",   // xxx.firebaseapp.com
+  projectId:         "",   // 專案 ID
+  storageBucket:     "",   // xxx.appspot.com
+  messagingSenderId: "",
+  appId:             ""
+};
+//  ▲▲▲ 填入後存檔即可啟用雲端功能 ▲▲▲
 
-// ▼▼▼ 填入你的 Supabase 專案資訊（留空 = 純本地模式）▼▼▼
-const SUPA_URL = '';   // e.g. 'https://xxxx.supabase.co'
-const SUPA_KEY = '';   // anon public key
-// ▲▲▲──────────────────────────────────────────────────▲▲▲
+const FIREBASE_READY = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId);
+let _fireApp=null, _fireAuth=null, _fireDb=null, _fireUser=null;
 
-let _cloudUser = null;   // { id, email, access_token }
-let _cloudTimer = null;
+function initFirebase(){
+  if(!FIREBASE_READY || _fireApp) return;
+  try{
+    _fireApp  = firebase.initializeApp(FIREBASE_CONFIG);
+    _fireAuth = firebase.auth();
+    _fireDb   = firebase.firestore();
+    // Persistence: 跨頁面保持登入
+    _fireAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
+    // 監聽登入狀態
+    _fireAuth.onAuthStateChanged(onAuthStateChanged);
+    console.log('[Firebase] ✅ 初始化成功');
+  }catch(e){ console.error('[Firebase] 初始化失敗', e); }
+}
+
+// ── 登入狀態監聽（核心） ──────────────────────────────
+async function onAuthStateChanged(user){
+  _fireUser = user;
+  if(user){
+    console.log('[Firebase] 已登入', user.uid, user.email);
+    showToast(`✅ 已登入：${user.displayName||user.email}`);
+    await loadUserDataFromFirestore(user.uid);
+    refreshCloudUI();
+  }else{
+    console.log('[Firebase] 未登入');
+    refreshCloudUI();
+  }
+}
+
+// ── Google 登入 ────────────────────────────────────────
+async function cloudGoogleSignIn(){
+  if(!FIREBASE_READY){ alert('⚠️ 請先在 app.js 填入 Firebase 設定'); return; }
+  initFirebase();
+  try{
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({prompt:'select_account'});
+    await _fireAuth.signInWithPopup(provider);
+  }catch(e){
+    if(e.code!=='auth/popup-closed-by-user')
+      showToast('❌ 登入失敗：'+e.message);
+  }
+}
+
+// ── 登出 ──────────────────────────────────────────────
+async function cloudLogout(){
+  if(!_fireAuth){ refreshCloudUI(); closeCloudModal(); return; }
+  await _fireAuth.signOut();
+  _fireUser = null;
+  refreshCloudUI();
+  closeCloudModal();
+  showToast('已登出 Google 帳號');
+}
+
+// ── 從 Firestore 讀取使用者資料 ───────────────────────
+async function loadUserDataFromFirestore(uid){
+  if(!_fireDb) return;
+  try{
+    const docRef = _fireDb.collection('users').doc(uid);
+    const snap   = await docRef.get();
+    if(!snap.exists){
+      // 新使用者：初始化預設資料
+      const defaults = getEmptyState();
+      defaults.savedAt = new Date().toISOString();
+      await docRef.set({
+        balance:      defaults.cash,
+        portfolio:    defaults.holdings,
+        history:      defaults.history,
+        realizedTrades: defaults.realizedTrades,
+        assetHistory: defaults.assetHistory,
+        realizedPnL:  defaults.realizedPnL,
+        feeDiscount:  defaults.feeDiscount,
+        watchlist:    defaults.watchlist,
+        savedAt:      defaults.savedAt
+      });
+      showToast('🎉 新帳號已初始化 $1,000,000 虛擬資金！');
+      // 本地 state 不變（已是預設值）
+    }else{
+      const data = snap.data();
+      // 將雲端資料合併至 local state
+      state.cash          = num(data.balance)   ?? state.cash;
+      state.holdings      = data.portfolio      || state.holdings;
+      state.history       = data.history        || state.history;
+      state.realizedTrades= data.realizedTrades || state.realizedTrades;
+      state.assetHistory  = data.assetHistory   || state.assetHistory;
+      state.realizedPnL   = num(data.realizedPnL) ?? state.realizedPnL;
+      state.feeDiscount   = num(data.feeDiscount) ?? state.feeDiscount;
+      state.watchlist     = data.watchlist       || state.watchlist;
+      saveState(state);
+      // 重新渲染
+      renderDashboardQuick();
+      renderHoldingsImmediate();
+      renderHistory();
+      renderRealized();
+      renderHoldingsOverview();
+      renderWatchlistImmediate();
+      renderCharts();
+      updateFeeLabel();
+      showToast('☁️ 已從雲端載入帳務資料');
+    }
+  }catch(e){ console.error('[Firestore] 讀取失敗', e); showToast('❌ 雲端讀取失敗：'+e.message); }
+}
+
+// ── 儲存至 Firestore（每次買賣後呼叫） ────────────────
+async function saveToFirestore(){
+  if(!_fireUser || !_fireDb) return;
+  try{
+    await _fireDb.collection('users').doc(_fireUser.uid).set({
+      balance:       state.cash,
+      portfolio:     state.holdings,
+      history:       state.history,
+      realizedTrades:state.realizedTrades,
+      assetHistory:  state.assetHistory,
+      realizedPnL:   state.realizedPnL,
+      feeDiscount:   state.feeDiscount,
+      watchlist:     state.watchlist,
+      savedAt:       new Date().toISOString()
+    },{merge:true});
+    console.log('[Firestore] ✅ 已同步');
+  }catch(e){ console.error('[Firestore] 寫入失敗', e); }
+}
+
+// ── 手動觸發雲端快照同步 ──────────────────────────────
+async function cloudSyncSnapshot(){
+  if(!_fireUser){showToast('⚠️ 請先登入');return;}
+  await saveToFirestore();
+  const msg=document.getElementById('cloudSyncMsg');
+  if(msg)msg.textContent=`✅ 已同步至 Firestore（${new Date().toLocaleString('zh-TW')}）`;
+  showToast('☁️ 雲端同步完成');
+}
+
+// ── 從雲端還原 ────────────────────────────────────────
+async function cloudFetchHistory(){
+  if(!_fireUser){showToast('⚠️ 請先登入');return;}
+  const msg=document.getElementById('cloudSyncMsg');
+  if(msg)msg.textContent='⏳ 從雲端讀取…';
+  await loadUserDataFromFirestore(_fireUser.uid);
+  if(msg)msg.textContent='✅ 已從雲端還原資料';
+}
+
+// ── UI 狀態刷新 ────────────────────────────────────────
+function refreshCloudUI(){
+  const dot    = document.getElementById('cloudStatusDot');
+  const txt    = document.getElementById('cloudStatusText');
+  const form   = document.getElementById('cloudLoginForm');
+  const logged = document.getElementById('cloudLoggedIn');
+  const info   = document.getElementById('cloudUserInfo');
+  const topBtn = document.getElementById('btnCloudLogin');
+
+  if(!FIREBASE_READY){
+    if(dot)  dot.style.background='#555';
+    if(txt)  txt.textContent='未設定 Firebase（本地模式）';
+    if(form) form.style.display='none';
+    if(logged) logged.style.display='none';
+    const m=document.getElementById('cloudMsg');
+    if(m) m.textContent='請在 app.js 頂部填入 FIREBASE_CONFIG 以啟用雲端功能';
+    return;
+  }
+  if(_fireUser){
+    if(dot)  dot.style.background='#2ecc71';
+    if(txt)  txt.textContent='已登入 Google';
+    if(form) form.style.display='none';
+    if(logged){ logged.style.display='flex'; }
+    const name=_fireUser.displayName||_fireUser.email||'使用者';
+    const avatar=_fireUser.photoURL;
+    if(info) info.innerHTML=avatar
+      ? `<img src="${avatar}" style="width:28px;height:28px;border-radius:50%;vertical-align:middle;margin-right:6px;">${name}`
+      : `👤 ${name}`;
+    if(topBtn){ topBtn.textContent='☁️ '+name.split(' ')[0]; topBtn.style.background='#1a2d1a'; }
+  }else{
+    if(dot)  dot.style.background='#d29922';
+    if(txt)  txt.textContent='尚未登入';
+    if(form) form.style.display='flex';
+    if(logged) logged.style.display='none';
+    if(topBtn){ topBtn.textContent='☁️ 雲端登入'; topBtn.style.background='#1a2d1a'; }
+  }
+}
 
 // ── Modal 開關 ─────────────────────────────────────────
 function openCloudModal(){
-  const modal = document.getElementById('cloudModal');
+  initFirebase();
+  const modal=document.getElementById('cloudModal');
   if(modal){ modal.style.display='flex'; refreshCloudUI(); }
 }
 function closeCloudModal(){
-  const modal = document.getElementById('cloudModal');
+  const modal=document.getElementById('cloudModal');
   if(modal) modal.style.display='none';
 }
-// 點 backdrop 關閉
-document.addEventListener('click', e=>{
+document.addEventListener('click',e=>{
   const modal=document.getElementById('cloudModal');
-  if(modal&&e.target===modal) closeCloudModal();
+  if(modal && e.target===modal) closeCloudModal();
 });
 
-// ── UI 狀態更新 ────────────────────────────────────────
-function refreshCloudUI(){
-  const dot   = document.getElementById('cloudStatusDot');
-  const txt   = document.getElementById('cloudStatusText');
-  const form  = document.getElementById('cloudLoginForm');
-  const logged= document.getElementById('cloudLoggedIn');
-  const info  = document.getElementById('cloudUserInfo');
-  const btn   = document.getElementById('btnCloudLogin');
-
-  if(!SUPA_URL){
-    if(dot) dot.style.background='#555';
-    if(txt) txt.textContent='未設定 Supabase（本地模式）';
-    if(form) form.style.display='none';
-    if(logged) logged.style.display='none';
-    const msg=document.getElementById('cloudMsg');
-    if(msg) msg.textContent='請在 app.js 頂部填入 SUPA_URL 與 SUPA_KEY 以啟用雲端同步';
-    return;
-  }
-  if(_cloudUser){
-    if(dot) dot.style.background='#2ecc71';
-    if(txt) txt.textContent='已登入';
-    if(form) form.style.display='none';
-    if(logged){ logged.style.display='flex'; }
-    if(info) info.textContent=`👤 ${_cloudUser.email}`;
-    if(btn){ btn.style.background='#1a2d1a'; btn.textContent='☁️ 已登入'; }
-  }else{
-    if(dot) dot.style.background='#d29922';
-    if(txt) txt.textContent='尚未登入';
-    if(form) form.style.display='flex';
-    if(logged) logged.style.display='none';
-    if(btn){ btn.style.background='#1a2d1a'; btn.textContent='☁️ 雲端登入'; }
-  }
-}
-
-// ── 登入 / 註冊 ────────────────────────────────────────
-async function cloudAuth(mode){
-  const email = document.getElementById('cloudEmail')?.value.trim();
-  const pass  = document.getElementById('cloudPassword')?.value;
-  const msg   = document.getElementById('cloudMsg');
-  if(!email||!pass){ if(msg)msg.textContent='❌ 請填寫 Email 與密碼'; return; }
-  if(msg) msg.textContent='⏳ 處理中…';
-  const endpoint = mode==='signup'
-    ? `${SUPA_URL}/auth/v1/signup`
-    : `${SUPA_URL}/auth/v1/token?grant_type=password`;
-  try{
-    const r=await fetch(endpoint,{
-      method:'POST',
-      headers:{'Content-Type':'application/json','apikey':SUPA_KEY},
-      body:JSON.stringify({email,password:pass})
-    });
-    const data=await r.json();
-    if(!r.ok){ if(msg)msg.textContent='❌ '+(data.error_description||data.msg||'失敗'); return; }
-    _cloudUser={ id:data.user?.id||data.id, email:data.user?.email||email, access_token:data.access_token };
-    localStorage.setItem('cloud_token', JSON.stringify(_cloudUser));
-    if(msg) msg.textContent='';
-    refreshCloudUI();
-    showToast(`✅ ${mode==='signup'?'註冊並登入':'登入'}成功`);
-    scheduleCloudAutoSync();
-  }catch(e){ if(msg)msg.textContent='❌ 網路錯誤：'+e.message; }
-}
-
-async function cloudLogout(){
-  _cloudUser=null;
-  localStorage.removeItem('cloud_token');
-  if(_cloudTimer){clearInterval(_cloudTimer);_cloudTimer=null;}
-  refreshCloudUI();
-  closeCloudModal();
-  showToast('已登出雲端');
-}
-
-// ── 每日快照同步 ───────────────────────────────────────
-async function cloudSyncSnapshot(){
-  if(!_cloudUser||!SUPA_URL) return;
-  const today=new Date().toISOString().slice(0,10);
-  const hv=parseInt((document.getElementById('holdingsValue')?.textContent||'0').replace(/[^\d]/g,''),10)||0;
-  const total=state.cash+hv;
-  const msg=document.getElementById('cloudSyncMsg');
-  try{
-    const r=await fetch(`${SUPA_URL}/rest/v1/asset_snapshots`,{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'apikey':SUPA_KEY,
-        'Authorization':'Bearer '+_cloudUser.access_token,
-        'Prefer':'resolution=merge-duplicates'
-      },
-      body:JSON.stringify({user_id:_cloudUser.id, date:today, total})
-    });
-    if(r.ok||r.status===201||r.status===200){
-      if(msg)msg.textContent=`✅ 已同步 ${today} 快照（$${formatMoney(total)}）`;
-      showToast(`☁️ 雲端快照已同步：${today}`);
-    }else{
-      const err=await r.json().catch(()=>({}));
-      if(msg)msg.textContent='❌ 同步失敗：'+(err.message||r.status);
-    }
-  }catch(e){ if(msg)msg.textContent='❌ 網路錯誤：'+e.message; }
-}
-
-async function cloudFetchHistory(){
-  if(!_cloudUser||!SUPA_URL) return;
-  const msg=document.getElementById('cloudSyncMsg');
-  if(msg)msg.textContent='⏳ 從雲端讀取…';
-  try{
-    const r=await fetch(`${SUPA_URL}/rest/v1/asset_snapshots?user_id=eq.${_cloudUser.id}&order=date.asc&limit=365`,{
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+_cloudUser.access_token}
-    });
-    if(!r.ok){ if(msg)msg.textContent='❌ 讀取失敗：'+r.status; return; }
-    const rows=await r.json();
-    if(!Array.isArray(rows)||!rows.length){ if(msg)msg.textContent='雲端尚無資料'; return; }
-    // Merge with local
-    const cloudMap={};rows.forEach(row=>cloudMap[row.date]=row.total);
-    const localMap={};(state.assetHistory||[]).forEach(d=>localMap[d.date]=d.total);
-    const merged={...localMap,...cloudMap};
-    state.assetHistory=Object.entries(merged).sort((a,b)=>a[0].localeCompare(b[0])).map(([date,total])=>({date,total}));
-    saveState(state);renderCharts();
-    if(msg)msg.textContent=`✅ 已合併 ${rows.length} 筆雲端紀錄`;
-    showToast(`☁️ 雲端走勢已還原（${rows.length} 筆）`);
-  }catch(e){ if(msg)msg.textContent='❌ 網路錯誤：'+e.message; }
-}
-
-// ── 自動排程（每小時嘗試同步） ─────────────────────────
-function scheduleCloudAutoSync(){
-  if(!_cloudUser||!SUPA_URL) return;
-  if(_cloudTimer) clearInterval(_cloudTimer);
-  _cloudTimer=setInterval(()=>{
-    const ms=getMarketState();
-    if(ms==='CLOSED') cloudSyncSnapshot();
-  }, 3600_000);
-}
-
-// ── 載入時恢復登入狀態 ────────────────────────────────
+// ── 啟動時初始化 ─────────────────────────────────────
 function restoreCloudSession(){
-  if(!SUPA_URL) return;
-  try{
-    const saved=localStorage.getItem('cloud_token');
-    if(saved){ _cloudUser=JSON.parse(saved); refreshCloudUI(); scheduleCloudAutoSync(); }
-  }catch(_){}
+  if(FIREBASE_READY) initFirebase();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1300,8 +1351,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
   document.getElementById('btnCloudLogin')?.addEventListener('click',openCloudModal);
   document.getElementById('btnCloseKLine')?.addEventListener('click',closeKLine);
-  document.getElementById('btnCloudSignIn')?.addEventListener('click',()=>cloudAuth('login'));
-  document.getElementById('btnCloudSignUp')?.addEventListener('click',()=>cloudAuth('signup'));
+  document.getElementById('btnCloudSignIn')?.addEventListener('click',cloudGoogleSignIn);
+  document.getElementById('btnCloudSignUp')?.addEventListener('click',cloudGoogleSignIn);
   document.getElementById('btnCloudLogout')?.addEventListener('click',cloudLogout);
   document.getElementById('btnCloudSync')?.addEventListener('click',cloudSyncSnapshot);
   document.getElementById('btnCloudFetch')?.addEventListener('click',cloudFetchHistory);
