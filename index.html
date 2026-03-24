@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>台股虛擬操盤系統</title>
+  <title>台股虛擬操盤系統 v1.4</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { background: #0d1117; color: #e6edf3; font-family: 'Segoe UI', sans-serif; }
     .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; }
     .btn-primary { background: #238636; border: none; color: #fff; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: background .2s; }
     .btn-primary:hover { background: #2ea043; }
-    .btn-danger  { background: #da3633; border: none; color: #fff; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: background .2s; }
+    .btn-danger  { background: #da3633; border: none; color: #fff; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
     .btn-danger:hover { background: #f85149; }
-    .btn-blue   { background: #1f6feb; border: none; color: #fff; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: background .2s; }
+    .btn-blue   { background: #1f6feb; border: none; color: #fff; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
     .btn-blue:hover { background: #388bfd; }
-    .btn-amber  { background: #9e6a03; border: none; color: #fff; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: background .2s; }
+    .btn-amber  { background: #9e6a03; border: none; color: #fff; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
     .btn-amber:hover { background: #d29922; }
     .text-up   { color: #3fb950; }
     .text-down { color: #f85149; }
@@ -27,23 +27,27 @@
     .badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: .75rem; font-weight: 700; }
     .badge-up   { background: #0f2d1a; color: #3fb950; }
     .badge-down { background: #2d0f0f; color: #f85149; }
-    #toast { position: fixed; bottom: 24px; right: 24px; background: #21262d; border: 1px solid #30363d; padding: 12px 20px; border-radius: 8px; font-size: .88rem; z-index: 999; display: none; }
+    .version-tag { background: #1f6feb22; color: #388bfd; border: 1px solid #1f6feb55; font-size: .7rem; font-weight: 700; padding: 2px 8px; border-radius: 9999px; margin-left: 8px; vertical-align: middle; }
+    #toast { position: fixed; bottom: 24px; right: 24px; background: #21262d; border: 1px solid #30363d; padding: 12px 20px; border-radius: 8px; font-size: .88rem; z-index: 9999; display: none; max-width: 320px; }
   </style>
 </head>
 <body class="min-h-screen p-4">
 
-  <!-- ── HEADER ── -->
-  <header class="flex items-center justify-between mb-6 px-2">
+  <!-- HEADER -->
+  <header class="flex items-center justify-between mb-6 px-2 flex-wrap gap-3">
     <div class="flex items-center gap-3">
       <span class="text-2xl">📈</span>
       <div>
-        <h1 class="text-xl font-bold tracking-wide">台股虛擬操盤系統</h1>
+        <h1 class="text-xl font-bold tracking-wide">
+          台股虛擬操盤系統
+          <span class="version-tag">v1.4</span>
+        </h1>
         <p class="text-xs text-gray-500" id="lastSaved">最後儲存：—</p>
       </div>
     </div>
     <div class="flex gap-2 flex-wrap justify-end">
       <button class="btn-blue"  onclick="exportDataToJson()">💾 匯出備份</button>
-      <label  class="btn-amber" style="cursor:pointer;">
+      <label  class="btn-amber" style="cursor:pointer; display:inline-block; padding:8px 16px; border-radius:6px; font-weight:600;">
         📂 匯入備份
         <input type="file" accept=".json" id="importFile" style="display:none;" onchange="importDataFromJson(event)"/>
       </label>
@@ -51,7 +55,7 @@
     </div>
   </header>
 
-  <!-- ── DASHBOARD ── -->
+  <!-- DASHBOARD -->
   <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
     <div class="card p-4">
       <p class="text-xs text-gray-500 mb-1">虛擬現金</p>
@@ -73,42 +77,40 @@
 
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-    <!-- ── LEFT COLUMN ── -->
+    <!-- LEFT -->
     <div class="lg:col-span-1 flex flex-col gap-4">
 
-      <!-- 搜尋 & 追蹤 -->
+      <!-- 追蹤清單 -->
       <div class="card p-4">
         <h2 class="font-semibold mb-3 text-sm text-gray-400 uppercase tracking-widest">🔍 股票搜尋 / 追蹤清單</h2>
         <div class="flex gap-2 mb-3">
           <input id="searchInput" class="input-dark" placeholder="輸入股票代號 (e.g. 2330)" />
-          <button class="btn-primary" onclick="addToWatchlist()">＋追蹤</button>
+          <button class="btn-primary" id="btnAddWatch">＋追蹤</button>
         </div>
-        <div id="watchlistTable">
-          <table>
-            <thead><tr><th>代號</th><th>現價</th><th>漲跌</th><th></th></tr></thead>
-            <tbody id="watchlistBody"></tbody>
-          </table>
-        </div>
+        <table>
+          <thead><tr><th>代號</th><th>現價</th><th>漲跌</th><th></th></tr></thead>
+          <tbody id="watchlistBody"></tbody>
+        </table>
       </div>
 
-      <!-- 虛擬交易面板 -->
+      <!-- 交易面板 -->
       <div class="card p-4">
         <h2 class="font-semibold mb-3 text-sm text-gray-400 uppercase tracking-widest">💹 虛擬交易面板</h2>
         <div class="flex flex-col gap-3">
           <input id="tradeSymbol" class="input-dark" placeholder="股票代號 (e.g. 0050)"/>
-          <input id="tradeQty"    class="input-dark" type="number" placeholder="股數（1 股 = 1000 股票）" min="1"/>
-          <input id="tradePrice"  class="input-dark" type="number" placeholder="成交價（留空則抓市價）" step="0.01"/>
+          <input id="tradeQty"    class="input-dark" type="number" placeholder="股數（1 張 = 1000 股）" min="1"/>
+          <input id="tradePrice"  class="input-dark" type="number" placeholder="成交價（留空則抓收盤價）" step="0.01"/>
           <div class="flex gap-2">
-            <button class="btn-primary flex-1" onclick="executeTrade('buy')">買入 ▲</button>
-            <button class="btn-danger  flex-1" onclick="executeTrade('sell')">賣出 ▼</button>
+            <button class="btn-primary flex-1" id="btnBuy">買入 ▲</button>
+            <button class="btn-danger  flex-1" id="btnSell">賣出 ▼</button>
           </div>
-          <p id="tradeMsg" class="text-xs text-gray-500 mt-1"></p>
+          <p id="tradeMsg" class="text-xs text-red-400 mt-1 min-h-[1rem]"></p>
         </div>
       </div>
 
     </div>
 
-    <!-- ── RIGHT COLUMN ── -->
+    <!-- RIGHT -->
     <div class="lg:col-span-2 flex flex-col gap-4">
 
       <!-- 持股庫存 -->
@@ -120,7 +122,7 @@
           </thead>
           <tbody id="holdingsBody"></tbody>
         </table>
-        <p id="holdingsEmpty" class="text-gray-600 text-sm text-center py-4" style="display:none;">目前無持股</p>
+        <p id="holdingsEmpty" class="text-gray-600 text-sm text-center py-4">目前無持股</p>
       </div>
 
       <!-- 交易紀錄 -->
@@ -132,14 +134,13 @@
             <tbody id="tradeHistoryBody"></tbody>
           </table>
         </div>
-        <p id="historyEmpty" class="text-gray-600 text-sm text-center py-4" style="display:none;">尚無交易紀錄</p>
+        <p id="historyEmpty" class="text-gray-600 text-sm text-center py-4">尚無交易紀錄</p>
       </div>
 
     </div>
   </div>
 
   <div id="toast"></div>
-
   <script src="app.js"></script>
 </body>
 </html>
