@@ -1,5 +1,6 @@
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v2.1  |  SPA分頁 + 圖表 + 手續費 + K線
+//  台股虛擬操盤系統 v2.2  |  SPA分頁 + Firebase雲端 + K線
+//  version:'2.2'
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -122,7 +123,6 @@ function loadState(){
 function saveState(s){
   s.savedAt=new Date().toISOString();
   localStorage.setItem(STORAGE_KEY,JSON.stringify(s));
-  // 有登入時同步至 Firestore（debounced 3s）
   if(typeof _saveToFirestoreDebounced==='function') _saveToFirestoreDebounced();
   const el=document.getElementById('lastSaved');
   if(el) el.textContent='最後儲存：'+new Date(s.savedAt).toLocaleString('zh-TW');
@@ -144,51 +144,6 @@ function calcFee(price,shares,side){
   const broker=Math.max(Math.round(amount*0.001425*discount),1);
   const tax=side==='sell'?Math.round(amount*0.003):0;
   return{amount,broker,tax,total:broker+tax};
-}
-
-
-// ── 手續費設定 ─────────────────────────────────────────
-function setFeeDiscount(){
-  const cur=((state.feeDiscount??0.6)*10).toFixed(1);
-  const input=prompt(`手續費折數（預設 6 折）\n請輸入折數（1~10，如 6=六折）：`,cur);
-  if(input===null)return;
-  const d=parseFloat(input);
-  if(isNaN(d)||d<1||d>10){alert('❌ 請輸入 1~10');return;}
-  state.feeDiscount=parseFloat((d/10).toFixed(2));
-  saveState(state);
-  showToast(`✅ 手續費設為 ${d} 折（${(state.feeDiscount*0.1425).toFixed(4)}%）`);
-  updateFeeLabel();
-}
-function updateFeeLabel(){
-  const el=document.getElementById('feeLabel');
-  if(el){const d=state.feeDiscount??0.6;el.textContent=`${(d*10).toFixed(0)} 折（${(d*0.1425).toFixed(4)}%）`;}
-}
-function updateFeePreview(){
-  const preview=document.getElementById('feePreview');if(!preview)return;
-  const symbol=normalizeSymbol(document.getElementById('tradeSymbol')?.value||'');
-  const shares=parseInt(document.getElementById('tradeQty')?.value||'0',10);
-  const pInput=document.getElementById('tradePrice')?.value||'';
-  const price=num(pInput)||(symbol&&quoteCache[symbol]?.data?.price)||0;
-  if(!price||!shares){preview.style.display='none';return;}
-  const feeB=calcFee(price,shares,'buy');
-  const feeS=calcFee(price,shares,'sell');
-  preview.style.display='block';
-  preview.innerHTML=`買入總額 <b>$${formatMoney(feeB.amount+feeB.total)}</b>（手續費 ${formatMoney(feeB.broker)}）&nbsp;|&nbsp; 賣出到手 <b>$${formatMoney(feeS.amount-feeS.total)}</b>（交稅 ${formatMoney(feeS.tax)}）`;
-}
-
-// ── 每日資產快照 ───────────────────────────────────────
-function recordAssetSnapshot(){
-  const today=new Date().toISOString().slice(0,10);
-  if(!Array.isArray(state.assetHistory))state.assetHistory=[];
-  const hv=parseInt((document.getElementById('holdingsValue')?.textContent||'0').replace(/[^\d]/g,''),10)||0;
-  const total=state.cash+hv;
-  const last=state.assetHistory[state.assetHistory.length-1];
-  if(last&&last.date===today){last.total=total;}
-  else{state.assetHistory.push({date:today,total});}
-  if(state.assetHistory.length>365)state.assetHistory=state.assetHistory.slice(-365);
-  saveState(state);
-  // 收盤後自動雲端同步
-  if(getMarketState()==='CLOSED') setTimeout(cloudSyncSnapshot,2000);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -556,7 +511,6 @@ function setSource(src){
 // ═══════════════════════════════════════════════════════
 
 function addVirtualCash(){
-  // (cloud sync happens via saveState wrapper below)
   const input=prompt('輸入充值金額（元）：','1000000');
   if(input===null)return;
   const amount=num(input.replace(/,/g,''));
@@ -611,9 +565,8 @@ function buildWatchRow(symbol,q){
       </div>
     </td>
     <td>
-      <button class="btn-xs btn-xs-blue mr-1" data-trade="${symbol}">操盤</button>
-      <button class="btn-xs btn-xs-amber mr-1" data-kline="${symbol}">K線</button>
-      <button class="btn-xs btn-xs-red" data-remove="${symbol}">移除</button>
+      <button class="text-xs text-blue-400 hover:underline mr-2" data-trade="${symbol}">操盤</button>
+      <button class="text-xs hover:underline" style="color:#ff4d4d;" data-remove="${symbol}">移除</button>
     </td>`;
 }
 
@@ -621,7 +574,6 @@ function bindWatchlistEvents(){
   const tbody=document.getElementById('watchlistBody');
   tbody.querySelectorAll('[data-trade]').forEach(btn=>{btn.onclick=()=>{document.getElementById('tradeSymbol').value=btn.dataset.trade;};});
   tbody.querySelectorAll('[data-remove]').forEach(btn=>{btn.onclick=()=>removeFromWatchlist(btn.dataset.remove);});
-  tbody.querySelectorAll('[data-kline]').forEach(btn=>{btn.onclick=()=>showKLine(btn.dataset.kline);});
 }
 
 function renderWatchlistImmediate(){
@@ -748,9 +700,9 @@ function renderHoldingsImmediate(){
     const tr=document.createElement('tr');tr.dataset.hsymbol=symbol;
     tr.innerHTML=buildHoldingRow(symbol,h,q);tbody.appendChild(tr);
   }
-  tbody.querySelectorAll('[data-sell]').forEach(btn=>{btn.onclick=()=>{document.getElementById('tradeSymbol').value=btn.dataset.sell;if(typeof window.__navigate==='function')window.__navigate('trade');};});
+  tbody.querySelectorAll('[data-sell]').forEach(btn=>{btn.onclick=()=>{document.getElementById('tradeSymbol').value=btn.dataset.sell;};});
   document.getElementById('holdingsValue').textContent='$ '+formatMoney(total);
-  renderHoldingsOverview();
+  if(typeof renderHoldingsOverview==='function')renderHoldingsOverview();
   return total;
 }
 
@@ -811,7 +763,7 @@ function renderDashboardQuick(hv){
 // ─── Backup ────────────────────────────────────────────
 
 function exportDataToJson(){
-  const payload={exportedAt:new Date().toISOString(),version:'2.1',data:loadState()};
+  const payload={exportedAt:new Date().toISOString(),version:'2.0',data:loadState()};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'});
   const url=URL.createObjectURL(blob);
   const today=new Date().toISOString().slice(0,10).replace(/-/g,'');
@@ -934,7 +886,55 @@ function initTabs(){
 
 
 // ══════════════════════════════════════════════════════
-//  Holdings Overview (分頁一 mini table)
+//  手續費設定
+// ══════════════════════════════════════════════════════
+function setFeeDiscount(){
+  const cur=((state.feeDiscount??0.6)*10).toFixed(1);
+  const input=prompt(`手續費折數（目前 ${cur} 折）\n請輸入折數（1~10，如 6=六折）：`,cur);
+  if(input===null)return;
+  const d=parseFloat(input);
+  if(isNaN(d)||d<1||d>10){alert('❌ 請輸入 1~10');return;}
+  state.feeDiscount=parseFloat((d/10).toFixed(2));
+  saveState(state);
+  showToast(`✅ 手續費設為 ${d} 折（${(state.feeDiscount*0.1425).toFixed(4)}%）`);
+  updateFeeLabel();
+}
+function updateFeeLabel(){
+  const d=state.feeDiscount??0.6;
+  const lbl=`${(d*10).toFixed(0)} 折（${(d*0.1425).toFixed(4)}%）`;
+  const el=document.getElementById('feeLabel');if(el)el.textContent=lbl;
+  const el2=document.getElementById('feeLabel2');if(el2)el2.textContent=lbl;
+}
+function updateFeePreview(){
+  const preview=document.getElementById('feePreview');if(!preview)return;
+  const symbol=normalizeSymbol(document.getElementById('tradeSymbol')?.value||'');
+  const shares=parseInt(document.getElementById('tradeQty')?.value||'0',10);
+  const price=num(document.getElementById('tradePrice')?.value)||
+    (symbol&&quoteCache[symbol]?.data?.price)||0;
+  if(!price||!shares){preview.style.display='none';return;}
+  const fB=calcFee(price,shares,'buy');const fS=calcFee(price,shares,'sell');
+  preview.style.display='block';
+  preview.innerHTML=`買入總額 <b>$${formatMoney(fB.amount+fB.total)}</b>（手續費 ${formatMoney(fB.broker)}）&nbsp;|&nbsp; 賣出到手 <b>$${formatMoney(fS.amount-fS.total)}</b>（交稅 ${formatMoney(fS.tax)}）`;
+}
+
+// ══════════════════════════════════════════════════════
+//  每日資產快照
+// ══════════════════════════════════════════════════════
+function recordAssetSnapshot(){
+  const today=new Date().toISOString().slice(0,10);
+  if(!Array.isArray(state.assetHistory))state.assetHistory=[];
+  const hv=parseInt((document.getElementById('holdingsValue')?.textContent||'0').replace(/[^\d]/g,''),10)||0;
+  const total=state.cash+hv;
+  const last=state.assetHistory[state.assetHistory.length-1];
+  if(last&&last.date===today){last.total=total;}
+  else{state.assetHistory.push({date:today,total});}
+  if(state.assetHistory.length>365)state.assetHistory=state.assetHistory.slice(-365);
+  saveState(state);
+  if(getMarketState()==='CLOSED') setTimeout(saveToFirestore,2000);
+}
+
+// ══════════════════════════════════════════════════════
+//  Holdings Overview (資產總覽 mini table)
 // ══════════════════════════════════════════════════════
 function renderHoldingsOverview(){
   const tbody=document.getElementById('holdingsBodyOverview');
@@ -942,20 +942,23 @@ function renderHoldingsOverview(){
   if(!tbody)return;
   tbody.innerHTML='';
   const symbols=Object.keys(state.holdings);
-  if(!symbols.length){if(empty){empty.style.display='';empty.style.setProperty('display','block','important');}return;}
+  if(!symbols.length){
+    if(empty)empty.style.display='block';
+    return;
+  }
   if(empty)empty.style.display='none';
   for(const symbol of symbols){
-    const h=state.holdings[symbol];const q=quoteCache[symbol]?.data??null;
+    const h=state.holdings[symbol];
+    const q=quoteCache[symbol]?.data??null;
     const name=getStockName(symbol);
     const price=(q?.price>0)?q.price:h.avgPrice;
     const pnl=price*h.shares-h.avgPrice*h.shares;
-    const isUp=pnl>=0;
     const retPct=h.avgPrice>0?((price-h.avgPrice)/h.avgPrice*100):0;
+    const isUp=pnl>=0;
     const tr=document.createElement('tr');
     tr.innerHTML=`
-      <td><div class="font-mono" style="font-weight:700;">${symbol}</div>${name?`<div style="font-size:.7rem;color:var(--muted);">${name}</div>`:''}</td>
-      <td>${h.shares}</td>
-      <td>${formatPrice(h.avgPrice)}</td>
+      <td><div style="font-weight:700;">${symbol}</div>${name?`<div style="font-size:.7rem;color:var(--muted);">${name}</div>`:''}</td>
+      <td>${h.shares}</td><td>${formatPrice(h.avgPrice)}</td>
       <td style="font-weight:600;">${formatPrice(price)}</td>
       <td class="${isUp?'up':'down'}">${isUp?'+':''}${formatMoney(pnl)}</td>
       <td class="${retPct>=0?'up':'down'}">${retPct>=0?'+':''}${retPct.toFixed(2)}%</td>`;
@@ -964,7 +967,7 @@ function renderHoldingsOverview(){
 }
 
 // ══════════════════════════════════════════════════════
-//  圖表系統（Chart.js）
+//  Chart.js 圖表
 // ══════════════════════════════════════════════════════
 let _pieChart=null,_lineChart=null;
 function renderCharts(){renderPieChart();renderLineChart();}
@@ -982,21 +985,15 @@ function renderPieChart(){
     data.push(price*h.shares);colors.push(palette[pi++%palette.length]);
   }
   if(_pieChart){_pieChart.destroy();_pieChart=null;}
-  _pieChart=new Chart(canvas,{
-    type:'doughnut',
+  _pieChart=new Chart(canvas,{type:'doughnut',
     data:{labels,datasets:[{data,backgroundColor:colors,borderWidth:2,borderColor:'#161b22'}]},
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      plugins:{
-        legend:{position:'right',labels:{color:'#8b949e',font:{size:11},boxWidth:12}},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'right',labels:{color:'#8b949e',font:{size:11},boxWidth:12}},
         tooltip:{callbacks:{label:ctx=>{
           const t=ctx.dataset.data.reduce((a,b)=>a+b,0);
           const pct=t?((ctx.parsed/t)*100).toFixed(1):'0';
           return ` ${ctx.label}: $${Math.round(ctx.parsed).toLocaleString()} (${pct}%)`;
-        }}}
-      }
-    }
-  });
+        }}}}}});
 }
 
 function renderLineChart(){
@@ -1009,33 +1006,23 @@ function renderLineChart(){
     ctx.fillText('需至少 2 天資料才能顯示走勢',canvas.width/2,canvas.height/2);return;
   }
   if(_lineChart){_lineChart.destroy();_lineChart=null;}
-  _lineChart=new Chart(canvas,{
-    type:'line',
-    data:{labels:hist.map(d=>d.date),datasets:[{
-      label:'總資產',data:hist.map(d=>d.total),
+  _lineChart=new Chart(canvas,{type:'line',
+    data:{labels:hist.map(d=>d.date),datasets:[{label:'總資產',data:hist.map(d=>d.total),
       borderColor:'#388bfd',backgroundColor:'rgba(56,139,253,0.08)',
-      borderWidth:2,pointRadius:3,pointBackgroundColor:'#388bfd',fill:true,tension:0.3
-    }]},
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      scales:{
-        x:{ticks:{color:'#8b949e',maxRotation:45,font:{size:10}},grid:{color:'#21262d'}},
-        y:{ticks:{color:'#8b949e',callback:v=>'$'+Math.round(v/10000)+'萬'},grid:{color:'#21262d'}}
-      },
+      borderWidth:2,pointRadius:3,pointBackgroundColor:'#388bfd',fill:true,tension:0.3}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{x:{ticks:{color:'#8b949e',maxRotation:45,font:{size:10}},grid:{color:'#21262d'}},
+        y:{ticks:{color:'#8b949e',callback:v=>'$'+Math.round(v/10000)+'萬'},grid:{color:'#21262d'}}},
       plugins:{legend:{labels:{color:'#8b949e'}},
-        tooltip:{callbacks:{label:ctx=>`總資產：$${Math.round(ctx.parsed.y).toLocaleString()}`}}}
-    }
-  });
+        tooltip:{callbacks:{label:ctx=>`總資產：$${Math.round(ctx.parsed.y).toLocaleString()}`}}}}});
 }
 
 // ══════════════════════════════════════════════════════
 //  K 線圖（Lightweight Charts）
 // ══════════════════════════════════════════════════════
 let _kwChart=null;
-
 async function showKLine(symbol){
   symbol=normalizeSymbol(symbol);
-  // navigate to market page
   if(typeof window.__navigate==='function')window.__navigate('market');
   const panel=document.getElementById('klinePanel');
   const title=document.getElementById('klineTitle');
@@ -1068,18 +1055,17 @@ async function showKLine(symbol){
 async function fetchKLineData(symbol){
   const start=daysAgo(90);
   const PROXIES=[u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`];
-  for(const url of[
-    `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&stock_id=${symbol}&start_date=${start}&token=${encodeURIComponent(_r())}`,
-    `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&stock_id=${symbol}&start_date=${start}`
-  ]){
-    try{
-      const r=await timedFetch(url,12000);if(!r.ok)continue;
-      const json=await r.json();if(json.status!==200)continue;
-      const raw=json.data;if(!Array.isArray(raw)||!raw.length)continue;
-      raw.sort((a,b)=>a.date.localeCompare(b.date));
-      return raw.map(d=>({time:d.date,open:parseFloat(d.open),high:parseFloat(d.max),low:parseFloat(d.min),close:parseFloat(d.close)})).filter(d=>d.open&&d.high&&d.low&&d.close);
-    }catch(e){console.warn('[KLine-FM]',e.message);}
-  }
+  const fmUrl=`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&stock_id=${symbol}&start_date=${start}`;
+  try{
+    const r=await timedFetch(fmUrl,12000);
+    if(r.ok){
+      const json=await r.json();
+      if(json.status===200&&Array.isArray(json.data)&&json.data.length){
+        json.data.sort((a,b)=>a.date.localeCompare(b.date));
+        return json.data.map(d=>({time:d.date,open:parseFloat(d.open),high:parseFloat(d.max),low:parseFloat(d.min),close:parseFloat(d.close)})).filter(d=>d.open&&d.high&&d.low&&d.close);
+      }
+    }
+  }catch(e){console.warn('[KLine-FM]',e.message);}
   for(const sfx of['.TW','.TWO']){
     const target=`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}${sfx}?range=3mo&interval=1d`;
     for(const px of PROXIES){
@@ -1105,6 +1091,148 @@ function closeKLine(){
 }
 
 // ══════════════════════════════════════════════════════
+//  Firebase Authentication + Firestore
+// ══════════════════════════════════════════════════════
+// ▼▼▼ 請至 Firebase Console 取得設定後填入 ▼▼▼
+const FIREBASE_CONFIG = {
+  apiKey:            "",   // Web API Key
+  authDomain:        "",   // xxx.firebaseapp.com
+  projectId:         "",   // 專案 ID
+  storageBucket:     "",
+  messagingSenderId: "",
+  appId:             ""
+};
+// ▲▲▲ 留空 = 純本地模式，功能不受影響 ▲▲▲
+
+const FIREBASE_READY = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId);
+let _fireApp=null,_fireAuth=null,_fireDb=null,_fireUser=null;
+
+function initFirebase(){
+  if(!FIREBASE_READY||_fireApp)return;
+  try{
+    _fireApp  = firebase.initializeApp(FIREBASE_CONFIG);
+    _fireAuth = firebase.auth();
+    _fireDb   = firebase.firestore();
+    _fireAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
+    _fireAuth.onAuthStateChanged(onFirebaseAuthChanged);
+    console.log('[Firebase] ✅ 初始化成功');
+  }catch(e){console.error('[Firebase]',e);}
+}
+
+async function onFirebaseAuthChanged(user){
+  _fireUser=user;
+  if(user){ showToast(`✅ 已登入：${user.displayName||user.email}`); await loadUserDataFromFirestore(user.uid); }
+  refreshCloudUI();
+}
+
+async function cloudGoogleSignIn(){
+  if(!FIREBASE_READY){alert('⚠️ 請先在 app.js 填入 Firebase 設定');return;}
+  initFirebase();
+  try{
+    const provider=new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({prompt:'select_account'});
+    await _fireAuth.signInWithPopup(provider);
+  }catch(e){ if(e.code!=='auth/popup-closed-by-user') showToast('❌ 登入失敗：'+e.message); }
+}
+
+async function cloudLogout(){
+  if(_fireAuth) await _fireAuth.signOut();
+  _fireUser=null; refreshCloudUI(); showToast('已登出 Google 帳號');
+}
+
+async function loadUserDataFromFirestore(uid){
+  if(!_fireDb)return;
+  try{
+    const docRef=_fireDb.collection('users').doc(uid);
+    const snap=await docRef.get();
+    if(!snap.exists){
+      const d=getEmptyState();
+      await docRef.set({balance:d.cash,portfolio:d.holdings,history:d.history,
+        realizedTrades:d.realizedTrades,assetHistory:d.assetHistory,
+        realizedPnL:d.realizedPnL,feeDiscount:d.feeDiscount,
+        watchlist:d.watchlist,savedAt:new Date().toISOString()});
+      showToast('🎉 新帳號已初始化 $1,000,000 虛擬資金！');
+    }else{
+      const data=snap.data();
+      state.cash          = num(data.balance)      ?? state.cash;
+      state.holdings      = data.portfolio         || state.holdings;
+      state.history       = data.history           || state.history;
+      state.realizedTrades= data.realizedTrades    || state.realizedTrades;
+      state.assetHistory  = data.assetHistory      || state.assetHistory;
+      state.realizedPnL   = num(data.realizedPnL)  ?? state.realizedPnL;
+      state.feeDiscount   = num(data.feeDiscount)  ?? state.feeDiscount;
+      state.watchlist     = data.watchlist         || state.watchlist;
+      saveState(state);
+      renderDashboardQuick();renderHoldingsImmediate();renderHistory();
+      renderRealized();renderHoldingsOverview();renderWatchlistImmediate();renderCharts();updateFeeLabel();
+      showToast('☁️ 已從雲端載入帳務資料');
+    }
+  }catch(e){console.error('[Firestore]',e);showToast('❌ 雲端讀取失敗：'+e.message);}
+}
+
+async function saveToFirestore(){
+  if(!_fireUser||!_fireDb)return;
+  try{
+    await _fireDb.collection('users').doc(_fireUser.uid).set({
+      balance:state.cash,portfolio:state.holdings,history:state.history,
+      realizedTrades:state.realizedTrades,assetHistory:state.assetHistory,
+      realizedPnL:state.realizedPnL,feeDiscount:state.feeDiscount,
+      watchlist:state.watchlist,savedAt:new Date().toISOString()
+    },{merge:true});
+  }catch(e){console.error('[Firestore save]',e);}
+}
+
+async function cloudSyncSnapshot(){
+  if(!_fireUser){showToast('⚠️ 請先登入');return;}
+  await saveToFirestore();
+  const msg=document.getElementById('cloudSyncMsg');
+  if(msg)msg.textContent=`✅ 已同步（${new Date().toLocaleString('zh-TW')}）`;
+  showToast('☁️ 雲端同步完成');
+}
+
+async function cloudFetchHistory(){
+  if(!_fireUser){showToast('⚠️ 請先登入');return;}
+  const msg=document.getElementById('cloudSyncMsg');if(msg)msg.textContent='⏳ 從雲端讀取…';
+  await loadUserDataFromFirestore(_fireUser.uid);
+  if(msg)msg.textContent='✅ 已從雲端還原資料';
+}
+
+function refreshCloudUI(){
+  const dot=document.getElementById('cloudStatusDot');
+  const txt=document.getElementById('cloudStatusText');
+  const form=document.getElementById('cloudLoginForm');
+  const logged=document.getElementById('cloudLoggedIn');
+  const info=document.getElementById('cloudUserInfo');
+  const topBtn=document.getElementById('btnCloudLogin');
+  if(!FIREBASE_READY){
+    if(dot)dot.style.background='#555';
+    if(txt)txt.textContent='未設定 Firebase（本地模式）';
+    if(form)form.style.display='flex';if(logged)logged.style.display='none';
+    const m=document.getElementById('cloudMsg');
+    if(m)m.textContent='請在 app.js 填入 FIREBASE_CONFIG 以啟用雲端';
+    return;
+  }
+  if(_fireUser){
+    if(dot)dot.style.background='#2ecc71';if(txt)txt.textContent='已登入 Google';
+    if(form)form.style.display='none';if(logged){logged.style.display='flex';}
+    const name=_fireUser.displayName||_fireUser.email||'使用者';
+    const avatar=_fireUser.photoURL;
+    if(info)info.innerHTML=avatar?`<img src="${avatar}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:4px;">${name}`:`👤 ${name}`;
+    if(topBtn){topBtn.textContent='☁️ '+name.split(' ')[0];topBtn.style.background='#1a2d1a';}
+  }else{
+    if(dot)dot.style.background='#d29922';if(txt)txt.textContent='尚未登入';
+    if(form)form.style.display='flex';if(logged)logged.style.display='none';
+    if(info)info.textContent='';
+    if(topBtn){topBtn.textContent='☁️ 雲端';topBtn.style.background='#1a2d1a';}
+  }
+}
+
+function openCloudModal(){if(typeof window.__navigate==='function')window.__navigate('cloud');}
+function closeCloudModal(){}
+
+function restoreCloudSession(){if(FIREBASE_READY)initFirebase();}
+
+// ══════════════════════════════════════════════════════
 //  SPA page-enter hook
 // ══════════════════════════════════════════════════════
 window.__onPageEnter=function(page){
@@ -1112,222 +1240,8 @@ window.__onPageEnter=function(page){
   if(page==='market'){renderWatchlistImmediate();refreshWatchlistPrices();}
   if(page==='portfolio'){renderHoldingsImmediate();renderRealized();renderHistory();}
   if(page==='trade'){renderSourceSelector();updateFeeLabel();}
+  if(page==='cloud'){initFirebase();refreshCloudUI();}
 };
-
-
-// ══════════════════════════════════════════════════════
-//  Firebase Authentication + Firestore 雲端同步
-//  使用 Firebase JS SDK v9+ (modular, via CDN compat)
-// ══════════════════════════════════════════════════════
-//  ▼▼▼ 請至 Firebase Console 取得設定後填入 ▼▼▼
-const FIREBASE_CONFIG = {
-  apiKey:            "",   // Web API Key
-  authDomain:        "",   // xxx.firebaseapp.com
-  projectId:         "",   // 專案 ID
-  storageBucket:     "",   // xxx.appspot.com
-  messagingSenderId: "",
-  appId:             ""
-};
-//  ▲▲▲ 填入後存檔即可啟用雲端功能 ▲▲▲
-
-const FIREBASE_READY = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId);
-let _fireApp=null, _fireAuth=null, _fireDb=null, _fireUser=null;
-
-function initFirebase(){
-  if(!FIREBASE_READY || _fireApp) return;
-  try{
-    _fireApp  = firebase.initializeApp(FIREBASE_CONFIG);
-    _fireAuth = firebase.auth();
-    _fireDb   = firebase.firestore();
-    // Persistence: 跨頁面保持登入
-    _fireAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
-    // 監聽登入狀態
-    _fireAuth.onAuthStateChanged(onAuthStateChanged);
-    console.log('[Firebase] ✅ 初始化成功');
-  }catch(e){ console.error('[Firebase] 初始化失敗', e); }
-}
-
-// ── 登入狀態監聽（核心） ──────────────────────────────
-async function onAuthStateChanged(user){
-  _fireUser = user;
-  if(user){
-    console.log('[Firebase] 已登入', user.uid, user.email);
-    showToast(`✅ 已登入：${user.displayName||user.email}`);
-    await loadUserDataFromFirestore(user.uid);
-    refreshCloudUI();
-  }else{
-    console.log('[Firebase] 未登入');
-    refreshCloudUI();
-  }
-}
-
-// ── Google 登入 ────────────────────────────────────────
-async function cloudGoogleSignIn(){
-  if(!FIREBASE_READY){ alert('⚠️ 請先在 app.js 填入 Firebase 設定'); return; }
-  initFirebase();
-  try{
-    const provider = new firebase.auth.GoogleAuthProvider();
-    provider.setCustomParameters({prompt:'select_account'});
-    await _fireAuth.signInWithPopup(provider);
-  }catch(e){
-    if(e.code!=='auth/popup-closed-by-user')
-      showToast('❌ 登入失敗：'+e.message);
-  }
-}
-
-// ── 登出 ──────────────────────────────────────────────
-async function cloudLogout(){
-  if(!_fireAuth){ refreshCloudUI(); closeCloudModal(); return; }
-  await _fireAuth.signOut();
-  _fireUser = null;
-  refreshCloudUI();
-  closeCloudModal();
-  showToast('已登出 Google 帳號');
-}
-
-// ── 從 Firestore 讀取使用者資料 ───────────────────────
-async function loadUserDataFromFirestore(uid){
-  if(!_fireDb) return;
-  try{
-    const docRef = _fireDb.collection('users').doc(uid);
-    const snap   = await docRef.get();
-    if(!snap.exists){
-      // 新使用者：初始化預設資料
-      const defaults = getEmptyState();
-      defaults.savedAt = new Date().toISOString();
-      await docRef.set({
-        balance:      defaults.cash,
-        portfolio:    defaults.holdings,
-        history:      defaults.history,
-        realizedTrades: defaults.realizedTrades,
-        assetHistory: defaults.assetHistory,
-        realizedPnL:  defaults.realizedPnL,
-        feeDiscount:  defaults.feeDiscount,
-        watchlist:    defaults.watchlist,
-        savedAt:      defaults.savedAt
-      });
-      showToast('🎉 新帳號已初始化 $1,000,000 虛擬資金！');
-      // 本地 state 不變（已是預設值）
-    }else{
-      const data = snap.data();
-      // 將雲端資料合併至 local state
-      state.cash          = num(data.balance)   ?? state.cash;
-      state.holdings      = data.portfolio      || state.holdings;
-      state.history       = data.history        || state.history;
-      state.realizedTrades= data.realizedTrades || state.realizedTrades;
-      state.assetHistory  = data.assetHistory   || state.assetHistory;
-      state.realizedPnL   = num(data.realizedPnL) ?? state.realizedPnL;
-      state.feeDiscount   = num(data.feeDiscount) ?? state.feeDiscount;
-      state.watchlist     = data.watchlist       || state.watchlist;
-      saveState(state);
-      // 重新渲染
-      renderDashboardQuick();
-      renderHoldingsImmediate();
-      renderHistory();
-      renderRealized();
-      renderHoldingsOverview();
-      renderWatchlistImmediate();
-      renderCharts();
-      updateFeeLabel();
-      showToast('☁️ 已從雲端載入帳務資料');
-    }
-  }catch(e){ console.error('[Firestore] 讀取失敗', e); showToast('❌ 雲端讀取失敗：'+e.message); }
-}
-
-// ── 儲存至 Firestore（每次買賣後呼叫） ────────────────
-async function saveToFirestore(){
-  if(!_fireUser || !_fireDb) return;
-  try{
-    await _fireDb.collection('users').doc(_fireUser.uid).set({
-      balance:       state.cash,
-      portfolio:     state.holdings,
-      history:       state.history,
-      realizedTrades:state.realizedTrades,
-      assetHistory:  state.assetHistory,
-      realizedPnL:   state.realizedPnL,
-      feeDiscount:   state.feeDiscount,
-      watchlist:     state.watchlist,
-      savedAt:       new Date().toISOString()
-    },{merge:true});
-    console.log('[Firestore] ✅ 已同步');
-  }catch(e){ console.error('[Firestore] 寫入失敗', e); }
-}
-
-// ── 手動觸發雲端快照同步 ──────────────────────────────
-async function cloudSyncSnapshot(){
-  if(!_fireUser){showToast('⚠️ 請先登入');return;}
-  await saveToFirestore();
-  const msg=document.getElementById('cloudSyncMsg');
-  if(msg)msg.textContent=`✅ 已同步至 Firestore（${new Date().toLocaleString('zh-TW')}）`;
-  showToast('☁️ 雲端同步完成');
-}
-
-// ── 從雲端還原 ────────────────────────────────────────
-async function cloudFetchHistory(){
-  if(!_fireUser){showToast('⚠️ 請先登入');return;}
-  const msg=document.getElementById('cloudSyncMsg');
-  if(msg)msg.textContent='⏳ 從雲端讀取…';
-  await loadUserDataFromFirestore(_fireUser.uid);
-  if(msg)msg.textContent='✅ 已從雲端還原資料';
-}
-
-// ── UI 狀態刷新 ────────────────────────────────────────
-function refreshCloudUI(){
-  const dot    = document.getElementById('cloudStatusDot');
-  const txt    = document.getElementById('cloudStatusText');
-  const form   = document.getElementById('cloudLoginForm');
-  const logged = document.getElementById('cloudLoggedIn');
-  const info   = document.getElementById('cloudUserInfo');
-  const topBtn = document.getElementById('btnCloudLogin');
-
-  if(!FIREBASE_READY){
-    if(dot)  dot.style.background='#555';
-    if(txt)  txt.textContent='未設定 Firebase（本地模式）';
-    if(form) form.style.display='none';
-    if(logged) logged.style.display='none';
-    const m=document.getElementById('cloudMsg');
-    if(m) m.textContent='請在 app.js 頂部填入 FIREBASE_CONFIG 以啟用雲端功能';
-    return;
-  }
-  if(_fireUser){
-    if(dot)  dot.style.background='#2ecc71';
-    if(txt)  txt.textContent='已登入 Google';
-    if(form) form.style.display='none';
-    if(logged){ logged.style.display='flex'; }
-    const name=_fireUser.displayName||_fireUser.email||'使用者';
-    const avatar=_fireUser.photoURL;
-    if(info) info.innerHTML=avatar
-      ? `<img src="${avatar}" style="width:28px;height:28px;border-radius:50%;vertical-align:middle;margin-right:6px;">${name}`
-      : `👤 ${name}`;
-    if(topBtn){ topBtn.textContent='☁️ '+name.split(' ')[0]; topBtn.style.background='#1a2d1a'; }
-  }else{
-    if(dot)  dot.style.background='#d29922';
-    if(txt)  txt.textContent='尚未登入';
-    if(form) form.style.display='flex';
-    if(logged) logged.style.display='none';
-    if(topBtn){ topBtn.textContent='☁️ 雲端登入'; topBtn.style.background='#1a2d1a'; }
-  }
-}
-
-// ── Modal 開關 ─────────────────────────────────────────
-function openCloudModal(){
-  initFirebase();
-  const modal=document.getElementById('cloudModal');
-  if(modal){ modal.style.display='flex'; refreshCloudUI(); }
-}
-function closeCloudModal(){
-  const modal=document.getElementById('cloudModal');
-  if(modal) modal.style.display='none';
-}
-document.addEventListener('click',e=>{
-  const modal=document.getElementById('cloudModal');
-  if(modal && e.target===modal) closeCloudModal();
-});
-
-// ── 啟動時初始化 ─────────────────────────────────────
-function restoreCloudSession(){
-  if(FIREBASE_READY) initFirebase();
-}
 
 // ═══════════════════════════════════════════════════════
 //  Init
@@ -1346,22 +1260,21 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('btnAddCash').addEventListener('click',addVirtualCash);
   document.getElementById('btnSetCash').addEventListener('click',setVirtualCash);
   document.getElementById('btnFee')?.addEventListener('click',setFeeDiscount);
-  document.getElementById('btnGoMarket')?.addEventListener('click',()=>{
-    if(typeof window.__navigate==='function')window.__navigate('market');
-  });
-  document.getElementById('btnCloudLogin')?.addEventListener('click',openCloudModal);
+  document.getElementById('btnFee2')?.addEventListener('click',setFeeDiscount);
   document.getElementById('btnCloseKLine')?.addEventListener('click',closeKLine);
+  document.getElementById('btnGoMarket')?.addEventListener('click',()=>{window.__navigate&&window.__navigate('market');});
+  document.getElementById('btnCloudLogin')?.addEventListener('click',()=>{window.__navigate&&window.__navigate('cloud');});
   document.getElementById('btnCloudSignIn')?.addEventListener('click',cloudGoogleSignIn);
-  document.getElementById('btnCloudSignUp')?.addEventListener('click',cloudGoogleSignIn);
   document.getElementById('btnCloudLogout')?.addEventListener('click',cloudLogout);
   document.getElementById('btnCloudSync')?.addEventListener('click',cloudSyncSnapshot);
   document.getElementById('btnCloudFetch')?.addEventListener('click',cloudFetchHistory);
-  // 首頁備份按鈕
-  document.getElementById('btnExportHome')?.addEventListener('click',exportDataToJson);
-  document.getElementById('importFileHome')?.addEventListener('change',importDataFromJson);
-  // 頂部 bar 備份按鈕 (桌面)
+  document.getElementById('btnExportCloud')?.addEventListener('click',exportDataToJson);
+  document.getElementById('importFileCloud')?.addEventListener('change',importDataFromJson);
   document.getElementById('btnExportTop')?.addEventListener('click',exportDataToJson);
   document.getElementById('importFileTop')?.addEventListener('change',importDataFromJson);
+  document.getElementById('btnResetCloud')?.addEventListener('click',()=>{
+    if(confirm('⚠️ 確定要重置所有資料嗎？此操作無法還原！')){ localStorage.removeItem(STORAGE_KEY); location.reload(); }
+  });
   ['tradeSymbol','tradeQty','tradePrice'].forEach(id=>{
     document.getElementById(id)?.addEventListener('input',updateFeePreview);
   });
@@ -1387,8 +1300,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   renderHoldingsOverview();
   renderWatchlistImmediate();
   renderSourceSelector();
-  renderCharts();
-  recordAssetSnapshot();
+  setTimeout(()=>{renderCharts();recordAssetSnapshot();},800);
 
   refreshWatchlistPrices().then(()=>refreshHoldingsPrices());
   scheduleNextRefresh();
