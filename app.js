@@ -1,9 +1,9 @@
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v2.0  |  報酬率欄 + 已實現損益統計
+//  台股虛擬操盤系統 v2.1  |  圖表 + 手續費自訂 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
-const STORAGE_KEY  = 'twStock_v2';
+const STORAGE_KEY  = 'twStock_v3';
 
 let state = loadState();
 const quoteCache    = {};
@@ -99,7 +99,7 @@ function getTWDateStr(){const tw=getTWDate();return`${tw.getUTCFullYear()}${Stri
 // ─── State ─────────────────────────────────────────────
 
 function getEmptyState(){
-  return{cash:INITIAL_CASH,holdings:{},history:[],realizedTrades:[],watchlist:[],realizedPnL:0,priceSource:'auto',savedAt:null};
+  return{cash:INITIAL_CASH,holdings:{},history:[],realizedTrades:[],assetHistory:[],watchlist:[],realizedPnL:0,feeDiscount:0.6,priceSource:'auto',savedAt:null};
 }
 
 function loadState(){
@@ -133,9 +133,41 @@ function updateLastSavedLabel(){
 
 function calcFee(price,shares,side){
   const amount=price*shares;
-  const broker=Math.max(Math.round(amount*0.001425),20);
+  const discount=state?.feeDiscount??0.6;
+  const broker=Math.max(Math.round(amount*0.001425*discount),1);
   const tax=side==='sell'?Math.round(amount*0.003):0;
   return{amount,broker,tax,total:broker+tax};
+}
+
+
+// ── 手續費折數設定 ─────────────────────────────────────
+function setFeeDiscount(){
+  const cur=((state.feeDiscount??0.6)*10).toFixed(1);
+  const input=prompt(`手續費折數（預設 6 折 = 0.1425% × 0.6）\n請輸入折數（1~10，如 6=六折）：`,cur);
+  if(input===null)return;
+  const d=parseFloat(input);
+  if(isNaN(d)||d<1||d>10){alert('❌ 請輸入 1~10 之間的數字');return;}
+  state.feeDiscount=parseFloat((d/10).toFixed(2));
+  saveState(state);
+  showToast(`✅ 手續費設為 ${d} 折（${(state.feeDiscount*0.1425).toFixed(4)}%）`);
+  updateFeeLabel();
+}
+function updateFeeLabel(){
+  const el=document.getElementById('feeLabel');
+  if(el){const d=state.feeDiscount??0.6;el.textContent=`手續費：${(d*10).toFixed(0)} 折 (${(d*0.1425).toFixed(4)}%)`;}
+}
+
+// ── 每日資產快照 ───────────────────────────────────────
+function recordAssetSnapshot(){
+  const today=new Date().toISOString().slice(0,10);
+  if(!Array.isArray(state.assetHistory))state.assetHistory=[];
+  const hv=parseInt((document.getElementById('holdingsValue')?.textContent||'0').replace(/[^\d]/g,''),10)||0;
+  const total=state.cash+hv;
+  const last=state.assetHistory[state.assetHistory.length-1];
+  if(last&&last.date===today){last.total=total;}
+  else{state.assetHistory.push({date:today,total});}
+  if(state.assetHistory.length>365)state.assetHistory=state.assetHistory.slice(-365);
+  saveState(state);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -557,7 +589,8 @@ function buildWatchRow(symbol,q){
       </div>
     </td>
     <td>
-      <button class="text-xs text-blue-400 hover:underline mr-2" data-trade="${symbol}">操盤</button>
+      <button class="text-xs text-blue-400 hover:underline mr-1" data-trade="${symbol}">操盤</button>
+      <button class="text-xs hover:underline mr-1" style="color:#d29922;" data-kline="${symbol}">K線</button>
       <button class="text-xs hover:underline" style="color:#ff4d4d;" data-remove="${symbol}">移除</button>
     </td>`;
 }
@@ -566,6 +599,7 @@ function bindWatchlistEvents(){
   const tbody=document.getElementById('watchlistBody');
   tbody.querySelectorAll('[data-trade]').forEach(btn=>{btn.onclick=()=>{document.getElementById('tradeSymbol').value=btn.dataset.trade;};});
   tbody.querySelectorAll('[data-remove]').forEach(btn=>{btn.onclick=()=>removeFromWatchlist(btn.dataset.remove);});
+  tbody.querySelectorAll('[data-kline]').forEach(btn=>{btn.onclick=()=>showKLine(btn.dataset.kline);});
 }
 
 function renderWatchlistImmediate(){
@@ -643,6 +677,8 @@ async function executeTrade(side){
   if(!state.watchlist.includes(symbol)){state.watchlist.unshift(symbol);state.watchlist=[...new Set(state.watchlist)];}
   saveState(state);msg.textContent='';document.getElementById('tradePrice').value='';
   renderDashboardQuick();renderHistory();renderRealized();
+  setTimeout(recordAssetSnapshot,500);
+  renderCharts();
   renderWatchlistImmediate();renderHoldingsImmediate();
   refreshWatchlistPrices();refreshHoldingsPrices();
 }
@@ -753,7 +789,7 @@ function renderDashboardQuick(hv){
 // ─── Backup ────────────────────────────────────────────
 
 function exportDataToJson(){
-  const payload={exportedAt:new Date().toISOString(),version:'2.0',data:loadState()};
+  const payload={exportedAt:new Date().toISOString(),version:'2.1',data:loadState()};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'});
   const url=URL.createObjectURL(blob);
   const today=new Date().toISOString().slice(0,10).replace(/-/g,'');
@@ -874,6 +910,157 @@ function initTabs(){
   });
 }
 
+
+// ══════════════════════════════════════════════════════
+//  圖表系統（Chart.js）
+// ══════════════════════════════════════════════════════
+let _pieChart=null,_lineChart=null;
+function renderCharts(){renderPieChart();renderLineChart();}
+
+function renderPieChart(){
+  const canvas=document.getElementById('chartPie');
+  if(!canvas||typeof Chart==='undefined')return;
+  const labels=['現金'],data=[state.cash],colors=['#388bfd'];
+  const palette=['#ff4d4d','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e74c3c','#3498db','#e67e22'];
+  let pi=0;
+  for(const sym of Object.keys(state.holdings)){
+    const h=state.holdings[sym];const q=quoteCache[sym]?.data;
+    const price=(q?.price>0)?q.price:h.avgPrice;
+    labels.push(sym+(getStockName(sym)?' '+getStockName(sym):''));
+    data.push(price*h.shares);colors.push(palette[pi++%palette.length]);
+  }
+  if(_pieChart){_pieChart.destroy();_pieChart=null;}
+  _pieChart=new Chart(canvas,{
+    type:'doughnut',
+    data:{labels,datasets:[{data,backgroundColor:colors,borderWidth:2,borderColor:'#161b22'}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'right',labels:{color:'#8b949e',font:{size:11},boxWidth:12}},
+        tooltip:{callbacks:{label:ctx=>{
+          const total=ctx.dataset.data.reduce((a,b)=>a+b,0);
+          const pct=total?((ctx.parsed/total)*100).toFixed(1):'0';
+          return ` ${ctx.label}: $${Math.round(ctx.parsed).toLocaleString()} (${pct}%)`;
+        }}}
+      }
+    }
+  });
+}
+
+function renderLineChart(){
+  const canvas=document.getElementById('chartLine');
+  if(!canvas||typeof Chart==='undefined')return;
+  const hist=state.assetHistory||[];
+  if(hist.length<2){
+    const ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle='#555';ctx.font='13px sans-serif';ctx.textAlign='center';
+    ctx.fillText('需至少 2 天資料才能顯示走勢',canvas.width/2,canvas.height/2);return;
+  }
+  if(_lineChart){_lineChart.destroy();_lineChart=null;}
+  _lineChart=new Chart(canvas,{
+    type:'line',
+    data:{labels:hist.map(d=>d.date),datasets:[{
+      label:'總資產',data:hist.map(d=>d.total),
+      borderColor:'#388bfd',backgroundColor:'rgba(56,139,253,0.08)',
+      borderWidth:2,pointRadius:3,pointBackgroundColor:'#388bfd',fill:true,tension:0.3
+    }]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      scales:{
+        x:{ticks:{color:'#8b949e',maxRotation:45,font:{size:10}},grid:{color:'#21262d'}},
+        y:{ticks:{color:'#8b949e',callback:v=>'$'+Math.round(v/10000)+'萬'},grid:{color:'#21262d'}}
+      },
+      plugins:{
+        legend:{labels:{color:'#8b949e'}},
+        tooltip:{callbacks:{label:ctx=>`總資產：$${Math.round(ctx.parsed.y).toLocaleString()}`}}
+      }
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════
+//  K 線圖（Lightweight Charts）
+// ══════════════════════════════════════════════════════
+let _kwChart=null;
+
+async function showKLine(symbol){
+  symbol=normalizeSymbol(symbol);
+  const panel=document.getElementById('klinePanel');
+  const title=document.getElementById('klineTitle');
+  if(!panel)return;
+  panel.style.display='block';
+  if(title)title.textContent=`📊 ${symbol} ${getStockName(symbol)} K線（近3個月）`;
+  const container=document.getElementById('klineContainer');
+  if(!container)return;
+  if(typeof LightweightCharts==='undefined'){
+    container.innerHTML='<p style="color:#555;text-align:center;padding:20px;">⏳ 圖表庫載入中…請稍後再試</p>';return;
+  }
+  container.innerHTML='<p style="color:#8b949e;text-align:center;padding:20px;">⏳ 載入K線資料…</p>';
+  if(_kwChart){try{_kwChart.remove();}catch(_){}_kwChart=null;}
+  const data=await fetchKLineData(symbol);
+  container.innerHTML='';
+  _kwChart=LightweightCharts.createChart(container,{
+    width:container.clientWidth||600,height:260,
+    layout:{background:{color:'#0d1117'},textColor:'#8b949e'},
+    grid:{vertLines:{color:'#21262d'},horzLines:{color:'#21262d'}},
+    rightPriceScale:{borderColor:'#30363d'},
+    timeScale:{borderColor:'#30363d'}
+  });
+  const series=_kwChart.addCandlestickSeries({
+    upColor:'#ff4d4d',downColor:'#2ecc71',
+    borderUpColor:'#ff4d4d',borderDownColor:'#2ecc71',
+    wickUpColor:'#ff4d4d',wickDownColor:'#2ecc71'
+  });
+  if(data&&data.length){
+    series.setData(data);_kwChart.timeScale().fitContent();
+  }else{
+    container.innerHTML='<p style="color:#555;text-align:center;padding:20px;">❌ 無法取得K線資料（可能為假日或代號錯誤）</p>';
+  }
+}
+
+async function fetchKLineData(symbol){
+  const start=daysAgo(90);
+  const PROXIES=[u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`];
+  for(const url of[
+    `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&stock_id=${symbol}&start_date=${start}&token=${encodeURIComponent(_r())}`,
+    `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&stock_id=${symbol}&start_date=${start}`
+  ]){
+    try{
+      const r=await timedFetch(url,12000);if(!r.ok)continue;
+      const json=await r.json();if(json.status!==200)continue;
+      const raw=json.data;if(!Array.isArray(raw)||!raw.length)continue;
+      raw.sort((a,b)=>a.date.localeCompare(b.date));
+      return raw.map(d=>({
+        time:d.date,
+        open:parseFloat(d.open),high:parseFloat(d.max),
+        low:parseFloat(d.min),close:parseFloat(d.close)
+      })).filter(d=>d.open&&d.high&&d.low&&d.close);
+    }catch(e){console.warn('[KLine-FM]',e.message);}
+  }
+  for(const sfx of['.TW','.TWO']){
+    const target=`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}${sfx}?range=3mo&interval=1d`;
+    for(const px of PROXIES){
+      try{
+        const r=await timedFetch(px(target),8000);if(!r.ok)continue;
+        const text=await r.text();if(!text||text.startsWith('<'))continue;
+        const json=JSON.parse(text);const result=json?.chart?.result?.[0];if(!result)continue;
+        const ts=result.timestamp||[];const q=result.indicators?.quote?.[0]||{};const out=[];
+        for(let i=0;i<ts.length;i++){
+          const o=num(q.open?.[i]),h=num(q.high?.[i]),l=num(q.low?.[i]),c=num(q.close?.[i]);
+          if(o&&h&&l&&c)out.push({time:new Date(ts[i]*1000).toISOString().slice(0,10),open:o,high:h,low:l,close:c});
+        }
+        if(out.length)return out;
+      }catch(_){}
+    }
+  }
+  return[];
+}
+
+function closeKLine(){
+  const panel=document.getElementById('klinePanel');if(panel)panel.style.display='none';
+  if(_kwChart){try{_kwChart.remove();}catch(_){}_kwChart=null;}
+}
+
 // ═══════════════════════════════════════════════════════
 //  Init
 // ═══════════════════════════════════════════════════════
@@ -890,6 +1077,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('importFile').addEventListener('change',importDataFromJson);
   document.getElementById('btnAddCash').addEventListener('click',addVirtualCash);
   document.getElementById('btnSetCash').addEventListener('click',setVirtualCash);
+  document.getElementById('btnFee')?.addEventListener('click',setFeeDiscount);
+  document.getElementById('btnCloseKLine')?.addEventListener('click',closeKLine);
 
   document.querySelectorAll('.source-btn').forEach(btn=>{
     btn.addEventListener('click',()=>setSource(btn.dataset.source));
@@ -903,12 +1092,15 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   updateClock();setInterval(updateClock,1000);
 
+  updateFeeLabel();
   renderDashboardQuick(0);
   renderHoldingsImmediate();
   renderHistory();
   renderRealized();
   renderWatchlistImmediate();
   renderSourceSelector();
+  renderCharts();
+  recordAssetSnapshot();
 
   refreshWatchlistPrices().then(()=>refreshHoldingsPrices());
   scheduleNextRefresh();
