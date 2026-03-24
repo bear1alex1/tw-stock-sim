@@ -180,6 +180,8 @@ function recordAssetSnapshot(){
   else{state.assetHistory.push({date:today,total});}
   if(state.assetHistory.length>365)state.assetHistory=state.assetHistory.slice(-365);
   saveState(state);
+  // 收盤後自動雲端同步
+  if(getMarketState()==='CLOSED') setTimeout(cloudSyncSnapshot,2000);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -932,7 +934,7 @@ function renderHoldingsOverview(){
   if(!tbody)return;
   tbody.innerHTML='';
   const symbols=Object.keys(state.holdings);
-  if(!symbols.length){if(empty)empty.style.display='';return;}
+  if(!symbols.length){if(empty){empty.style.display='';empty.style.setProperty('display','block','important');}return;}
   if(empty)empty.style.display='none';
   for(const symbol of symbols){
     const h=state.holdings[symbol];const q=quoteCache[symbol]?.data??null;
@@ -1104,6 +1106,178 @@ window.__onPageEnter=function(page){
   if(page==='trade'){renderSourceSelector();updateFeeLabel();}
 };
 
+
+// ══════════════════════════════════════════════════════
+//  雲端同步（Firebase / 自訂後端介面）
+//  ★ 架構說明：
+//    - 使用 Supabase REST API（無需 SDK，純 fetch）
+//    - 免費方案即可儲存每日快照
+//    - 使用者需自行填入 SUPABASE_URL + ANON_KEY
+//    - 若未設定則停留在「本地模式」，功能不受影響
+// ══════════════════════════════════════════════════════
+
+// ▼▼▼ 填入你的 Supabase 專案資訊（留空 = 純本地模式）▼▼▼
+const SUPA_URL = '';   // e.g. 'https://xxxx.supabase.co'
+const SUPA_KEY = '';   // anon public key
+// ▲▲▲──────────────────────────────────────────────────▲▲▲
+
+let _cloudUser = null;   // { id, email, access_token }
+let _cloudTimer = null;
+
+// ── Modal 開關 ─────────────────────────────────────────
+function openCloudModal(){
+  const modal = document.getElementById('cloudModal');
+  if(modal){ modal.style.display='flex'; refreshCloudUI(); }
+}
+function closeCloudModal(){
+  const modal = document.getElementById('cloudModal');
+  if(modal) modal.style.display='none';
+}
+// 點 backdrop 關閉
+document.addEventListener('click', e=>{
+  const modal=document.getElementById('cloudModal');
+  if(modal&&e.target===modal) closeCloudModal();
+});
+
+// ── UI 狀態更新 ────────────────────────────────────────
+function refreshCloudUI(){
+  const dot   = document.getElementById('cloudStatusDot');
+  const txt   = document.getElementById('cloudStatusText');
+  const form  = document.getElementById('cloudLoginForm');
+  const logged= document.getElementById('cloudLoggedIn');
+  const info  = document.getElementById('cloudUserInfo');
+  const btn   = document.getElementById('btnCloudLogin');
+
+  if(!SUPA_URL){
+    if(dot) dot.style.background='#555';
+    if(txt) txt.textContent='未設定 Supabase（本地模式）';
+    if(form) form.style.display='none';
+    if(logged) logged.style.display='none';
+    const msg=document.getElementById('cloudMsg');
+    if(msg) msg.textContent='請在 app.js 頂部填入 SUPA_URL 與 SUPA_KEY 以啟用雲端同步';
+    return;
+  }
+  if(_cloudUser){
+    if(dot) dot.style.background='#2ecc71';
+    if(txt) txt.textContent='已登入';
+    if(form) form.style.display='none';
+    if(logged){ logged.style.display='flex'; }
+    if(info) info.textContent=`👤 ${_cloudUser.email}`;
+    if(btn){ btn.style.background='#1a2d1a'; btn.textContent='☁️ 已登入'; }
+  }else{
+    if(dot) dot.style.background='#d29922';
+    if(txt) txt.textContent='尚未登入';
+    if(form) form.style.display='flex';
+    if(logged) logged.style.display='none';
+    if(btn){ btn.style.background='#1a2d1a'; btn.textContent='☁️ 雲端登入'; }
+  }
+}
+
+// ── 登入 / 註冊 ────────────────────────────────────────
+async function cloudAuth(mode){
+  const email = document.getElementById('cloudEmail')?.value.trim();
+  const pass  = document.getElementById('cloudPassword')?.value;
+  const msg   = document.getElementById('cloudMsg');
+  if(!email||!pass){ if(msg)msg.textContent='❌ 請填寫 Email 與密碼'; return; }
+  if(msg) msg.textContent='⏳ 處理中…';
+  const endpoint = mode==='signup'
+    ? `${SUPA_URL}/auth/v1/signup`
+    : `${SUPA_URL}/auth/v1/token?grant_type=password`;
+  try{
+    const r=await fetch(endpoint,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPA_KEY},
+      body:JSON.stringify({email,password:pass})
+    });
+    const data=await r.json();
+    if(!r.ok){ if(msg)msg.textContent='❌ '+(data.error_description||data.msg||'失敗'); return; }
+    _cloudUser={ id:data.user?.id||data.id, email:data.user?.email||email, access_token:data.access_token };
+    localStorage.setItem('cloud_token', JSON.stringify(_cloudUser));
+    if(msg) msg.textContent='';
+    refreshCloudUI();
+    showToast(`✅ ${mode==='signup'?'註冊並登入':'登入'}成功`);
+    scheduleCloudAutoSync();
+  }catch(e){ if(msg)msg.textContent='❌ 網路錯誤：'+e.message; }
+}
+
+async function cloudLogout(){
+  _cloudUser=null;
+  localStorage.removeItem('cloud_token');
+  if(_cloudTimer){clearInterval(_cloudTimer);_cloudTimer=null;}
+  refreshCloudUI();
+  closeCloudModal();
+  showToast('已登出雲端');
+}
+
+// ── 每日快照同步 ───────────────────────────────────────
+async function cloudSyncSnapshot(){
+  if(!_cloudUser||!SUPA_URL) return;
+  const today=new Date().toISOString().slice(0,10);
+  const hv=parseInt((document.getElementById('holdingsValue')?.textContent||'0').replace(/[^\d]/g,''),10)||0;
+  const total=state.cash+hv;
+  const msg=document.getElementById('cloudSyncMsg');
+  try{
+    const r=await fetch(`${SUPA_URL}/rest/v1/asset_snapshots`,{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'apikey':SUPA_KEY,
+        'Authorization':'Bearer '+_cloudUser.access_token,
+        'Prefer':'resolution=merge-duplicates'
+      },
+      body:JSON.stringify({user_id:_cloudUser.id, date:today, total})
+    });
+    if(r.ok||r.status===201||r.status===200){
+      if(msg)msg.textContent=`✅ 已同步 ${today} 快照（$${formatMoney(total)}）`;
+      showToast(`☁️ 雲端快照已同步：${today}`);
+    }else{
+      const err=await r.json().catch(()=>({}));
+      if(msg)msg.textContent='❌ 同步失敗：'+(err.message||r.status);
+    }
+  }catch(e){ if(msg)msg.textContent='❌ 網路錯誤：'+e.message; }
+}
+
+async function cloudFetchHistory(){
+  if(!_cloudUser||!SUPA_URL) return;
+  const msg=document.getElementById('cloudSyncMsg');
+  if(msg)msg.textContent='⏳ 從雲端讀取…';
+  try{
+    const r=await fetch(`${SUPA_URL}/rest/v1/asset_snapshots?user_id=eq.${_cloudUser.id}&order=date.asc&limit=365`,{
+      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+_cloudUser.access_token}
+    });
+    if(!r.ok){ if(msg)msg.textContent='❌ 讀取失敗：'+r.status; return; }
+    const rows=await r.json();
+    if(!Array.isArray(rows)||!rows.length){ if(msg)msg.textContent='雲端尚無資料'; return; }
+    // Merge with local
+    const cloudMap={};rows.forEach(row=>cloudMap[row.date]=row.total);
+    const localMap={};(state.assetHistory||[]).forEach(d=>localMap[d.date]=d.total);
+    const merged={...localMap,...cloudMap};
+    state.assetHistory=Object.entries(merged).sort((a,b)=>a[0].localeCompare(b[0])).map(([date,total])=>({date,total}));
+    saveState(state);renderCharts();
+    if(msg)msg.textContent=`✅ 已合併 ${rows.length} 筆雲端紀錄`;
+    showToast(`☁️ 雲端走勢已還原（${rows.length} 筆）`);
+  }catch(e){ if(msg)msg.textContent='❌ 網路錯誤：'+e.message; }
+}
+
+// ── 自動排程（每小時嘗試同步） ─────────────────────────
+function scheduleCloudAutoSync(){
+  if(!_cloudUser||!SUPA_URL) return;
+  if(_cloudTimer) clearInterval(_cloudTimer);
+  _cloudTimer=setInterval(()=>{
+    const ms=getMarketState();
+    if(ms==='CLOSED') cloudSyncSnapshot();
+  }, 3600_000);
+}
+
+// ── 載入時恢復登入狀態 ────────────────────────────────
+function restoreCloudSession(){
+  if(!SUPA_URL) return;
+  try{
+    const saved=localStorage.getItem('cloud_token');
+    if(saved){ _cloudUser=JSON.parse(saved); refreshCloudUI(); scheduleCloudAutoSync(); }
+  }catch(_){}
+}
+
 // ═══════════════════════════════════════════════════════
 //  Init
 // ═══════════════════════════════════════════════════════
@@ -1121,7 +1295,22 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('btnAddCash').addEventListener('click',addVirtualCash);
   document.getElementById('btnSetCash').addEventListener('click',setVirtualCash);
   document.getElementById('btnFee')?.addEventListener('click',setFeeDiscount);
+  document.getElementById('btnGoMarket')?.addEventListener('click',()=>{
+    if(typeof window.__navigate==='function')window.__navigate('market');
+  });
+  document.getElementById('btnCloudLogin')?.addEventListener('click',openCloudModal);
   document.getElementById('btnCloseKLine')?.addEventListener('click',closeKLine);
+  document.getElementById('btnCloudSignIn')?.addEventListener('click',()=>cloudAuth('login'));
+  document.getElementById('btnCloudSignUp')?.addEventListener('click',()=>cloudAuth('signup'));
+  document.getElementById('btnCloudLogout')?.addEventListener('click',cloudLogout);
+  document.getElementById('btnCloudSync')?.addEventListener('click',cloudSyncSnapshot);
+  document.getElementById('btnCloudFetch')?.addEventListener('click',cloudFetchHistory);
+  // 首頁備份按鈕
+  document.getElementById('btnExportHome')?.addEventListener('click',exportDataToJson);
+  document.getElementById('importFileHome')?.addEventListener('change',importDataFromJson);
+  // 頂部 bar 備份按鈕 (桌面)
+  document.getElementById('btnExportTop')?.addEventListener('click',exportDataToJson);
+  document.getElementById('importFileTop')?.addEventListener('change',importDataFromJson);
   ['tradeSymbol','tradeQty','tradePrice'].forEach(id=>{
     document.getElementById(id)?.addEventListener('input',updateFeePreview);
   });
@@ -1138,6 +1327,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   updateClock();setInterval(updateClock,1000);
 
+  restoreCloudSession();
   updateFeeLabel();
   renderDashboardQuick(0);
   renderHoldingsImmediate();
