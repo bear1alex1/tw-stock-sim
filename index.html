@@ -122,8 +122,13 @@
 
     /* ── Clock bar ── */
     #clockBar{background:#161b22;border-bottom:1px solid var(--border2);
-      padding:6px 12px;display:flex;align-items:center;justify-content:space-between;
+      padding:8px 16px;display:flex;align-items:center;justify-content:space-between;
       font-size:.75rem;color:var(--muted);position:sticky;top:0;z-index:50;}
+    @media(min-width:768px){
+      #clockBar{left:200px;position:fixed;right:0;top:0;}
+      #appMain{padding-top:56px;}
+      #btnExportTop,#btnImportTop{display:inline-flex!important;}
+    }
 
     /* ── K-line panel ── */
     #klinePanel{background:var(--surface);border:1px solid var(--border);
@@ -185,15 +190,23 @@
 
 <!-- Clock Bar -->
 <div id="clockBar">
-  <div style="display:flex;align-items:center;gap:8px;">
-    <span style="font-weight:800;color:var(--text);font-size:.82rem;">
-      台股虛擬操盤 <span class="vtag">v2.1</span>
-    </span>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span style="font-size:1.25rem;">📈</span>
+    <div>
+      <div style="font-weight:800;color:var(--text);font-size:.92rem;line-height:1.2;">
+        台股虛擬操盤系統 <span class="vtag">v2.1</span>
+      </div>
+      <div id="lastSaved" style="font-size:.65rem;color:#444;line-height:1.2;">最後儲存：—</div>
+    </div>
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
-    <span id="twClock">—</span>
+    <span id="twClock" style="font-size:.78rem;">—</span>
     <span id="marketBadge" class="badge badge-closed">—</span>
-    <span id="lastSaved" style="font-size:.68rem;color:#444;"></span>
+    <!-- 桌面版快捷備份按鈕 -->
+    <button id="btnExportTop" class="btn-xs btn-xs-blue" style="display:none;">💾 匯出</button>
+    <label id="btnImportTop" class="btn-xs btn-xs-gray" style="display:none;cursor:pointer;">
+      📂 匯入<input type="file" accept=".json" id="importFileTop" style="display:none;"/>
+    </label>
   </div>
 </div>
 
@@ -235,6 +248,7 @@
         <div class="sub" style="display:flex;gap:6px;justify-content:center;margin-top:6px;">
           <button class="btn-xs btn-xs-red" id="btnAddCash">＋充值</button>
           <button class="btn-xs btn-xs-gray" id="btnSetCash">✏️ 設定</button>
+          <button class="btn-xs" id="btnCloudLogin" style="margin-top:4px;background:#1a2d1a;color:#2ecc71;border:1px solid #1a4a1a;width:100%;">☁️ 雲端登入</button>
         </div>
       </div>
       <div class="card stat-big">
@@ -256,8 +270,24 @@
       </div>
     </div>
 
+    <!-- Backup quick row (首頁也可備份) -->
+    <div class="card" style="margin-top:14px;margin-bottom:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div>
+          <div class="setting-label" style="font-size:.88rem;">💾 資料備份 / 還原</div>
+          <div class="setting-desc" id="backupNote" style="font-size:.72rem;color:var(--muted);">定期匯出 JSON 備份，避免資料遺失</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-blue" id="btnExportHome" style="font-size:.8rem;padding:7px 14px;">💾 匯出 JSON</button>
+          <label class="btn btn-amber" style="font-size:.8rem;padding:7px 14px;cursor:pointer;">
+            📂 匯入 JSON<input type="file" accept=".json" id="importFileHome" style="display:none;"/>
+          </label>
+        </div>
+      </div>
+    </div>
+
     <!-- Holdings mini summary -->
-    <div class="card" style="margin-top:14px;">
+    <div class="card" style="margin-top:12px;">
       <div class="sec-title">📦 持股概況（點此查看詳情）</div>
       <div class="tbl-wrap">
         <table>
@@ -267,7 +297,13 @@
           <tbody id="holdingsBodyOverview"></tbody>
         </table>
       </div>
-      <p id="holdingsEmptyOverview" class="muted" style="text-align:center;padding:16px;font-size:.85rem;">目前無持股</p>
+      <div id="holdingsEmptyOverview" style="text-align:center;padding:20px 12px;">
+        <div style="font-size:2rem;margin-bottom:8px;">📭</div>
+        <p class="muted" style="font-size:.85rem;margin-bottom:12px;">目前尚無持股</p>
+        <button class="btn btn-blue" id="btnGoMarket" style="font-size:.82rem;padding:8px 18px;">
+          📡 前往行情追蹤下單 →
+        </button>
+      </div>
     </div>
   </div>
 
@@ -479,6 +515,47 @@
     <span class="icon">⚙️</span>交易設定
   </button>
 </nav>
+
+
+<!-- ── 雲端登入 Modal ────────────────────── -->
+<div id="cloudModal" style="display:none;position:fixed;inset:0;z-index:200;
+  background:#000a;display:none;align-items:center;justify-content:center;padding:16px;">
+  <div class="card" style="width:100%;max-width:380px;padding:24px;position:relative;">
+    <button onclick="closeCloudModal()" style="position:absolute;top:12px;right:14px;
+      background:transparent;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;">✕</button>
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-size:2rem;">☁️</div>
+      <h2 style="font-size:1rem;font-weight:800;margin-top:6px;">雲端同步登入</h2>
+      <p class="muted" style="font-size:.78rem;margin-top:4px;">登入後資產快照將每日自動上傳<br/>跨裝置保留連續走勢紀錄</p>
+    </div>
+    <!-- 登入狀態 -->
+    <div id="cloudStatus" style="background:var(--bg);border:1px solid var(--border2);
+      border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:.82rem;
+      display:flex;align-items:center;gap:8px;">
+      <span id="cloudStatusDot" style="width:8px;height:8px;border-radius:50%;
+        background:#555;display:inline-block;flex-shrink:0;"></span>
+      <span id="cloudStatusText">尚未登入</span>
+    </div>
+    <!-- Email / Password -->
+    <div id="cloudLoginForm" style="display:flex;flex-direction:column;gap:10px;">
+      <input id="cloudEmail" class="inp" type="email" placeholder="Email"/>
+      <input id="cloudPassword" class="inp" type="password" placeholder="密碼"/>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-blue" id="btnCloudSignIn" style="flex:1;font-size:.85rem;">登入</button>
+        <button class="btn btn-ghost" id="btnCloudSignUp" style="flex:1;font-size:.85rem;">註冊</button>
+      </div>
+      <p id="cloudMsg" class="muted" style="font-size:.78rem;min-height:1em;text-align:center;"></p>
+    </div>
+    <!-- 已登入狀態 -->
+    <div id="cloudLoggedIn" style="display:none;flex-direction:column;gap:10px;">
+      <p style="font-size:.85rem;text-align:center;" id="cloudUserInfo">—</p>
+      <button class="btn btn-blue" id="btnCloudSync" style="font-size:.85rem;">☁️ 立即同步快照</button>
+      <button class="btn btn-ghost" id="btnCloudFetch" style="font-size:.85rem;">📥 從雲端還原走勢</button>
+      <button class="btn btn-danger" id="btnCloudLogout" style="font-size:.85rem;">登出</button>
+      <p id="cloudSyncMsg" class="muted" style="font-size:.78rem;text-align:center;min-height:1em;"></p>
+    </div>
+  </div>
+</div>
 
 <div id="toast"></div>
 
