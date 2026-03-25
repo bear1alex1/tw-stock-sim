@@ -244,7 +244,7 @@ async function fetchYahooBackup(symbol){
   ];
 
   async function _tryV7(sfx){
-    const target=`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}${sfx}&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketPreviousClose,shortName&_=${ts}`;
+    const target=`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}${sfx}&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketPreviousClose,shortName,longName&lang=zh-TW&region=TW&_=${ts}`;
     const urls=[target,...PROXIES.map(function(px){return px(target);})];
     for(const url of urls){
       try{
@@ -258,7 +258,7 @@ async function fetchYahooBackup(symbol){
         const change=num(q.regularMarketChange);
         const changePct=num(q.regularMarketChangePercent);
         const prev=num(q.regularMarketPreviousClose);
-        if(q.shortName) setStockName(symbol,q.shortName);
+        const yName=q.longName||q.shortName||""; if(yName)setStockName(symbol,yName.replace(/\s*\(.*?\)/g,"").trim());
         console.log('[Yahoo-v7] OK '+symbol+sfx+' '+price);
         return{price,previousClose:prev,change,changePct,marketState:ms,source:'Yahoo'};
       }catch(e){}
@@ -409,55 +409,65 @@ async function fetchFinMind(symbol){
 
 let _twseCache=null,_twseTs=0,_twseP=null;
 async function _doLoadTwse(){
-  for(const url of['https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL','https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL']){
+  for(const url of[
+    'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL',
+    'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL'
+  ]){
     try{
-      const r=await timedFetch(url,12000);if(!r.ok)continue;
+      const r=await timedFetch(url+'?_='+Date.now(),12000);if(!r.ok)continue;
       const arr=await r.json();if(!Array.isArray(arr)||arr.length<50)continue;
       const map={};
       for(const item of arr){
-        const code=String(item.Code??item['股票代號']??'').trim();
-        // ▼ 擷取名稱
-        const name=String(item.StockName??item['股票名稱']??'').trim();
-        if(code&&name) setStockName(code,name);
-        const close=num(item.ClosingPrice)??num(item['收盤價'])??null;
-        const changeRaw=num(item.Change)??null;
+        // TWSE STOCK_DAY_ALL 正確欄位：Code, Name, ClosingPrice, Change
+        const code=String(item.Code??item['證券代號']??item['股票代號']??'').trim();
+        const name=String(item.Name??item.StockName??item['證券名稱']??item['股票名稱']??'').trim();
+        if(code&&name&&/[一-鿿！-～]/.test(name))setStockName(code,name);
+        const close=num(item.ClosingPrice??item['收盤價']);
+        const changeRaw=num(item.Change??item['漲跌價差']);
         if(code&&close&&close>0){
-          const prevClose=changeRaw!==null?parseFloat((close-changeRaw).toFixed(2)):null;
-          map[code]={close,prevClose,change:changeRaw,changePct:prevClose&&changeRaw?parseFloat((changeRaw/prevClose*100).toFixed(2)):null};
+          const prevClose=changeRaw!=null?parseFloat((close-changeRaw).toFixed(2)):null;
+          const changePct=prevClose&&changeRaw?parseFloat((changeRaw/prevClose*100).toFixed(2)):null;
+          map[code]={close,prevClose,change:changeRaw,changePct};
         }
       }
-      if(Object.keys(map).length>100)return map;
+      const cnt=Object.keys(map).length;
+      console.log('[TWSE] loaded '+cnt+' stocks');
+      if(cnt>100)return map;
     }catch(e){console.warn('[TWSE-API]',e.message);}
   }
   return null;
 }
+// 縮短批量快取至 8 秒，確保每次刷新都能拿到最新價格
 function loadTwse(){
-  if(_twseCache&&Date.now()-_twseTs<getCacheTTL()*5)return Promise.resolve(_twseCache);
-  if(!_twseP){_twseP=_doLoadTwse().then(m=>{if(m){_twseCache=m;_twseTs=Date.now();}_twseP=null;return _twseCache;});}
+  if(_twseCache&&Date.now()-_twseTs<8000)return Promise.resolve(_twseCache);
+  if(!_twseP){_twseP=_doLoadTwse().then(function(m){if(m){_twseCache=m;_twseTs=Date.now();}_twseP=null;return _twseCache;});}
   return _twseP;
 }
 
 let _tpexCache=null,_tpexTs=0,_tpexP=null;
 async function _doLoadTpex(){
   try{
-    const r=await timedFetch('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes',12000);
+    const r=await timedFetch('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes?_='+Date.now(),12000);
     if(!r.ok)throw new Error('HTTP '+r.status);
     const arr=await r.json();if(!Array.isArray(arr)||arr.length<10)throw new Error('empty');
     const map={};
     for(const item of arr){
       const code=String(item.SecuritiesCompanyCode??item['代號']??'').trim();
-      // ▼ 擷取名稱
-      const name=String(item.CompanyName??item['公司名稱']??item.Name??'').trim();
-      if(code&&name) setStockName(code,name);
-      const close=num(item.Close)??num(item['收盤'])??null;
-      if(code&&close&&close>0)map[code]={close,prevClose:null,change:null,changePct:null};
+      const name=String(item.CompanyName??item['公司名稱']??item['公司簡稱']??item.Name??'').trim();
+      if(code&&name&&/[一-鿿！-～]/.test(name))setStockName(code,name);
+      const close=num(item.Close??item['收盤'])??null;
+      const changeRaw=num(item.Change??item['漲跌'])??null;
+      const prev=num(item.PreviousClose??item['昨收'])??null;
+      const changePct=(prev&&changeRaw)?parseFloat((changeRaw/prev*100).toFixed(2)):null;
+      if(code&&close&&close>0)map[code]={close,prevClose:prev,change:changeRaw,changePct};
     }
+    console.log('[TPEx] loaded '+Object.keys(map).length+' stocks');
     return map;
   }catch(e){console.warn('[TPEx-API]',e.message);return null;}
 }
 function loadTpex(){
-  if(_tpexCache&&Date.now()-_tpexTs<getCacheTTL()*5)return Promise.resolve(_tpexCache);
-  if(!_tpexP){_tpexP=_doLoadTpex().then(m=>{if(m){_tpexCache=m;_tpexTs=Date.now();}_tpexP=null;return _tpexCache;});}
+  if(_tpexCache&&Date.now()-_tpexTs<8000)return Promise.resolve(_tpexCache);
+  if(!_tpexP){_tpexP=_doLoadTpex().then(function(m){if(m){_tpexCache=m;_tpexTs=Date.now();}_tpexP=null;return _tpexCache;});}
   return _tpexP;
 }
 
@@ -483,48 +493,42 @@ async function fetchQuote(symbol){
   const cached=quoteCache[symbol];
   if(cached&&Date.now()-cached.ts<getCacheTTL())return cached.data;
   const ms=getMarketState();
-  const src=state.priceSource||'auto';
   let data=null;
-  const MAIN=['yahoo','stooq','finmind'];
-  let priorities;
-  if(src==='auto'){
-    const si=_rotateSourceIdx%MAIN.length;
-    priorities=[...MAIN.slice(si),...MAIN.slice(0,si)];
-  }else if(MAIN.includes(src)){
-    priorities=[src,...MAIN.filter(function(s){return s!==src;})];
-  }else{
-    priorities=[src,'yahoo','stooq','finmind'];
+
+  // ── 優先：TWSE/TPEx OpenAPI（免 Proxy，CORS 開放，含中文名稱）──
+  // 盤中每 8 秒自動更新，資料最直接最新
+  const [tw,tp]=await Promise.allSettled([loadTwse(),loadTpex()]);
+  const twseMap=tw.status==='fulfilled'?tw.value:null;
+  const tpexMap=tp.status==='fulfilled'?tp.value:null;
+  if(twseMap&&twseMap[symbol]&&twseMap[symbol].close>0){
+    const d=twseMap[symbol];
+    data={price:d.close,previousClose:d.prevClose,change:d.change,changePct:d.changePct,marketState:ms,source:'TWSE'};
+  }else if(tpexMap&&tpexMap[symbol]&&tpexMap[symbol].close>0){
+    const d=tpexMap[symbol];
+    data={price:d.close,previousClose:d.prevClose,change:d.change,changePct:d.changePct,marketState:ms,source:'TPEx'};
   }
-  try{const f=await fetchBySource(symbol,priorities[0]);if(f&&f.price>0)data=f;}catch(e){}
-  if(!data&&priorities.length>=2){
-    const [r1,r2]=await Promise.allSettled([
-      fetchBySource(symbol,priorities[1]),
-      priorities[2]?fetchBySource(symbol,priorities[2]):Promise.resolve(null)
-    ]);
-    data=(r1.status==='fulfilled'&&r1.value&&r1.value.price>0?r1.value:null)||
-         (r2.status==='fulfilled'&&r2.value&&r2.value.price>0?r2.value:null);
-  }
-  if(!data){
-    for(const p of priorities.slice(3)){
-      try{data=await fetchBySource(symbol,p);}catch(e){}
-      if(data&&data.price>0)break;
+
+  // ── 備援：Yahoo v7 → Stooq → FinMind（Proxy，適用特殊股票）──
+  if(!data||data.price<=0){
+    const src=state.priceSource||'auto';
+    const FALLBACKS=['yahoo','stooq','finmind'];
+    const priorities=(src!=='auto'&&src!=='twse'&&src!=='tpex')
+      ?[src,...FALLBACKS.filter(function(s){return s!==src;})]
+      :FALLBACKS;
+    try{const f=await fetchBySource(symbol,priorities[0]);if(f&&f.price>0)data=f;}catch(e){}
+    if(!data||data.price<=0){
+      const [r1,r2]=await Promise.allSettled([
+        fetchBySource(symbol,priorities[1]||'stooq'),
+        fetchBySource(symbol,priorities[2]||'finmind')
+      ]);
+      data=(r1.status==='fulfilled'&&r1.value&&r1.value.price>0?r1.value:null)||
+           (r2.status==='fulfilled'&&r2.value&&r2.value.price>0?r2.value:null);
     }
   }
-  if(!data){
-    const [tw,tp]=await Promise.allSettled([loadTwse(),loadTpex()]);
-    const twseMap=tw.status==='fulfilled'?tw.value:null;
-    const tpexMap=tp.status==='fulfilled'?tp.value:null;
-    if(twseMap&&twseMap[symbol]&&twseMap[symbol].close>0){
-      const d=twseMap[symbol];
-      data={price:d.close,previousClose:d.prevClose,change:d.change,changePct:d.changePct,marketState:ms,source:'TWSE-API'};
-    }else if(tpexMap&&tpexMap[symbol]&&tpexMap[symbol].close>0){
-      const d=tpexMap[symbol];
-      data={price:d.close,previousClose:null,change:null,changePct:null,marketState:ms,source:'TPEx-API'};
-    }
-  }
+
   if(!data||data.price<=0){console.error('[Quote] FAIL '+symbol);return null;}
   data.marketState=ms;
-  console.log('[Quote] OK '+symbol+'='+data.price+' ['+data.source+'][R'+((_rotateSourceIdx%MAIN.length)+1)+']['+getMarketLabel(ms)+']');
+  console.log('[Quote] '+symbol+'='+data.price+' ['+data.source+']');
   quoteCache[symbol]={data,ts:Date.now()};
   return data;
 }
@@ -535,7 +539,7 @@ async function fetchQuote(symbol){
 
 const SOURCE_NOTES={
   auto:{
-    REGULAR:'盤中 → Yahoo v7即時優先，Stooq 備援，FinMind 最終安全網（5秒輪替）',
+    REGULAR:'盤中 → TWSE/TPEx 直接取值（免Proxy，每8秒更新），Yahoo/Stooq 備援',
     POST:'盤後 → Yahoo → Stooq → FinMind 依序嘗試',
     CLOSING:'收盤中 → Yahoo → Stooq → FinMind',
     PRE:'盤前 → Yahoo 昨日收盤，Stooq / FinMind 備援',
@@ -933,7 +937,10 @@ function startWatchlistAutoRefresh(){
     _rotateSourceIdx++;
     const ms=getMarketState();
     if((ms==='CLOSED'||ms==='PRE')&&_rotateSourceIdx%5!==0)return;
+    // 清除 per-symbol 快取
     [...state.watchlist,...Object.keys(state.holdings)].forEach(function(s){delete quoteCache[normalizeSymbol(s)];});
+    // TWSE/TPEx batch 快取由各自 TTL(8s) 控制，盤中自動更新
+    // 每 60 秒強制重取一次批量資料
     if(_rotateSourceIdx%12===0){_twseCache=null;_twseTs=0;_tpexCache=null;_tpexTs=0;}
     console.log('[AutoRefresh] R'+_rotateSourceIdx+' '+new Date().toLocaleTimeString('zh-TW'));
     renderSourceSelector();
