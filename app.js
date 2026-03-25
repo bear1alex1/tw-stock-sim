@@ -957,78 +957,87 @@ function scheduleNextRefresh(){startWatchlistAutoRefresh();}
 // ═══════════════════════════════════════════════════════
 //  中文股名批量預載 (TWSE + TPEx OpenAPI)
 // ═══════════════════════════════════════════════════════
-// 股票名稱來源：TWSE 公開資料（永久清單，不受當日交易影響）
-// 欄位：有價證券代號、有價證券名稱
+// ════════════════════════════════════════════════════════
+//  股票名稱批量預載
+//  策略：TWSE/TPEx opendata(主) → Yahoo TW 爬蟲(逐股備援)
+// ════════════════════════════════════════════════════════
 async function preloadStockNames(){
   var total=0;
-  // ── 上市股票名稱（TWSE opendata，永久清單）──
-  var srcList=[
-    // 上市普通股 + ETF + 受益憑證
+
+  // ── A. TWSE 上市清單（t187ap03_L 永久清單）──────────────
+  var twseSrcs=[
     'https://openapi.twse.com.tw/v1/opendata/t187ap03_L',
-    // 備援：當日行情（盤中才有資料）
     'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
   ];
-  for(var si=0;si<srcList.length;si++){
+  for(var si=0;si<twseSrcs.length;si++){
     try{
-      var r=await timedFetch(srcList[si],10000);
+      var r=await timedFetch(twseSrcs[si],12000);
       if(!r.ok)continue;
       var arr=await r.json();
       if(!Array.isArray(arr)||arr.length<10)continue;
       var cnt=0;
       for(var j=0;j<arr.length;j++){
         var item=arr[j];
-        // t187ap03_L 欄位：有價證券代號、有價證券名稱
-        var code=String(
-          item['有價證券代號']||item.Code||item['證券代號']||''
-        ).trim();
-        var name=String(
-          item['有價證券名稱']||item.Name||item['證券名稱']||item.StockName||''
-        ).trim();
-        // 排除英文名稱
-        if(code&&name&&/[\u4e00-\u9fff\uff01-\uff5e]/.test(name)){
-          stockNameCache[code]=name;
-          cnt++;
-        }
+        var code=String(item['有價證券代號']||item.Code||item['證券代號']||'').trim();
+        var name=String(item['有價證券名稱']||item.Name||item['證券名稱']||'').trim();
+        if(code&&name&&/[\u4e00-\u9fff]/.test(name)){stockNameCache[code]=name;cnt++;}
       }
-      console.log('[StockNames] TWSE('+si+') '+cnt+' names');
+      console.log('[Names-TWSE] src'+si+': '+cnt+' names');
       total+=cnt;
       if(cnt>100)break;
-    }catch(e){console.warn('[StockNames] src'+si,e.message);}
+    }catch(e){console.warn('[Names-TWSE] src'+si,e.message);}
   }
-  // ── 上櫃股票名稱（TPEx opendata）──
+
+  // ── B. TPEx 上櫃清單 ─────────────────────────────────────
   var tpexSrcs=[
     'https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O',
     'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes'
   ];
   for(var ti=0;ti<tpexSrcs.length;ti++){
     try{
-      var r2=await timedFetch(tpexSrcs[ti],10000);
+      var r2=await timedFetch(tpexSrcs[ti],12000);
       if(!r2.ok)continue;
       var arr2=await r2.json();
       if(!Array.isArray(arr2))continue;
       var c2=0;
       for(var k=0;k<arr2.length;k++){
         var it=arr2[k];
-        var code2=String(
-          it['有價證券代號']||it.SecuritiesCompanyCode||it['代號']||''
-        ).trim();
-        var name2=String(
-          it['有價證券名稱']||it.CompanyName||it['公司簡稱']||it.Name||''
-        ).trim();
-        if(code2&&name2&&/[\u4e00-\u9fff\uff01-\uff5e]/.test(name2)&&!stockNameCache[code2]){
+        var code2=String(it['有價證券代號']||it.SecuritiesCompanyCode||it['代號']||'').trim();
+        var name2=String(it['有價證券名稱']||it.CompanyName||it['公司簡稱']||it.Name||'').trim();
+        if(code2&&name2&&/[\u4e00-\u9fff]/.test(name2)&&!stockNameCache[code2]){
           stockNameCache[code2]=name2;c2++;
         }
       }
-      console.log('[StockNames] TPEx('+ti+') '+c2+' names');
+      console.log('[Names-TPEx] src'+ti+': '+c2+' names');
       total+=c2;
       if(c2>10)break;
-    }catch(e){console.warn('[StockNames] tpex'+ti,e.message);}
+    }catch(e){console.warn('[Names-TPEx] src'+ti,e.message);}
   }
-  console.log('[StockNames] total='+total+' names loaded');
-  if(total>0){
+
+  console.log('[Names] TWSE+TPEx total='+total);
+
+  // ── C. 爬 Yahoo TW 補漏：清單中找不到名稱的股票逐一補抓 ──
+  var missing=[...state.watchlist,...Object.keys(state.holdings)].filter(
+    function(s){return !stockNameCache[normalizeSymbol(s)];}
+  );
+  if(missing.length){
+    console.log('[Names-YahooTW] filling '+missing.length+' missing...');
+    for(var mi=0;mi<missing.length;mi++){
+      var sym=normalizeSymbol(missing[mi]);
+      try{
+        var yRes=await scrapeYahooTW(sym);
+        if(yRes&&yRes.name&&/[\u4e00-\u9fff]/.test(yRes.name)){
+          stockNameCache[sym]=yRes.name;total++;
+          console.log('[Names-YahooTW] '+sym+' = '+yRes.name);
+        }
+      }catch(e){}
+    }
+  }
+
+  if(total>0||missing.length>0){
     renderWatchlistImmediate();
     renderHoldingsImmediate();
-    renderHoldingsOverview();
+    if(typeof renderHoldingsOverview==='function')renderHoldingsOverview();
   }
 }
 
@@ -1095,35 +1104,124 @@ function checkAlerts(symbol,price){
 //  基本面資料 (Yahoo Finance v10/quoteSummary)
 // ═══════════════════════════════════════════════════════
 var _fundCache={};
-// 基本面資料優先使用 TWSE BWIBBU_d（CORS 直連，免 Proxy）
-// BWIBBU_d 欄位：殖利率、本益比、股價淨值比
+var _nameCache_ts={};
+
+// ════════════════════════════════════════════════════════
+//  爬蟲核心：tw.stock.yahoo.com/quote/SYMBOL
+//  同時取得：中文股名 + 本益比 + 殖利率 + EPS + 近四季EPS
+// ════════════════════════════════════════════════════════
+async function scrapeYahooTW(symbol){
+  // 嘗試無後綴、.TW、.TWO 三種格式
+  var slugs=[symbol, symbol+'.TW', symbol+'.TWO'];
+  var PROXIES=[
+    function(u){return 'https://api.allorigins.win/raw?url='+encodeURIComponent(u);},
+    function(u){return 'https://corsproxy.io/?'+encodeURIComponent(u);}
+  ];
+  for(var pi=0;pi<PROXIES.length;pi++){
+    for(var si=0;si<slugs.length;si++){
+      var pageUrl='https://tw.stock.yahoo.com/quote/'+slugs[si];
+      try{
+        var r=await timedFetch(PROXIES[pi](pageUrl),10000);
+        if(!r.ok)continue;
+        var html=await r.text();
+        if(!html||html.length<1000)continue;
+
+        var result={name:null,pe:null,forwardPE:null,dividendYield:null,eps:null,epsQuarters:[]};
+
+        // ── 1. 中文股名 from <title> ──────────────────────────
+        // 格式: "台積電 (2330.TW) 股票 - Yahoo股市"
+        var titleM=html.match(/<title>([^<(（]+)/);
+        if(titleM){
+          var n=titleM[1].trim();
+          if(n&&/[\u4e00-\u9fff\uff01-\uff5e]/.test(n))result.name=n;
+        }
+
+        // ── 2. 從 window.App / JSON-LD / script data 提取財務數字 ──
+        // Yahoo TW 頁面把資料嵌在 script 的 JSON 裡
+        // 找出所有 <script> 內容並搜尋關鍵字
+        var scripts=html.match(/<script[^>]*>([\s\S]*?)<\/script>/g)||[];
+        for(var i=0;i<scripts.length;i++){
+          var sc=scripts[i];
+          // 本益比
+          if(!result.pe){
+            var peM=sc.match(/"trailingPE"\s*:\s*\{[^}]*"raw"\s*:\s*([\d.]+)/);
+            if(!peM)peM=sc.match(/"trailingPE"\s*:\s*([\d.]+)/);
+            if(peM)result.pe=parseFloat(peM[1]);
+          }
+          // 殖利率
+          if(!result.dividendYield){
+            var dyM=sc.match(/"dividendYield"\s*:\s*\{[^}]*"raw"\s*:\s*([\d.]+)/);
+            if(!dyM)dyM=sc.match(/"dividendYield"\s*:\s*([\d.]+)/);
+            if(dyM)result.dividendYield=parseFloat(dyM[1]);
+          }
+          // EPS TTM
+          if(!result.eps){
+            var epsM=sc.match(/"trailingEps"\s*:\s*\{[^}]*"raw"\s*:\s*([\d.]+)/);
+            if(!epsM)epsM=sc.match(/"trailingEps"\s*:\s*([\d.]+)/);
+            if(epsM)result.eps=parseFloat(epsM[1]);
+          }
+        }
+
+        // ── 3. 也嘗試從 meta description 找數字 ──
+        var metaM=html.match(/<meta name="description"[^>]+content="([^"]+)"/);
+        if(metaM){
+          var desc=metaM[1];
+          if(!result.pe){var pm=desc.match(/本益比.*?([\d.]+)/);if(pm)result.pe=parseFloat(pm[1]);}
+          if(!result.dividendYield){var dm=desc.match(/殖利率.*?([\d.]+)%/);if(dm)result.dividendYield=parseFloat(dm[1])/100;}
+          if(!result.eps){var em=desc.match(/EPS.*?([\d.]+)/);if(em)result.eps=parseFloat(em[1]);}
+        }
+
+        if(result.name||result.pe||result.eps){
+          console.log('[YahooTW] '+symbol+' name='+result.name+' pe='+result.pe+' eps='+result.eps);
+          return result;
+        }
+      }catch(e){console.warn('[YahooTW]',symbol,e.message);}
+    }
+  }
+  return null;
+}
+
 async function fetchFundamentals(symbol){
   if(_fundCache[symbol]&&Date.now()-_fundCache[symbol].ts<3600000)return _fundCache[symbol].data;
-  var data={pe:null,pbr:null,dividendYield:null,eps:null,epsQuarters:[]};
-  var loaded=false;
 
-  // ── A. TWSE BWIBBU_d（上市股，免 Proxy）──────────────
-  try{
-    var r=await timedFetch('https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_d',10000);
-    if(r.ok){
-      var arr=await r.json();
-      if(Array.isArray(arr)){
-        for(var i=0;i<arr.length;i++){
-          var item=arr[i];
-          var code=String(item.Code||item['股票代號']||'').trim();
-          if(code!==symbol)continue;
-          data.pe=num(item.PEratio||item['本益比'])||null;
-          data.dividendYield=num(item.DividendYield||item['殖利率'])||null;
-          data.pbr=num(item.PBratio||item['股價淨值比'])||null;
-          loaded=true;
-          break;
+  var data={pe:null,pbr:null,dividendYield:null,eps:null,epsQuarters:[],name:null};
+  var ok=false;
+
+  // ── A. 爬 Yahoo TW 頁面（最直接，含中文名）──────────────
+  var yTW=await scrapeYahooTW(symbol);
+  if(yTW){
+    if(yTW.name)  data.name=yTW.name;
+    if(yTW.pe)    data.pe=yTW.pe;
+    if(yTW.dividendYield) data.dividendYield=
+      yTW.dividendYield>1?yTW.dividendYield.toFixed(2):(yTW.dividendYield*100).toFixed(2);
+    if(yTW.eps)   data.eps=yTW.eps;
+    ok=true;
+  }
+
+  // ── B. TWSE BWIBBU_d 補充（本益比/殖利率，免Proxy）───────
+  if(!data.pe||!data.dividendYield){
+    try{
+      var r=await timedFetch('https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_d',10000);
+      if(r.ok){
+        var arr=await r.json();
+        if(Array.isArray(arr)){
+          for(var i=0;i<arr.length;i++){
+            var item=arr[i];
+            var code=String(item.Code||item['股票代號']||'').trim();
+            if(code!==symbol)continue;
+            if(!data.pe) data.pe=num(item.PEratio||item['本益比'])||null;
+            if(!data.dividendYield) data.dividendYield=
+              String(num(item.DividendYield||item['殖利率'])||'');
+            data.pbr=num(item.PBratio||item['股價淨值比'])||null;
+            ok=true; break;
+          }
         }
       }
-    }
-  }catch(e){console.warn('[Fund-TWSE]',e.message);}
+    }catch(e){console.warn('[Fund-TWSE]',e.message);}
+  }
 
-  // ── B. TPEx BWIBBU（上櫃股）──────────────────────────
-  if(!loaded){
+  // ── C. TPEx 上櫃補充 ────────────────────────────────────
+  if(!data.pe&&!data.dividendYield){
     try{
       var r2=await timedFetch('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis',10000);
       if(r2.ok){
@@ -1133,18 +1231,16 @@ async function fetchFundamentals(symbol){
             var it=arr2[j];
             var c2=String(it.SecuritiesCompanyCode||it['代號']||'').trim();
             if(c2!==symbol)continue;
-            data.pe=num(it.PriceEarningRatio||it['本益比'])||null;
-            data.dividendYield=num(it.DividendYield||it['殖利率'])||null;
-            data.pbr=num(it.PriceBookRatio||it['股價淨值比'])||null;
-            loaded=true;
-            break;
+            if(!data.pe) data.pe=num(it.PriceEarningRatio||it['本益比'])||null;
+            if(!data.dividendYield) data.dividendYield=String(num(it.DividendYield||it['殖利率'])||'');
+            ok=true; break;
           }
         }
       }
     }catch(e){console.warn('[Fund-TPEx]',e.message);}
   }
 
-  // ── C. FinMind 近四季 EPS（有 token 才用）────────────
+  // ── D. FinMind 近四季 EPS（有 Token 才有）────────────────
   try{
     var epUrl='https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockFinancialStatements'
       +'&stock_id='+symbol+'&start_date='+daysAgo(400)+'&token='+encodeURIComponent(_r());
@@ -1153,18 +1249,30 @@ async function fetchFundamentals(symbol){
       var je=await re.json();
       if(je.status===200&&Array.isArray(je.data)){
         var eps_raw=je.data.filter(function(d){return d.type==='EPS';})
-          .sort(function(a,b){return b.date.localeCompare(a.date);})
-          .slice(0,4);
-        data.eps=eps_raw.length?num(eps_raw[0].value):null;
+          .sort(function(a,b){return b.date.localeCompare(a.date);}).slice(0,4);
+        if(!data.eps&&eps_raw.length) data.eps=num(eps_raw[0].value);
         data.epsQuarters=eps_raw.map(function(d){return{period:d.date.slice(0,7),eps:num(d.value)};});
+        if(eps_raw.length) ok=true;
       }
     }
   }catch(e){console.warn('[Fund-EPS]',e.message);}
 
-  if(!loaded&&!data.eps){
-    console.warn('[Fund] 無法取得 '+symbol+' 基本面資料');
-    return null;
+  if(!ok){console.warn('[Fund] 無法取得 '+symbol);return null;}
+
+  // 若爬到中文名稱，順便更新 stockNameCache
+  if(data.name&&/[\u4e00-\u9fff]/.test(data.name)){
+    stockNameCache[symbol]=data.name;
+    // 更新畫面上的股票名稱
+    var tbody=document.getElementById('watchlistBody');
+    if(tbody){
+      var tr=tbody.querySelector('[data-symbol="'+symbol+'"]');
+      if(tr){
+        var nd=tr.querySelector('[data-fund]');
+        if(nd)nd.textContent=data.name;
+      }
+    }
   }
+
   _fundCache[symbol]={data:data,ts:Date.now()};
   return data;
 }
@@ -1180,24 +1288,32 @@ async function toggleFundamentals(symbol){
   fRow.innerHTML='<td colspan="4" style="padding:8px 16px;background:#0a0f16;border-left:3px solid #388bfd;">'
     +'<span style="font-size:.78rem;color:var(--muted);">\ud83d\udcca \u8f09\u5165\u57fa\u672c\u9762\u8cc7\u6599\u2026</span></td>';
   tr.after(fRow);
+
   var d=await fetchFundamentals(symbol);
+
   if(!d){
     fRow.innerHTML='<td colspan="4" style="padding:8px 16px;background:#0a0f16;border-left:3px solid #ff4d4d;">'
-      +'<span style="font-size:.78rem;color:#ff4d4d;">\u274c \u7121\u6cd5\u53d6\u5f97\u57fa\u672c\u9762\u8cc7\u6599\uff08\u8acb\u78ba\u8a8d\u4ee3\u865f\u6216\u7a0d\u5f8c\u518d\u8a66\uff09</span></td>';
+      +'<span style="font-size:.78rem;color:#ff4d4d;">\u274c \u7121\u6cd5\u53d6\u5f97\u57fa\u672c\u9762\u8cc7\u6599</span></td>';
     return;
   }
-  var eps4=d.epsQuarters.length
-    ?d.epsQuarters.map(function(q){return'<span style="margin-right:10px;">'+q.period+'\uff1a<strong>'+q.eps+'</strong></span>';}).join('')
+
+  var eps4=d.epsQuarters&&d.epsQuarters.length
+    ?d.epsQuarters.map(function(q){
+        return '<span style="margin-right:10px;">'+q.period+'\uff1a<strong>'+q.eps+'</strong></span>';
+      }).join('')
     :'\u2014';
+
+  var dy=d.dividendYield?d.dividendYield+'%':'\u2014';
+
   fRow.innerHTML='<td colspan="4" style="padding:10px 16px;background:#0a0f16;border-left:3px solid #388bfd;">'
-    +'<div style="display:flex;gap:20px;flex-wrap:wrap;font-size:.82rem;align-items:center;">'
-    +'<span>\ud83d\udcc8 \u672c\u76ca\u6bd4(TTM)\uff1a<strong style="color:#f3b73b;font-size:1rem;">'+(d.pe?d.pe.toFixed(1):'\u2014')+'</strong></span>'
-    +'<span>\ud83d\udd2e \u9810\u4f30\u672c\u76ca\u6bd4\uff1a<strong style="color:#f3b73b;">'+(d.forwardPE?d.forwardPE.toFixed(1):'\u2014')+'</strong></span>'
-    +'<span>\ud83d\udcb0 \u6b96\u5229\u7387\uff1a<strong style="color:#2ecc71;font-size:1rem;">'+(d.dividendYield?d.dividendYield+'%':'\u2014')+'</strong></span>'
-    +'<span>\ud83d\udcca \u80a1\u50f9\u6de8\u5024\u6bd4\uff1a<strong style="color:#8b949e;">'+(d.pbr?d.pbr.toFixed(2):'\u2014')+'</strong></span>'
-    +'<span>\ud83d\udcca EPS(TTM)\uff1a<strong style="color:#fff;">'+(d.eps||'\u2014')+'</strong></span>'
+    +'<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:.82rem;align-items:center;">'
+    +(d.pe?'<span>\ud83d\udcc8 \u672c\u76ca\u6bd4(TTM)\uff1a<strong style="color:#f3b73b;font-size:1rem;">'+d.pe.toFixed(1)+'</strong></span>':'')
+    +(d.dividendYield?'<span>\ud83d\udcb0 \u6b96\u5229\u7387\uff1a<strong style="color:#2ecc71;font-size:1rem;">'+dy+'</strong></span>':'')
+    +(d.eps?'<span>\ud83d\udcca EPS(TTM)\uff1a<strong style="color:#fff;">'+d.eps+'</strong></span>':'')
+    +(d.pbr?'<span>\ud83c\udfe6 \u6de8\u5024\u6bd4\uff1a<strong style="color:#8b949e;">'+d.pbr.toFixed(2)+'</strong></span>':'')
     +'</div>'
-    +'<div style="margin-top:8px;font-size:.78rem;color:var(--muted);">\u8fd14\u5b63 EPS\uff1a'+eps4+'</div>'
+    +'<div style="margin-top:6px;font-size:.78rem;color:var(--muted);">\u8fd14\u5b63 EPS\uff1a'+eps4+'</div>'
+    +(d.name?'<div style="margin-top:4px;font-size:.72rem;color:#388bfd;">\u2714 \u540d\u7a31\u5df2\u66f4\u65b0\uff1a'+d.name+'</div>':'')
     +'</td>';
 }
 
