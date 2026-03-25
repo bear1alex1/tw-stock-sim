@@ -1,4 +1,4 @@
-const APP_VERSION = '2.4';   // ← 只改這裡就能更版
+const APP_VERSION = '2.5';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
 //  台股虛擬操盤系統 v2.2  |  SPA分頁 + Firebase雲端 + K線
@@ -1016,21 +1016,13 @@ async function preloadStockNames(){
 
   console.log('[Names] TWSE+TPEx total='+total);
 
-  // ── C. 爬 Yahoo TW 補漏：清單中找不到名稱的股票逐一補抓 ──
+  // ── C. fetchChineseName 補漏（Yahoo Search → 頁面標題）──
   var missing=[...state.watchlist,...Object.keys(state.holdings)].filter(
-    function(s){return !stockNameCache[normalizeSymbol(s)];}
-  );
+    function(s){return !stockNameCache[normalizeSymbol(s)]||!/[\u4e00-\u9fff]/.test(stockNameCache[normalizeSymbol(s)]);});
   if(missing.length){
-    console.log('[Names-YahooTW] filling '+missing.length+' missing...');
+    console.log('[Names] fetching '+missing.length+' missing names...');
     for(var mi=0;mi<missing.length;mi++){
-      var sym=normalizeSymbol(missing[mi]);
-      try{
-        var yRes=await scrapeYahooTW(sym);
-        if(yRes&&yRes.name&&/[\u4e00-\u9fff]/.test(yRes.name)){
-          stockNameCache[sym]=yRes.name;total++;
-          console.log('[Names-YahooTW] '+sym+' = '+yRes.name);
-        }
-      }catch(e){}
+      fetchChineseName(normalizeSymbol(missing[mi]));
     }
   }
 
@@ -1104,143 +1096,91 @@ function checkAlerts(symbol,price){
 //  基本面資料 (Yahoo Finance v10/quoteSummary)
 // ═══════════════════════════════════════════════════════
 var _fundCache={};
-var _nameCache_ts={};
 
 // ════════════════════════════════════════════════════════
-//  爬蟲核心：tw.stock.yahoo.com/quote/SYMBOL
-//  同時取得：中文股名 + 本益比 + 殖利率 + EPS + 近四季EPS
+//  基本面：Yahoo Finance v10/quoteSummary（直連，不爬 HTML）
+//  + TWSE BWIBBU_d / TPEx 補充
 // ════════════════════════════════════════════════════════
-async function scrapeYahooTW(symbol){
-  // 嘗試無後綴、.TW、.TWO 三種格式
-  var slugs=[symbol, symbol+'.TW', symbol+'.TWO'];
-  var PROXIES=[
-    function(u){return 'https://api.allorigins.win/raw?url='+encodeURIComponent(u);},
-    function(u){return 'https://corsproxy.io/?'+encodeURIComponent(u);}
-  ];
-  for(var pi=0;pi<PROXIES.length;pi++){
-    for(var si=0;si<slugs.length;si++){
-      var pageUrl='https://tw.stock.yahoo.com/quote/'+slugs[si];
-      try{
-        var r=await timedFetch(PROXIES[pi](pageUrl),10000);
-        if(!r.ok)continue;
-        var html=await r.text();
-        if(!html||html.length<1000)continue;
-
-        var result={name:null,pe:null,forwardPE:null,dividendYield:null,eps:null,epsQuarters:[]};
-
-        // ── 1. 中文股名 from <title> ──────────────────────────
-        // 格式: "台積電 (2330.TW) 股票 - Yahoo股市"
-        var titleM=html.match(/<title>([^<(（]+)/);
-        if(titleM){
-          var n=titleM[1].trim();
-          if(n&&/[\u4e00-\u9fff\uff01-\uff5e]/.test(n))result.name=n;
-        }
-
-        // ── 2. 從 window.App / JSON-LD / script data 提取財務數字 ──
-        // Yahoo TW 頁面把資料嵌在 script 的 JSON 裡
-        // 找出所有 <script> 內容並搜尋關鍵字
-        var scripts=html.match(/<script[^>]*>([\s\S]*?)<\/script>/g)||[];
-        for(var i=0;i<scripts.length;i++){
-          var sc=scripts[i];
-          // 本益比
-          if(!result.pe){
-            var peM=sc.match(/"trailingPE"\s*:\s*\{[^}]*"raw"\s*:\s*([\d.]+)/);
-            if(!peM)peM=sc.match(/"trailingPE"\s*:\s*([\d.]+)/);
-            if(peM)result.pe=parseFloat(peM[1]);
-          }
-          // 殖利率
-          if(!result.dividendYield){
-            var dyM=sc.match(/"dividendYield"\s*:\s*\{[^}]*"raw"\s*:\s*([\d.]+)/);
-            if(!dyM)dyM=sc.match(/"dividendYield"\s*:\s*([\d.]+)/);
-            if(dyM)result.dividendYield=parseFloat(dyM[1]);
-          }
-          // EPS TTM
-          if(!result.eps){
-            var epsM=sc.match(/"trailingEps"\s*:\s*\{[^}]*"raw"\s*:\s*([\d.]+)/);
-            if(!epsM)epsM=sc.match(/"trailingEps"\s*:\s*([\d.]+)/);
-            if(epsM)result.eps=parseFloat(epsM[1]);
-          }
-        }
-
-        // ── 3. 也嘗試從 meta description 找數字 ──
-        var metaM=html.match(/<meta name="description"[^>]+content="([^"]+)"/);
-        if(metaM){
-          var desc=metaM[1];
-          if(!result.pe){var pm=desc.match(/本益比.*?([\d.]+)/);if(pm)result.pe=parseFloat(pm[1]);}
-          if(!result.dividendYield){var dm=desc.match(/殖利率.*?([\d.]+)%/);if(dm)result.dividendYield=parseFloat(dm[1])/100;}
-          if(!result.eps){var em=desc.match(/EPS.*?([\d.]+)/);if(em)result.eps=parseFloat(em[1]);}
-        }
-
-        if(result.name||result.pe||result.eps){
-          console.log('[YahooTW] '+symbol+' name='+result.name+' pe='+result.pe+' eps='+result.eps);
-          return result;
-        }
-      }catch(e){console.warn('[YahooTW]',symbol,e.message);}
-    }
-  }
-  return null;
-}
-
 async function fetchFundamentals(symbol){
   if(_fundCache[symbol]&&Date.now()-_fundCache[symbol].ts<3600000)return _fundCache[symbol].data;
-
-  var data={pe:null,pbr:null,dividendYield:null,eps:null,epsQuarters:[],name:null};
+  var data={pe:null,pbr:null,dividendYield:null,eps:null,epsQuarters:[]};
   var ok=false;
 
-  // ── A. 爬 Yahoo TW 頁面（最直接，含中文名）──────────────
-  var yTW=await scrapeYahooTW(symbol);
-  if(yTW){
-    if(yTW.name)  data.name=yTW.name;
-    if(yTW.pe)    data.pe=yTW.pe;
-    if(yTW.dividendYield) data.dividendYield=
-      yTW.dividendYield>1?yTW.dividendYield.toFixed(2):(yTW.dividendYield*100).toFixed(2);
-    if(yTW.eps)   data.eps=yTW.eps;
-    ok=true;
+  // ── A. Yahoo v10/quoteSummary（直連，免 Proxy）──────────
+  var ySfxList=['.TW','.TWO'];
+  var yModules='summaryDetail,defaultKeyStatistics,financialData';
+  var yBases=[
+    'https://query1.finance.yahoo.com/v10/finance/quoteSummary/',
+    'https://query2.finance.yahoo.com/v10/finance/quoteSummary/'
+  ];
+  for(var bi=0;bi<yBases.length&&!ok;bi++){
+    for(var si=0;si<ySfxList.length&&!ok;si++){
+      var yUrl=yBases[bi]+symbol+ySfxList[si]
+        +'?modules='+yModules+'&lang=zh-TW&region=TW&_='+Date.now();
+      try{
+        var r=await timedFetch(yUrl,6000);
+        if(!r.ok)continue;
+        var j=await r.json();
+        var res=j&&j.quoteSummary&&j.quoteSummary.result&&j.quoteSummary.result[0];
+        if(!res)continue;
+        var ks=res.defaultKeyStatistics||{};
+        var sd=res.summaryDetail||{};
+        var pe=num((ks.trailingPE&&ks.trailingPE.raw)||(sd.trailingPE&&sd.trailingPE.raw));
+        var pbr=num(ks.priceToBook&&ks.priceToBook.raw);
+        var dy=sd.dividendYield&&sd.dividendYield.raw!=null?sd.dividendYield.raw:null;
+        var eps=num(ks.trailingEps&&ks.trailingEps.raw);
+        if(pe||dy!=null||eps){
+          data.pe=pe;data.pbr=pbr;
+          data.dividendYield=dy!=null?(dy*100).toFixed(2):null;
+          data.eps=eps;ok=true;
+          console.log('[Fund-Y10] '+symbol+ySfxList[si]+' pe='+pe+' dy='+dy+' eps='+eps);
+        }
+      }catch(e){console.warn('[Fund-Y10]',e.message);}
+    }
   }
 
-  // ── B. TWSE BWIBBU_d 補充（本益比/殖利率，免Proxy）───────
-  if(!data.pe||!data.dividendYield){
+  // ── B. TWSE BWIBBU_d（上市補充，免 Proxy）────────────────
+  if(!data.pe&&!data.dividendYield){
     try{
-      var r=await timedFetch('https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_d',10000);
-      if(r.ok){
-        var arr=await r.json();
-        if(Array.isArray(arr)){
-          for(var i=0;i<arr.length;i++){
-            var item=arr[i];
-            var code=String(item.Code||item['股票代號']||'').trim();
+      var r2=await timedFetch('https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_d',10000);
+      if(r2.ok){
+        var arr2=await r2.json();
+        if(Array.isArray(arr2)){
+          for(var ii=0;ii<arr2.length;ii++){
+            var it=arr2[ii];
+            var code=String(it.Code||it['股票代號']||'').trim();
             if(code!==symbol)continue;
-            if(!data.pe) data.pe=num(item.PEratio||item['本益比'])||null;
-            if(!data.dividendYield) data.dividendYield=
-              String(num(item.DividendYield||item['殖利率'])||'');
-            data.pbr=num(item.PBratio||item['股價淨值比'])||null;
-            ok=true; break;
+            data.pe=num(it.PEratio||it['本益比'])||null;
+            data.dividendYield=String(num(it.DividendYield||it['殖利率'])||'')||null;
+            data.pbr=num(it.PBratio||it['股價淨值比'])||null;
+            ok=true;break;
           }
         }
       }
     }catch(e){console.warn('[Fund-TWSE]',e.message);}
   }
 
-  // ── C. TPEx 上櫃補充 ────────────────────────────────────
+  // ── C. TPEx（上櫃股）────────────────────────────────────
   if(!data.pe&&!data.dividendYield){
     try{
-      var r2=await timedFetch('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis',10000);
-      if(r2.ok){
-        var arr2=await r2.json();
-        if(Array.isArray(arr2)){
-          for(var j=0;j<arr2.length;j++){
-            var it=arr2[j];
-            var c2=String(it.SecuritiesCompanyCode||it['代號']||'').trim();
-            if(c2!==symbol)continue;
-            if(!data.pe) data.pe=num(it.PriceEarningRatio||it['本益比'])||null;
-            if(!data.dividendYield) data.dividendYield=String(num(it.DividendYield||it['殖利率'])||'');
-            ok=true; break;
+      var r3=await timedFetch('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis',10000);
+      if(r3.ok){
+        var arr3=await r3.json();
+        if(Array.isArray(arr3)){
+          for(var jj=0;jj<arr3.length;jj++){
+            var it3=arr3[jj];
+            var c3=String(it3.SecuritiesCompanyCode||it3['代號']||'').trim();
+            if(c3!==symbol)continue;
+            data.pe=num(it3.PriceEarningRatio||it3['本益比'])||null;
+            data.dividendYield=String(num(it3.DividendYield||it3['殖利率'])||'')||null;
+            ok=true;break;
           }
         }
       }
     }catch(e){console.warn('[Fund-TPEx]',e.message);}
   }
 
-  // ── D. FinMind 近四季 EPS（有 Token 才有）────────────────
+  // ── D. FinMind 近四季 EPS ────────────────────────────────
   try{
     var epUrl='https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockFinancialStatements'
       +'&stock_id='+symbol+'&start_date='+daysAgo(400)+'&token='+encodeURIComponent(_r());
@@ -1250,29 +1190,14 @@ async function fetchFundamentals(symbol){
       if(je.status===200&&Array.isArray(je.data)){
         var eps_raw=je.data.filter(function(d){return d.type==='EPS';})
           .sort(function(a,b){return b.date.localeCompare(a.date);}).slice(0,4);
-        if(!data.eps&&eps_raw.length) data.eps=num(eps_raw[0].value);
+        if(!data.eps&&eps_raw.length)data.eps=num(eps_raw[0].value);
         data.epsQuarters=eps_raw.map(function(d){return{period:d.date.slice(0,7),eps:num(d.value)};});
-        if(eps_raw.length) ok=true;
+        if(eps_raw.length)ok=true;
       }
     }
   }catch(e){console.warn('[Fund-EPS]',e.message);}
 
-  if(!ok){console.warn('[Fund] 無法取得 '+symbol);return null;}
-
-  // 若爬到中文名稱，順便更新 stockNameCache
-  if(data.name&&/[\u4e00-\u9fff]/.test(data.name)){
-    stockNameCache[symbol]=data.name;
-    // 更新畫面上的股票名稱
-    var tbody=document.getElementById('watchlistBody');
-    if(tbody){
-      var tr=tbody.querySelector('[data-symbol="'+symbol+'"]');
-      if(tr){
-        var nd=tr.querySelector('[data-fund]');
-        if(nd)nd.textContent=data.name;
-      }
-    }
-  }
-
+  if(!ok){console.warn('[Fund] FAIL '+symbol);return null;}
   _fundCache[symbol]={data:data,ts:Date.now()};
   return data;
 }
@@ -1352,6 +1277,80 @@ async function checkDividends(){
   }
 }
 
+
+// Yahoo Finance Search → 繁體中文股名（直連，免 Proxy）
+var _nameReqSet={};
+async function fetchChineseName(symbol){
+  if(_nameReqSet[symbol])return;
+  _nameReqSet[symbol]=true;
+  var ts=Date.now();
+  var urls=[
+    'https://query1.finance.yahoo.com/v1/finance/search?q='+symbol+'&lang=zh-Hant-TW&region=TW&quotesCount=5&_='+ts,
+    'https://query2.finance.yahoo.com/v1/finance/search?q='+symbol+'&lang=zh-Hant-TW&region=TW&quotesCount=5&_='+ts
+  ];
+  for(var i=0;i<urls.length;i++){
+    try{
+      var r=await timedFetch(urls[i],5000);
+      if(!r.ok)continue;
+      var j=await r.json();
+      var quotes=(j&&j.finance&&j.finance.result&&j.finance.result[0]&&j.finance.result[0].quotes)||
+                 (j&&j.quotes)||[];
+      for(var k=0;k<quotes.length;k++){
+        var q=quotes[k];
+        var sym=(q.symbol||'').replace(/\.(TW|TWO)$/i,'');
+        if(sym!==symbol)continue;
+        var cn=q.shortname||q.longname||q.shortName||q.longName||'';
+        if(cn&&/[\u4e00-\u9fff]/.test(cn)){
+          stockNameCache[symbol]=cn.replace(/\s*\(.*?\)/g,'').trim();
+          console.log('[CN-Name] '+symbol+' = '+stockNameCache[symbol]);
+          // 立刻更新 DOM
+          var tbody=document.getElementById('watchlistBody');
+          if(tbody){
+            var tr=tbody.querySelector('[data-symbol="'+symbol+'"]');
+            if(tr){
+              var nd=tr.querySelector('[data-fund]');
+              if(nd){nd.textContent=stockNameCache[symbol];nd.style.color='#8b949e';nd.style.textDecoration='underline dotted';}
+            }
+          }
+          _nameReqSet[symbol]=false;
+          return;
+        }
+      }
+    }catch(e){}
+  }
+  // Yahoo Search 失敗，改爬 tw.stock.yahoo.com quote 頁面 title
+  var PROXIES=[
+    function(u){return'https://api.allorigins.win/raw?url='+encodeURIComponent(u);},
+    function(u){return'https://corsproxy.io/?'+encodeURIComponent(u);}
+  ];
+  for(var sfx of['.TW','.TWO']){
+    var pageUrl='https://tw.stock.yahoo.com/quote/'+symbol+sfx;
+    for(var pi=0;pi<PROXIES.length;pi++){
+      try{
+        var r2=await timedFetch(PROXIES[pi](pageUrl),8000);
+        if(!r2.ok)continue;
+        var html=await r2.text();
+        if(!html||html.length<500)continue;
+        var m=html.match(/<title>([^<(（\s]+)/);
+        if(m){
+          var n=m[1].trim();
+          if(n&&/[\u4e00-\u9fff]/.test(n)){
+            stockNameCache[symbol]=n;
+            console.log('[CN-Title] '+symbol+' = '+n);
+            var tbody2=document.getElementById('watchlistBody');
+            if(tbody2){
+              var tr2=tbody2.querySelector('[data-symbol="'+symbol+'"]');
+              if(tr2){var nd2=tr2.querySelector('[data-fund]');if(nd2){nd2.textContent=n;nd2.style.color='#8b949e';nd2.style.textDecoration='underline dotted';}}
+            }
+            _nameReqSet[symbol]=false;
+            return;
+          }
+        }
+      }catch(e){}
+    }
+  }
+  _nameReqSet[symbol]=false;
+}
 // ═══════════════════════════════════════════════════════
 //  直接即時報價（繞過所有快取層，每次強制重新請求）
 // ═══════════════════════════════════════════════════════
@@ -1373,8 +1372,13 @@ async function fetchPriceNow(symbol){
       if(!q||!q.regularMarketPrice)continue;
       const price=num(q.regularMarketPrice);
       if(!price||price<=0)continue;
-      const yName=q.longName||q.shortName||'';
-      if(yName)setStockName(symbol,yName.replace(/\s*\(.*?\)/g,'').trim());
+      // 先用 longName/shortName（可能英文）
+      const yRaw=q.longName||q.shortName||'';
+      if(yRaw)setStockName(symbol,yRaw.replace(/\s*\(.*?\)/g,'').trim());
+      // 若名稱不是中文，非同步補抓 Yahoo Search 繁體中文名
+      if(!stockNameCache[symbol]||!/[\u4e00-\u9fff]/.test(stockNameCache[symbol])){
+        fetchChineseName(symbol);
+      }
       console.log('[Direct-Y7] '+symbol+sfx+'='+price+' t='+ts);
       return{
         price,
@@ -1458,7 +1462,7 @@ function startLiveRefresh(){
       if(!q||!q.price)return;
       // 更新快取
       quoteCache[symbol]={data:q,ts:Date.now()};
-      // 更新 watchlist 行
+      // 更新 watchlist 行（價格 + 名稱）
       if(tbody){
         const tr=tbody.querySelector('[data-symbol="'+symbol+'"]');
         if(tr){
@@ -1466,6 +1470,16 @@ function startLiveRefresh(){
           const cc=tr.querySelector('.wl-change');
           if(pc)pc.innerHTML=_watchPriceCellHTML(q);
           if(cc)cc.innerHTML=_watchChangeCellHTML(q);
+          // ← 名稱 DOM 同步更新（這是原本缺少的部分）
+          const nameDiv=tr.querySelector('[data-fund]');
+          if(nameDiv){
+            const cached=stockNameCache[symbol]||'';
+            if(cached&&/[一-鿿]/.test(cached)&&nameDiv.textContent!==cached){
+              nameDiv.textContent=cached;
+              nameDiv.style.color='#8b949e';
+              nameDiv.style.textDecoration='underline dotted';
+            }
+          }
         }
       }
       // checkAlerts
