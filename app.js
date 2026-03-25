@@ -1162,6 +1162,152 @@ async function checkDividends(){
     }catch(e){console.warn('[Dividend]',e.message);}
   }
 }
+
+// ═══════════════════════════════════════════════════════
+//  直接即時報價（繞過所有快取層，每次強制重新請求）
+// ═══════════════════════════════════════════════════════
+async function fetchPriceNow(symbol){
+  const ts=Date.now();
+  const ms=getMarketState();
+
+  // ── A. 優先：Yahoo Finance v7（不走 proxy，直連，加時間戳）──
+  for(const sfx of['.TW','.TWO']){
+    const url='https://query1.finance.yahoo.com/v7/finance/quote'
+      +'?symbols='+symbol+sfx
+      +'&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketPreviousClose,shortName,longName'
+      +'&lang=zh-TW&region=TW&_='+ts;
+    try{
+      const r=await timedFetch(url,4000);
+      if(!r.ok)continue;
+      const j=await r.json();
+      const q=j&&j.quoteResponse&&j.quoteResponse.result&&j.quoteResponse.result[0];
+      if(!q||!q.regularMarketPrice)continue;
+      const price=num(q.regularMarketPrice);
+      if(!price||price<=0)continue;
+      const yName=q.longName||q.shortName||'';
+      if(yName)setStockName(symbol,yName.replace(/\s*\(.*?\)/g,'').trim());
+      console.log('[Direct-Y7] '+symbol+sfx+'='+price+' t='+ts);
+      return{
+        price,
+        previousClose:num(q.regularMarketPreviousClose),
+        change:num(q.regularMarketChange),
+        changePct:num(q.regularMarketChangePercent),
+        marketState:ms,source:'Yahoo'
+      };
+    }catch(e){}
+  }
+
+  // ── B. 備援：TWSE/TPEx 批量（CORS 直連，含中文名稱）─────
+  try{
+    const [tw,tp]=await Promise.allSettled([
+      timedFetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL?_='+ts,8000),
+      timedFetch('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes?_='+ts,8000)
+    ]);
+    for(const res of[tw,tp]){
+      if(res.status!=='fulfilled'||!res.value.ok)continue;
+      const arr=await res.value.json();
+      if(!Array.isArray(arr))continue;
+      for(const item of arr){
+        const code=String(item.Code||item.SecuritiesCompanyCode||'').trim();
+        if(code!==symbol)continue;
+        const name=String(item.Name||item.CompanyName||'').trim();
+        if(name&&/[\u4e00-\u9fff]/.test(name))setStockName(symbol,name);
+        const close=num(item.ClosingPrice||item.Close);
+        const chg=num(item.Change);
+        if(!close||close<=0)continue;
+        const prev=chg!=null?parseFloat((close-chg).toFixed(2)):null;
+        const pct=prev&&chg?parseFloat((chg/prev*100).toFixed(2)):null;
+        console.log('[Direct-TW] '+symbol+'='+close+' t='+ts);
+        return{price:close,previousClose:prev,change:chg,changePct:pct,marketState:ms,source:'TWSE'};
+      }
+    }
+  }catch(e){}
+
+  // ── C. 最終備援：Stooq CSV ─────────────────────────────
+  for(const sfx of['.tw','.twp']){
+    const url='https://corsproxy.io/?'+encodeURIComponent('https://stooq.com/q/l/?s='+symbol.toLowerCase()+sfx+'&f=sd2t2ohlcvn&h&e=csv')+'&_cb='+ts;
+    try{
+      const r=await timedFetch(url,6000);if(!r.ok)continue;
+      const txt=await r.text();if(!txt||txt.includes('No data'))continue;
+      const lines=txt.trim().split('\n');if(lines.length<2)continue;
+      const h=lines[0].split(',').map(function(x){return x.trim().toLowerCase();});
+      const v=lines[1].split(',').map(function(x){return x.trim();});
+      const g=function(k){const i=h.indexOf(k);return i>=0?v[i]:null;};
+      const close=num(g('close'));if(!close||close<=0)continue;
+      const open=num(g('open'));
+      const chg=open?parseFloat((close-open).toFixed(2)):null;
+      const pct=open?parseFloat((chg/open*100).toFixed(2)):null;
+      return{price:close,previousClose:open,change:chg,changePct:pct,marketState:ms,source:'Stooq'};
+    }catch(e){}
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════
+//  5 秒即時刷新主循環（直接寫 DOM，不依賴 cache）
+// ═══════════════════════════════════════════════════════
+let _liveTimer=null;
+function startLiveRefresh(){
+  if(_liveTimer)clearInterval(_liveTimer);
+  _liveTimer=setInterval(async function(){
+    const ms=getMarketState();
+    // 休市時每 30 秒才更新一次
+    if((ms==='CLOSED'||ms==='PRE')&&Date.now()%30000>5000)return;
+
+    const syms=[...new Set([...state.watchlist,...Object.keys(state.holdings)])];
+    if(!syms.length)return;
+
+    console.log('[Live] tick '+new Date().toLocaleTimeString('zh-TW')+' symbols='+syms.join(','));
+
+    // 並行抓取所有股票
+    const results=await Promise.allSettled(syms.map(function(s){return fetchPriceNow(s);}));
+
+    // 更新 quoteCache + watchlist DOM
+    const tbody=document.getElementById('watchlistBody');
+    syms.forEach(function(symbol,i){
+      const q=results[i].status==='fulfilled'?results[i].value:null;
+      if(!q||!q.price)return;
+      // 更新快取
+      quoteCache[symbol]={data:q,ts:Date.now()};
+      // 更新 watchlist 行
+      if(tbody){
+        const tr=tbody.querySelector('[data-symbol="'+symbol+'"]');
+        if(tr){
+          const pc=tr.querySelector('.wl-price');
+          const cc=tr.querySelector('.wl-change');
+          if(pc)pc.innerHTML=_watchPriceCellHTML(q);
+          if(cc)cc.innerHTML=_watchChangeCellHTML(q);
+        }
+      }
+      // checkAlerts
+      checkAlerts(symbol,q.price);
+    });
+
+    // 更新持股 DOM（只更新現價欄）
+    const hbody=document.getElementById('holdingsBody');
+    if(hbody){
+      Object.keys(state.holdings).forEach(function(symbol){
+        const q=quoteCache[symbol]&&quoteCache[symbol].data;
+        const tr=hbody.querySelector('[data-hsymbol="'+symbol+'"]');
+        if(tr&&q&&q.price>0){
+          tr.innerHTML=buildHoldingRow(symbol,state.holdings[symbol],q);
+          tr.querySelectorAll('[data-setalert]').forEach(function(btn){btn.onclick=function(){setAlert(btn.dataset.setalert);};});
+          tr.querySelectorAll('[data-sell]').forEach(function(btn){btn.onclick=function(){document.getElementById('tradeSymbol').value=btn.dataset.sell;};});
+        }
+      });
+    }
+
+    // 更新資產數字
+    let total=0;
+    Object.keys(state.holdings).forEach(function(s){
+      const h=state.holdings[s];
+      const q=quoteCache[s]&&quoteCache[s].data;
+      total+=((q&&q.price>0)?q.price:h.avgPrice)*h.shares;
+    });
+    renderDashboardQuick(total);
+  },5000);
+  console.log('[Live] 5s loop started');
+}
 // ─── Console 診斷 ──────────────────────────────────────
 
 window.testAPI=async function(symbol='2330'){
@@ -1645,8 +1791,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   renderSourceSelector();
   setTimeout(()=>{renderCharts();recordAssetSnapshot();},800);
 
-  refreshWatchlistPrices().then(()=>refreshHoldingsPrices());
-  scheduleNextRefresh();
+  startLiveRefresh();
+  refreshWatchlistPrices().then(function(){refreshHoldingsPrices();});
   preloadStockNames();
   checkDividends();
 });
