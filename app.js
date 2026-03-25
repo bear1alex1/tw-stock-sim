@@ -1,8 +1,7 @@
-const APP_VERSION = '2.5';   // ← 只改這裡就能更版
+const APP_VERSION = '2.6';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v2.2  |  SPA分頁 + Firebase雲端 + K線
-//  version:'2.2'
+//  台股虛擬操盤系統 v2.6  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -32,6 +31,14 @@ function _r(){try{return(_a.match(/.{2}/g)||[]).map((h,i)=>String.fromCharCode(p
 
 function getTWDate(){return new Date(Date.now()+(8*3600000));}
 
+/** 核心任務 1：判斷台灣時間週一~五 08:30-13:35 */
+function isTaiwanTradingTime(){
+  const tw=getTWDate(),dow=tw.getUTCDay();
+  if(dow===0||dow===6) return false;
+  const t=tw.getUTCHours()*60+tw.getUTCMinutes(); // 分鐘數
+  return t>=510 && t<815; // 08:30=510, 13:35=815
+}
+
 function getMarketState(){
   const tw=getTWDate(),dow=tw.getUTCDay();
   if(dow===0||dow===6)return 'CLOSED';
@@ -54,18 +61,7 @@ function getMarketBadgeClass(s){
 }
 
 function getCacheTTL(){
-  const s=getMarketState();
-  if(s==='REGULAR') return 4_500;   // 配合5秒滾動刷新
-  if(s==='POST'||s==='CLOSING') return 4_500;
-  return 300_000;
-}
-function getRefreshInterval(){
-  const s=getMarketState();
-  if(s==='REGULAR')  return 10_000;
-  if(s==='POST')     return 60_000;
-  if(s==='CLOSING')  return 30_000;
-  if(s==='PRE')      return 60_000;
-  return 300_000;
+  return isTaiwanTradingTime()?4_500:300_000;
 }
 
 // ─── 時鐘 ──────────────────────────────────────────────
@@ -929,29 +925,165 @@ function showToast(msg){
   showToast._t=setTimeout(()=>{el.style.display='none';},3500);
 }
 
-// ─── 智慧排程 ──────────────────────────────────────────
+// ─── 智慧型報價調度系統（核心任務 1）────────────────────
 
-let _refreshTimer=null;
-let _wlRefreshTimer=null;
-function startWatchlistAutoRefresh(){
-  if(_wlRefreshTimer)clearInterval(_wlRefreshTimer);
-  _wlRefreshTimer=setInterval(async function(){
-    _rotateSourceIdx++;
-    const ms=getMarketState();
-    if((ms==='CLOSED'||ms==='PRE')&&_rotateSourceIdx%5!==0)return;
-    // 清除 per-symbol 快取
-    [...state.watchlist,...Object.keys(state.holdings)].forEach(function(s){delete quoteCache[normalizeSymbol(s)];});
-    // TWSE/TPEx batch 快取由各自 TTL(8s) 控制，盤中自動更新
-    // 每 60 秒強制重取一次批量資料
-    if(_rotateSourceIdx%12===0){_twseCache=null;_twseTs=0;_tpexCache=null;_tpexTs=0;}
-    console.log('[AutoRefresh] R'+_rotateSourceIdx+' '+new Date().toLocaleTimeString('zh-TW'));
-    renderSourceSelector();
-    await refreshWatchlistPrices();
-    await refreshHoldingsPrices();
-  },5000);
-  console.log('[AutoRefresh] started 5s loop');
+let _schedulerTimer=null;   // 唯一定時器
+let _schedulerCheck=null;   // 30s 交易時段檢查器
+let _isLiveRunning=false;   // 盤中刷新是否運作中
+
+/** 批次報價：將所有追蹤+持股合併為一次 API 請求 */
+async function fetchPriceBatch(){
+  const syms=[...new Set([...state.watchlist,...Object.keys(state.holdings)])];
+  if(!syms.length)return;
+
+  const ms=getMarketState();
+  console.log('[Batch] tick '+new Date().toLocaleTimeString('zh-TW')+' n='+syms.length);
+
+  // ── A. TWSE/TPEx 整批取值（一次拿全部股票）──
+  const [twMap,tpMap]=await Promise.allSettled([loadTwse(),loadTpex()])
+    .then(r=>[(r[0].status==='fulfilled'?r[0].value:null),(r[1].status==='fulfilled'?r[1].value:null)]);
+
+  const resolved={};
+  for(const s of syms){
+    if(twMap&&twMap[s]&&twMap[s].close>0){
+      const d=twMap[s];
+      resolved[s]={price:d.close,previousClose:d.prevClose,change:d.change,changePct:d.changePct,marketState:ms,source:'TWSE'};
+    }else if(tpMap&&tpMap[s]&&tpMap[s].close>0){
+      const d=tpMap[s];
+      resolved[s]={price:d.close,previousClose:d.prevClose,change:d.change,changePct:d.changePct,marketState:ms,source:'TPEx'};
+    }
+  }
+
+  // ── B. 未解決的代號：Yahoo v7 多代號批量查詢 ──
+  const missing=syms.filter(s=>!resolved[s]);
+  if(missing.length){
+    const ts=Date.now();
+    for(const sfx of['.TW','.TWO']){
+      const symStr=missing.map(s=>s+sfx).join(',');
+      const url='https://query1.finance.yahoo.com/v7/finance/quote?symbols='+symStr
+        +'&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketPreviousClose,shortName,longName'
+        +'&lang=zh-TW&region=TW&_='+ts;
+      try{
+        const r=await timedFetch(url,6000);
+        if(!r.ok)continue;
+        const text=await r.text();
+        if(!text||text.trim().startsWith('<'))continue;
+        const j=JSON.parse(text);
+        const quotes=(j&&j.quoteResponse&&j.quoteResponse.result)||[];
+        for(const q of quotes){
+          const sym=normalizeSymbol((q.symbol||'').replace(/\.(TW|TWO)$/i,''));
+          if(!sym||resolved[sym])continue;
+          const price=num(q.regularMarketPrice);
+          if(!price||price<=0)continue;
+          const yName=q.longName||q.shortName||'';
+          if(yName)setStockName(sym,yName.replace(/\s*\(.*?\)/g,'').trim());
+          resolved[sym]={price,previousClose:num(q.regularMarketPreviousClose),
+            change:num(q.regularMarketChange),changePct:num(q.regularMarketChangePercent),
+            marketState:ms,source:'Yahoo'};
+        }
+      }catch(e){console.warn('[Batch-Y7]',e.message);}
+    }
+  }
+
+  // ── C. 更新 quoteCache + DOM（含閃爍動畫）──
+  const wlBody=document.getElementById('watchlistBody');
+  const hlBody=document.getElementById('holdingsBody');
+
+  for(const symbol of syms){
+    const q=resolved[symbol];
+    if(!q||!q.price)continue;
+    const oldQ=quoteCache[symbol]&&quoteCache[symbol].data;
+    const oldPrice=oldQ?oldQ.price:null;
+    quoteCache[symbol]={data:q,ts:Date.now()};
+
+    // ─ Watchlist DOM ─
+    if(wlBody){
+      const tr=wlBody.querySelector('[data-symbol="'+symbol+'"]');
+      if(tr){
+        const pc=tr.querySelector('.wl-price');
+        const cc=tr.querySelector('.wl-change');
+        if(pc)pc.innerHTML=_watchPriceCellHTML(q);
+        if(cc)cc.innerHTML=_watchChangeCellHTML(q);
+        // 價格閃爍動畫（核心任務 3）
+        if(pc&&oldPrice&&q.price!==oldPrice){
+          const cls=q.price>oldPrice?'price-flash-up':'price-flash-down';
+          pc.classList.remove('price-flash-up','price-flash-down');
+          void pc.offsetWidth; // force reflow
+          pc.classList.add(cls);
+          pc.addEventListener('animationend',function _h(){pc.classList.remove(cls);pc.removeEventListener('animationend',_h);},{once:true});
+        }
+        // 名稱 DOM 同步
+        const nameDiv=tr.querySelector('[data-fund]');
+        if(nameDiv){
+          const cached=stockNameCache[symbol]||'';
+          if(cached&&/[一-鿿]/.test(cached)&&nameDiv.textContent!==cached){
+            nameDiv.textContent=cached;
+            nameDiv.style.color='#8b949e';
+            nameDiv.style.textDecoration='underline dotted';
+          }
+        }
+      }
+    }
+    // ─ Holdings DOM ─
+    if(hlBody){
+      const tr=hlBody.querySelector('[data-hsymbol="'+symbol+'"]');
+      if(tr&&state.holdings[symbol]){
+        tr.innerHTML=buildHoldingRow(symbol,state.holdings[symbol],q);
+        tr.querySelectorAll('[data-setalert]').forEach(function(btn){btn.onclick=function(){setAlert(btn.dataset.setalert);};});
+        tr.querySelectorAll('[data-sell]').forEach(function(btn){btn.onclick=function(){document.getElementById('tradeSymbol').value=btn.dataset.sell;};});
+      }
+    }
+    checkAlerts(symbol,q.price);
+  }
+
+  // ── D. 更新資產數字 ──
+  let total=0;
+  Object.keys(state.holdings).forEach(function(s){
+    const h=state.holdings[s];
+    const q=quoteCache[s]&&quoteCache[s].data;
+    total+=((q&&q.price>0)?q.price:h.avgPrice)*h.shares;
+  });
+  renderDashboardQuick(total);
+  renderSourceSelector();
 }
-function scheduleNextRefresh(){startWatchlistAutoRefresh();}
+
+/** 智慧調度器：盤中每5秒刷新，非盤中停止 */
+function startSmartScheduler(){
+  // 清除舊定時器
+  if(_schedulerTimer){clearInterval(_schedulerTimer);_schedulerTimer=null;}
+  if(_schedulerCheck){clearInterval(_schedulerCheck);_schedulerCheck=null;}
+
+  function _startLive(){
+    if(_isLiveRunning)return;
+    _isLiveRunning=true;
+    // 清除批量快取以取得最新資料
+    _twseCache=null;_twseTs=0;_tpexCache=null;_tpexTs=0;
+    _schedulerTimer=setInterval(function(){
+      // 每 60 秒強制重取批量資料
+      _rotateSourceIdx++;
+      if(_rotateSourceIdx%12===0){_twseCache=null;_twseTs=0;_tpexCache=null;_tpexTs=0;}
+      fetchPriceBatch();
+    },5000);
+    console.log('[Scheduler] 盤中模式啟動，每 5 秒刷新');
+  }
+
+  function _stopLive(){
+    if(!_isLiveRunning)return;
+    _isLiveRunning=false;
+    if(_schedulerTimer){clearInterval(_schedulerTimer);_schedulerTimer=null;}
+    console.log('[Scheduler] 非盤中，停止自動刷新，保留最後收盤價');
+  }
+
+  // 初始化：根據當前時間決定
+  if(isTaiwanTradingTime()) _startLive();
+  else console.log('[Scheduler] 當前非交易時段，僅保留最後報價');
+
+  // 每 30 秒檢查一次是否進入/離開交易時段
+  _schedulerCheck=setInterval(function(){
+    if(isTaiwanTradingTime()){ _startLive(); }
+    else{ _stopLive(); }
+  },30000);
+}
 
 
 // ═══════════════════════════════════════════════════════
@@ -1217,8 +1349,8 @@ async function toggleFundamentals(symbol){
   var d=await fetchFundamentals(symbol);
 
   if(!d){
-    fRow.innerHTML='<td colspan="4" style="padding:8px 16px;background:#0a0f16;border-left:3px solid #ff4d4d;">'
-      +'<span style="font-size:.78rem;color:#ff4d4d;">\u274c \u7121\u6cd5\u53d6\u5f97\u57fa\u672c\u9762\u8cc7\u6599</span></td>';
+    fRow.innerHTML='<td colspan="4" style="padding:8px 16px;background:#0a0f16;border-left:3px solid var(--border);">'
+      +'<span style="font-size:.78rem;color:var(--muted);">\u26a0\ufe0f \u66ab\u7121\u6578\u64da\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66</span></td>';
     return;
   }
 
@@ -1439,78 +1571,9 @@ async function fetchPriceNow(symbol){
 // ═══════════════════════════════════════════════════════
 //  5 秒即時刷新主循環（直接寫 DOM，不依賴 cache）
 // ═══════════════════════════════════════════════════════
-let _liveTimer=null;
-function startLiveRefresh(){
-  if(_liveTimer)clearInterval(_liveTimer);
-  _liveTimer=setInterval(async function(){
-    const ms=getMarketState();
-    // 休市時每 30 秒才更新一次
-    if((ms==='CLOSED'||ms==='PRE')&&Date.now()%30000>5000)return;
-
-    const syms=[...new Set([...state.watchlist,...Object.keys(state.holdings)])];
-    if(!syms.length)return;
-
-    console.log('[Live] tick '+new Date().toLocaleTimeString('zh-TW')+' symbols='+syms.join(','));
-
-    // 並行抓取所有股票
-    const results=await Promise.allSettled(syms.map(function(s){return fetchPriceNow(s);}));
-
-    // 更新 quoteCache + watchlist DOM
-    const tbody=document.getElementById('watchlistBody');
-    syms.forEach(function(symbol,i){
-      const q=results[i].status==='fulfilled'?results[i].value:null;
-      if(!q||!q.price)return;
-      // 更新快取
-      quoteCache[symbol]={data:q,ts:Date.now()};
-      // 更新 watchlist 行（價格 + 名稱）
-      if(tbody){
-        const tr=tbody.querySelector('[data-symbol="'+symbol+'"]');
-        if(tr){
-          const pc=tr.querySelector('.wl-price');
-          const cc=tr.querySelector('.wl-change');
-          if(pc)pc.innerHTML=_watchPriceCellHTML(q);
-          if(cc)cc.innerHTML=_watchChangeCellHTML(q);
-          // ← 名稱 DOM 同步更新（這是原本缺少的部分）
-          const nameDiv=tr.querySelector('[data-fund]');
-          if(nameDiv){
-            const cached=stockNameCache[symbol]||'';
-            if(cached&&/[一-鿿]/.test(cached)&&nameDiv.textContent!==cached){
-              nameDiv.textContent=cached;
-              nameDiv.style.color='#8b949e';
-              nameDiv.style.textDecoration='underline dotted';
-            }
-          }
-        }
-      }
-      // checkAlerts
-      checkAlerts(symbol,q.price);
-    });
-
-    // 更新持股 DOM（只更新現價欄）
-    const hbody=document.getElementById('holdingsBody');
-    if(hbody){
-      Object.keys(state.holdings).forEach(function(symbol){
-        const q=quoteCache[symbol]&&quoteCache[symbol].data;
-        const tr=hbody.querySelector('[data-hsymbol="'+symbol+'"]');
-        if(tr&&q&&q.price>0){
-          tr.innerHTML=buildHoldingRow(symbol,state.holdings[symbol],q);
-          tr.querySelectorAll('[data-setalert]').forEach(function(btn){btn.onclick=function(){setAlert(btn.dataset.setalert);};});
-          tr.querySelectorAll('[data-sell]').forEach(function(btn){btn.onclick=function(){document.getElementById('tradeSymbol').value=btn.dataset.sell;};});
-        }
-      });
-    }
-
-    // 更新資產數字
-    let total=0;
-    Object.keys(state.holdings).forEach(function(s){
-      const h=state.holdings[s];
-      const q=quoteCache[s]&&quoteCache[s].data;
-      total+=((q&&q.price>0)?q.price:h.avgPrice)*h.shares;
-    });
-    renderDashboardQuick(total);
-  },5000);
-  console.log('[Live] 5s loop started');
-}
+// [v2.6] startLiveRefresh 已由 startSmartScheduler + fetchPriceBatch 取代
+// 保留空函式以相容可能的外部呼叫
+function startLiveRefresh(){ startSmartScheduler(); }
 // ─── Console 診斷 ──────────────────────────────────────
 
 window.testAPI=async function(symbol='2330'){
@@ -1998,8 +2061,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   renderSourceSelector();
   setTimeout(()=>{renderCharts();recordAssetSnapshot();},800);
 
-  startLiveRefresh();
-  refreshWatchlistPrices().then(function(){refreshHoldingsPrices();});
+  // [v2.6] 統一智慧調度器，取代原本雙 Timer
+  startSmartScheduler();
+  // 初次載入時手動觸發一次報價
+  fetchPriceBatch();
   preloadStockNames();
   checkDividends();
 });
