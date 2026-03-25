@@ -9,6 +9,7 @@ const STORAGE_KEY  = 'twStock_v2';
 let state = loadState();
 const quoteCache    = {};
 const stockNameCache = {};   // { '2330': '台積電', ... }
+let _rotateSourceIdx = 0;     // 每5秒自動輪替報價來源索引
 
 function getStockName(symbol){ return stockNameCache[symbol] || ''; }
 function setStockName(code, name){
@@ -47,8 +48,8 @@ function getMarketBadgeClass(s){
 
 function getCacheTTL(){
   const s=getMarketState();
-  if(s==='REGULAR') return 8_000;
-  if(s==='POST'||s==='CLOSING') return 30_000;
+  if(s==='REGULAR') return 4_500;   // 配合5秒滾動刷新
+  if(s==='POST'||s==='CLOSING') return 4_500;
   return 300_000;
 }
 function getRefreshInterval(){
@@ -416,39 +417,48 @@ async function fetchQuote(symbol){
   const src=state.priceSource||'auto';
   let data=null;
 
+  // ── 輪替來源：每5秒 _rotateSourceIdx++ 換一個起點 ──
+  const BASE_ORDER = (ms==='REGULAR'||ms==='POST')
+    ? ['mis','twse','yahoo','finmind','google']
+    : ['twse','yahoo','finmind','google','mis'];
+
   let priorities=[];
   if(src==='auto'){
-    priorities=(ms==='REGULAR'||ms==='POST')
-      ?['mis','twse','yahoo','google','finmind']
-      :['twse','yahoo','finmind','google','mis'];
-  }else if(src==='twse'){
-    priorities=['twse',ms==='REGULAR'?'mis':'yahoo','yahoo','finmind','google'];
-  }else if(src==='yahoo'){
-    priorities=['yahoo',ms==='REGULAR'?'mis':'twse','twse','finmind','google'];
-  }else if(src==='google'){
-    priorities=['google','yahoo',ms==='REGULAR'?'mis':'twse','twse','finmind'];
+    const si = _rotateSourceIdx % BASE_ORDER.length;
+    priorities = [...BASE_ORDER.slice(si), ...BASE_ORDER.slice(0,si)];
+  }else{
+    // 手動指定來源排第一，其餘按輪替補位
+    const rest = BASE_ORDER.filter(s=>s!==src);
+    const si = _rotateSourceIdx % rest.length;
+    priorities = [src, ...rest.slice(si), ...rest.slice(0,si)];
   }
 
-  // 前兩個並行
-  if(priorities.length>=2){
+  // 當前輪次來源先單獨嘗試（快速）
+  try{
+    const first = await fetchBySource(symbol, priorities[0]);
+    if(first?.price>0) data=first;
+  }catch(_){}
+
+  // 若失敗，前兩個並行補救
+  if(!data?.price && priorities.length>=2){
     const [r1,r2]=await Promise.allSettled([
-      fetchBySource(symbol,priorities[0]),
-      fetchBySource(symbol,priorities[1])
+      fetchBySource(symbol,priorities[1]),
+      fetchBySource(symbol,priorities[2]||priorities[1])
     ]);
-    data=(r1.status==='fulfilled'?r1.value:null)??
-         (r2.status==='fulfilled'?r2.value:null);
+    data=(r1.status==='fulfilled'&&r1.value?.price>0?r1.value:null)??
+         (r2.status==='fulfilled'&&r2.value?.price>0?r2.value:null);
   }
 
-  // 依序試其餘
-  if(!data){
-    for(const p of priorities.slice(2)){
-      data=await fetchBySource(symbol,p);
+  // 依序試剩餘來源
+  if(!data?.price){
+    for(const p of priorities.slice(3)){
+      try{ data=await fetchBySource(symbol,p); }catch(_){}
       if(data?.price>0)break;
     }
   }
 
   // 最終備援：OpenAPI 整批
-  if(!data){
+  if(!data?.price){
     const [tw,tp]=await Promise.allSettled([loadTwse(),loadTpex()]);
     const twseMap=tw.status==='fulfilled'?tw.value:null;
     const tpexMap=tp.status==='fulfilled'?tp.value:null;
@@ -463,7 +473,7 @@ async function fetchQuote(symbol){
 
   if(!data||data.price<=0){console.error(`[Quote] ❌ ${symbol}`);return null;}
   data.marketState=ms;
-  console.log(`[Quote] ✅ ${symbol}=${data.price} [${data.source}][${getMarketLabel(ms)}]`);
+  console.log(`[Quote] ✅ ${symbol}=${data.price} [${data.source}][第${_rotateSourceIdx%BASE_ORDER.length+1}輪][${getMarketLabel(ms)}]`);
   quoteCache[symbol]={data,ts:Date.now()};
   return data;
 }
@@ -808,19 +818,31 @@ function showToast(msg){
 // ─── 智慧排程 ──────────────────────────────────────────
 
 let _refreshTimer=null;
-function scheduleNextRefresh(){
-  if(_refreshTimer)clearTimeout(_refreshTimer);
-  const interval=getRefreshInterval();
-  _refreshTimer=setTimeout(async()=>{
-    Object.keys(quoteCache).forEach(k=>delete quoteCache[k]);
-    _twseCache=null;_twseTs=0;_tpexCache=null;_tpexTs=0;
+// ── 5秒滾動刷新（輪替來源） ─────────────────────────────
+let _wlRefreshTimer=null;
+function startWatchlistAutoRefresh(){
+  if(_wlRefreshTimer) clearInterval(_wlRefreshTimer);
+  _wlRefreshTimer=setInterval(async()=>{
+    _rotateSourceIdx++;  // 每5秒換下一個起始來源
+    const ms=getMarketState();
+    // 非交易時段降頻：每 5 輪才真正打一次
+    if((ms==='CLOSED'||ms==='PRE')&&_rotateSourceIdx%5!==0) return;
+    // 清除 quote cache（確保拿到新資料）
+    [...state.watchlist,...Object.keys(state.holdings)].forEach(s=>{
+      delete quoteCache[normalizeSymbol(s)];
+    });
+    // 每 12 輪（約 1 分鐘）清一次批量快取
+    if(_rotateSourceIdx%12===0){
+      _twseCache=null;_twseTs=0;_tpexCache=null;_tpexTs=0;
+    }
     renderSourceSelector();
     await refreshWatchlistPrices();
     await refreshHoldingsPrices();
-    scheduleNextRefresh();
-  },interval);
-  console.log(`[排程] ${getMarketLabel(getMarketState())} → ${interval/1000}s 後更新`);
+  },5000);
+  console.log('[AutoRefresh] ✅ 5秒輪替刷新已啟動');
 }
+// 舊名稱相容
+function scheduleNextRefresh(){ startWatchlistAutoRefresh(); }
 
 // ─── Console 診斷 ──────────────────────────────────────
 
