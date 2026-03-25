@@ -1,3 +1,5 @@
+const APP_VERSION = '2.4';   // ← 只改這裡就能更版
+
 // ═══════════════════════════════════════════════════════
 //  台股虛擬操盤系統 v2.2  |  SPA分頁 + Firebase雲端 + K線
 //  version:'2.2'
@@ -955,45 +957,79 @@ function scheduleNextRefresh(){startWatchlistAutoRefresh();}
 // ═══════════════════════════════════════════════════════
 //  中文股名批量預載 (TWSE + TPEx OpenAPI)
 // ═══════════════════════════════════════════════════════
+// 股票名稱來源：TWSE 公開資料（永久清單，不受當日交易影響）
+// 欄位：有價證券代號、有價證券名稱
 async function preloadStockNames(){
-  try{
-    var twseUrls=[
-      'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL',
-      'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL'
-    ];
-    for(var i=0;i<twseUrls.length;i++){
-      var r=await timedFetch(twseUrls[i],10000);
+  var total=0;
+  // ── 上市股票名稱（TWSE opendata，永久清單）──
+  var srcList=[
+    // 上市普通股 + ETF + 受益憑證
+    'https://openapi.twse.com.tw/v1/opendata/t187ap03_L',
+    // 備援：當日行情（盤中才有資料）
+    'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
+  ];
+  for(var si=0;si<srcList.length;si++){
+    try{
+      var r=await timedFetch(srcList[si],10000);
       if(!r.ok)continue;
       var arr=await r.json();
-      if(!Array.isArray(arr)||arr.length<50)continue;
-      var count=0;
+      if(!Array.isArray(arr)||arr.length<10)continue;
+      var cnt=0;
       for(var j=0;j<arr.length;j++){
         var item=arr[j];
-        var code=String(item.Code||item['\u8b49\u5238\u4ee3\u865f']||'').trim();
-        var name=String(item.Name||item.StockName||item['\u8b49\u5238\u540d\u7a31']||'').trim();
-        if(code&&name&&/[\u4e00-\u9fff]/.test(name)){stockNameCache[code]=name;count++;}
-      }
-      console.log('[StockNames] TWSE '+count+' names loaded');
-      if(count>100)break;
-    }
-    var r2=await timedFetch('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes',10000);
-    if(r2.ok){
-      var arr2=await r2.json();
-      if(Array.isArray(arr2)){
-        var c2=0;
-        for(var k=0;k<arr2.length;k++){
-          var it=arr2[k];
-          var code2=String(it.SecuritiesCompanyCode||'').trim();
-          var name2=String(it.CompanyName||it.Name||'').trim();
-          if(code2&&name2&&/[\u4e00-\u9fff]/.test(name2)&&!stockNameCache[code2]){stockNameCache[code2]=name2;c2++;}
+        // t187ap03_L 欄位：有價證券代號、有價證券名稱
+        var code=String(
+          item['有價證券代號']||item.Code||item['證券代號']||''
+        ).trim();
+        var name=String(
+          item['有價證券名稱']||item.Name||item['證券名稱']||item.StockName||''
+        ).trim();
+        // 排除英文名稱
+        if(code&&name&&/[\u4e00-\u9fff\uff01-\uff5e]/.test(name)){
+          stockNameCache[code]=name;
+          cnt++;
         }
-        console.log('[StockNames] TPEx '+c2+' names loaded');
       }
-    }
+      console.log('[StockNames] TWSE('+si+') '+cnt+' names');
+      total+=cnt;
+      if(cnt>100)break;
+    }catch(e){console.warn('[StockNames] src'+si,e.message);}
+  }
+  // ── 上櫃股票名稱（TPEx opendata）──
+  var tpexSrcs=[
+    'https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O',
+    'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes'
+  ];
+  for(var ti=0;ti<tpexSrcs.length;ti++){
+    try{
+      var r2=await timedFetch(tpexSrcs[ti],10000);
+      if(!r2.ok)continue;
+      var arr2=await r2.json();
+      if(!Array.isArray(arr2))continue;
+      var c2=0;
+      for(var k=0;k<arr2.length;k++){
+        var it=arr2[k];
+        var code2=String(
+          it['有價證券代號']||it.SecuritiesCompanyCode||it['代號']||''
+        ).trim();
+        var name2=String(
+          it['有價證券名稱']||it.CompanyName||it['公司簡稱']||it.Name||''
+        ).trim();
+        if(code2&&name2&&/[\u4e00-\u9fff\uff01-\uff5e]/.test(name2)&&!stockNameCache[code2]){
+          stockNameCache[code2]=name2;c2++;
+        }
+      }
+      console.log('[StockNames] TPEx('+ti+') '+c2+' names');
+      total+=c2;
+      if(c2>10)break;
+    }catch(e){console.warn('[StockNames] tpex'+ti,e.message);}
+  }
+  console.log('[StockNames] total='+total+' names loaded');
+  if(total>0){
     renderWatchlistImmediate();
     renderHoldingsImmediate();
     renderHoldingsOverview();
-  }catch(e){console.warn('[StockNames]',e.message);}
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1059,42 +1095,78 @@ function checkAlerts(symbol,price){
 //  基本面資料 (Yahoo Finance v10/quoteSummary)
 // ═══════════════════════════════════════════════════════
 var _fundCache={};
+// 基本面資料優先使用 TWSE BWIBBU_d（CORS 直連，免 Proxy）
+// BWIBBU_d 欄位：殖利率、本益比、股價淨值比
 async function fetchFundamentals(symbol){
   if(_fundCache[symbol]&&Date.now()-_fundCache[symbol].ts<3600000)return _fundCache[symbol].data;
-  var ts=Date.now();
-  var PROXIES=[
-    function(u){return'https://corsproxy.io/?'+encodeURIComponent(u)+'&_cb='+ts;},
-    function(u){return'https://api.allorigins.win/raw?url='+encodeURIComponent(u);}
-  ];
-  for(var si=0;si<['.TW','.TWO'].length;si++){
-    var sfx=['.TW','.TWO'][si];
-    var target='https://query1.finance.yahoo.com/v10/finance/quoteSummary/'+symbol+sfx+'?modules=defaultKeyStatistics,financialData,earningsTrend&_='+ts;
-    var urls=[target,PROXIES[0](target),PROXIES[1](target)];
-    for(var ui=0;ui<urls.length;ui++){
-      try{
-        var r=await timedFetch(urls[ui],8000);if(!r.ok)continue;
-        var text=await r.text();if(!text||text.trim().startsWith('<'))continue;
-        var json=JSON.parse(text);
-        var res=json&&json.quoteSummary&&json.quoteSummary.result&&json.quoteSummary.result[0];
-        if(!res)continue;
-        var ks=res.defaultKeyStatistics||{};
-        var et=res.earningsTrend||{};
-        var epsArr=(et.trend||[]).slice(0,4).map(function(t){
-          return{period:t.period,eps:num(t.epsActual&&t.epsActual.raw)||num(t.earningsEstimate&&t.earningsEstimate.avg&&t.earningsEstimate.avg.raw)};
-        }).filter(function(t){return t.eps!=null;});
-        var data={
-          pe:num(ks.trailingPE&&ks.trailingPE.raw),
-          forwardPE:num(ks.forwardPE&&ks.forwardPE.raw),
-          dividendYield:ks.dividendYield&&ks.dividendYield.raw!=null?(ks.dividendYield.raw*100).toFixed(2):null,
-          eps:num(ks.trailingEps&&ks.trailingEps.raw),
-          epsQuarters:epsArr
-        };
-        _fundCache[symbol]={data:data,ts:Date.now()};
-        return data;
-      }catch(e){}
+  var data={pe:null,pbr:null,dividendYield:null,eps:null,epsQuarters:[]};
+  var loaded=false;
+
+  // ── A. TWSE BWIBBU_d（上市股，免 Proxy）──────────────
+  try{
+    var r=await timedFetch('https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_d',10000);
+    if(r.ok){
+      var arr=await r.json();
+      if(Array.isArray(arr)){
+        for(var i=0;i<arr.length;i++){
+          var item=arr[i];
+          var code=String(item.Code||item['股票代號']||'').trim();
+          if(code!==symbol)continue;
+          data.pe=num(item.PEratio||item['本益比'])||null;
+          data.dividendYield=num(item.DividendYield||item['殖利率'])||null;
+          data.pbr=num(item.PBratio||item['股價淨值比'])||null;
+          loaded=true;
+          break;
+        }
+      }
     }
+  }catch(e){console.warn('[Fund-TWSE]',e.message);}
+
+  // ── B. TPEx BWIBBU（上櫃股）──────────────────────────
+  if(!loaded){
+    try{
+      var r2=await timedFetch('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis',10000);
+      if(r2.ok){
+        var arr2=await r2.json();
+        if(Array.isArray(arr2)){
+          for(var j=0;j<arr2.length;j++){
+            var it=arr2[j];
+            var c2=String(it.SecuritiesCompanyCode||it['代號']||'').trim();
+            if(c2!==symbol)continue;
+            data.pe=num(it.PriceEarningRatio||it['本益比'])||null;
+            data.dividendYield=num(it.DividendYield||it['殖利率'])||null;
+            data.pbr=num(it.PriceBookRatio||it['股價淨值比'])||null;
+            loaded=true;
+            break;
+          }
+        }
+      }
+    }catch(e){console.warn('[Fund-TPEx]',e.message);}
   }
-  return null;
+
+  // ── C. FinMind 近四季 EPS（有 token 才用）────────────
+  try{
+    var epUrl='https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockFinancialStatements'
+      +'&stock_id='+symbol+'&start_date='+daysAgo(400)+'&token='+encodeURIComponent(_r());
+    var re=await timedFetch(epUrl,8000);
+    if(re.ok){
+      var je=await re.json();
+      if(je.status===200&&Array.isArray(je.data)){
+        var eps_raw=je.data.filter(function(d){return d.type==='EPS';})
+          .sort(function(a,b){return b.date.localeCompare(a.date);})
+          .slice(0,4);
+        data.eps=eps_raw.length?num(eps_raw[0].value):null;
+        data.epsQuarters=eps_raw.map(function(d){return{period:d.date.slice(0,7),eps:num(d.value)};});
+      }
+    }
+  }catch(e){console.warn('[Fund-EPS]',e.message);}
+
+  if(!loaded&&!data.eps){
+    console.warn('[Fund] 無法取得 '+symbol+' 基本面資料');
+    return null;
+  }
+  _fundCache[symbol]={data:data,ts:Date.now()};
+  return data;
 }
 
 async function toggleFundamentals(symbol){
@@ -1122,6 +1194,7 @@ async function toggleFundamentals(symbol){
     +'<span>\ud83d\udcc8 \u672c\u76ca\u6bd4(TTM)\uff1a<strong style="color:#f3b73b;font-size:1rem;">'+(d.pe?d.pe.toFixed(1):'\u2014')+'</strong></span>'
     +'<span>\ud83d\udd2e \u9810\u4f30\u672c\u76ca\u6bd4\uff1a<strong style="color:#f3b73b;">'+(d.forwardPE?d.forwardPE.toFixed(1):'\u2014')+'</strong></span>'
     +'<span>\ud83d\udcb0 \u6b96\u5229\u7387\uff1a<strong style="color:#2ecc71;font-size:1rem;">'+(d.dividendYield?d.dividendYield+'%':'\u2014')+'</strong></span>'
+    +'<span>\ud83d\udcca \u80a1\u50f9\u6de8\u5024\u6bd4\uff1a<strong style="color:#8b949e;">'+(d.pbr?d.pbr.toFixed(2):'\u2014')+'</strong></span>'
     +'<span>\ud83d\udcca EPS(TTM)\uff1a<strong style="color:#fff;">'+(d.eps||'\u2014')+'</strong></span>'
     +'</div>'
     +'<div style="margin-top:8px;font-size:.78rem;color:var(--muted);">\u8fd14\u5b63 EPS\uff1a'+eps4+'</div>'
@@ -1778,6 +1851,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
   document.getElementById('tradeQty').addEventListener('keydown',e=>{if(e.key==='Enter')executeTrade('buy');});
 
+  // 版號注入
+  const vEl=document.getElementById('appVersion');
+  if(vEl)vEl.textContent='v'+APP_VERSION;
+  document.title='台股虛擬操盤 v'+APP_VERSION;
   updateClock();setInterval(updateClock,1000);
 
   restoreCloudSession();
