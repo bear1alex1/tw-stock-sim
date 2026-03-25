@@ -545,38 +545,41 @@ function setVirtualCash(){
 //  Watchlist UI
 // ═══════════════════════════════════════════════════════
 
-function buildWatchRow(symbol,q){
-  const name  = getStockName(symbol);
+// ── 只更新價格欄位內容（不重建整列，避免閃爍）──────
+function _watchPriceCellHTML(q){
   const price = q?.price??null;
+  const src   = q?.source?`<span style="font-size:.58rem;color:#444;margin-left:3px;">[${q.source}]</span>`:'';
+  return `<span style="font-weight:600;">${formatPrice(price)}</span>${src}`;
+}
+function _watchChangeCellHTML(q){
   const chg   = q?.change??null;
   const pct   = q?.changePct??null;
   const ms    = getMarketState();
-  const src   = q?.source?` <span style="font-size:.58rem;color:#444;">[${q.source}]</span>`:'';
-
-  // 台灣慣例：紅漲綠跌
   const isUp     = (chg??0)>=0;
   const chgCls   = isUp?'text-up':'text-down';
   const badgeCls = !q?'badge-wait':(isUp?'badge-rise':'badge-fall');
   const arrow    = !q?'—':(isUp?'▲':'▼');
+  return `${chg!==null&&pct!==null
+    ?`<div class="${chgCls}" style="font-weight:700;">
+        ${isUp?'+':''}${chg.toFixed(2)}
+        <span style="font-size:.78rem;font-weight:400;">(${isUp?'+':''}${pct.toFixed(2)}%)</span>
+      </div>`
+    :'<div style="color:#444;">—</div>'}
+    <div style="display:flex;gap:4px;margin-top:4px;">
+      <span class="badge ${badgeCls}">${!q?'讀取中':arrow}</span>
+      <span class="badge ${getMarketBadgeClass(ms)}">${getMarketLabel(ms)}</span>
+    </div>`;
+}
 
+function buildWatchRow(symbol,q){
+  const name = getStockName(symbol);
   return`
     <td>
       <div class="font-mono font-bold">${symbol}</div>
       ${name?`<div style="font-size:.72rem;color:#8b949e;margin-top:1px;">${name}</div>`:''}
     </td>
-    <td style="font-weight:600;">${formatPrice(price)}${src}</td>
-    <td>
-      ${chg!==null&&pct!==null
-        ?`<div class="${chgCls}" style="font-weight:700;">
-            ${isUp?'+':''}${chg.toFixed(2)}
-            <span style="font-size:.78rem;font-weight:400;">(${isUp?'+':''}${pct.toFixed(2)}%)</span>
-          </div>`
-        :'<div style="color:#444;">—</div>'}
-      <div style="display:flex;gap:4px;margin-top:4px;">
-        <span class="badge ${badgeCls}">${!q?'讀取中':arrow}</span>
-        <span class="badge ${getMarketBadgeClass(ms)}">${getMarketLabel(ms)}</span>
-      </div>
-    </td>
+    <td class="wl-price">${_watchPriceCellHTML(q)}</td>
+    <td class="wl-change">${_watchChangeCellHTML(q)}</td>
     <td>
       <button class="text-xs text-blue-400 hover:underline mr-2" data-trade="${symbol}">操盤</button>
       <button class="text-xs hover:underline" style="color:#ff4d4d;" data-remove="${symbol}">移除</button>
@@ -585,7 +588,29 @@ function buildWatchRow(symbol,q){
 
 function bindWatchlistEvents(){
   const tbody=document.getElementById('watchlistBody');
-  tbody.querySelectorAll('[data-trade]').forEach(btn=>{btn.onclick=()=>{document.getElementById('tradeSymbol').value=btn.dataset.trade;};});
+  tbody.querySelectorAll('[data-trade]').forEach(btn=>{
+    btn.onclick=()=>{
+      const sym=btn.dataset.trade;
+      const inp=document.getElementById('tradeSymbol');
+      if(inp) inp.value=sym;
+      // 導航到交易頁並觸發價格預填
+      if(typeof window.navigate==='function') window.navigate('trade');
+      else{
+        // 備援：直接切換 tab
+        document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+        const tradeBtn=document.querySelector('.tab-btn[data-tab="trade"]');
+        const tradePanel=document.getElementById('tab-trade');
+        if(tradeBtn) tradeBtn.classList.add('active');
+        if(tradePanel) tradePanel.classList.add('active');
+      }
+      // 自動查詢目前報價
+      setTimeout(()=>{
+        const inp2=document.getElementById('tradeSymbol');
+        if(inp2&&inp2.value) inp2.dispatchEvent(new Event('blur'));
+      },100);
+    };
+  });
   tbody.querySelectorAll('[data-remove]').forEach(btn=>{btn.onclick=()=>removeFromWatchlist(btn.dataset.remove);});
 }
 
@@ -605,7 +630,12 @@ async function refreshWatchlistPrices(){
   for(const symbol of state.watchlist){
     const q=await fetchQuote(symbol);
     const tr=tbody.querySelector(`[data-symbol="${symbol}"]`);
-    if(tr){tr.innerHTML=buildWatchRow(symbol,q);bindWatchlistEvents();}
+    if(!tr) continue;
+    // 只更新價格與漲跌欄，不重建整列（避免閃爍 & 保留 name / 按鈕事件）
+    const priceCell  = tr.querySelector('.wl-price');
+    const changeCell = tr.querySelector('.wl-change');
+    if(priceCell)  priceCell.innerHTML  = _watchPriceCellHTML(q);
+    if(changeCell) changeCell.innerHTML = _watchChangeCellHTML(q);
   }
 }
 
