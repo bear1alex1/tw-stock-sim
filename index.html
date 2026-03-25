@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-  <title>台股虛擬操盤 v2.2</title>
+  <title>台股虛擬操盤 v2.3</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
@@ -146,7 +146,7 @@
     <span style="font-size:1.2rem;">📈</span>
     <div>
       <div style="font-weight:800;color:var(--text);font-size:.92rem;line-height:1.2;">
-        台股虛擬操盤系統 <span class="vtag">v2.2</span>
+        台股虛擬操盤系統 <span class="vtag">v2.3</span>
       </div>
       <div id="lastSaved" style="font-size:.65rem;color:#555;line-height:1.2;">最後儲存：—</div>
     </div>
@@ -208,22 +208,22 @@
         <div class="sub">歷史買賣結算</div>
       </div>
     </div>
-    <!-- 績效分析行 -->
+    <!-- ── 績效分析列 ── -->
     <div class="desk-grid-3" style="margin-bottom:14px;gap:10px;">
       <div class="card" style="padding:14px;text-align:center;">
-        <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px;">📉 最大回撤 (Max Drawdown)</div>
+        <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px;">📉 最大回撤</div>
         <div style="font-size:1.3rem;font-weight:800;color:#ff4d4d;" id="maxDrawdown">—</div>
-        <div style="font-size:.68rem;color:var(--muted);margin-top:3px;">資產歷史最大下跌幅度</div>
+        <div style="font-size:.66rem;color:var(--muted);margin-top:4px;">資產歷史最大跌幅</div>
       </div>
       <div class="card" style="padding:14px;text-align:center;">
-        <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px;">🏆 歷史勝率 (Win Rate)</div>
+        <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px;">🏆 歷史勝率</div>
         <div style="font-size:1.3rem;font-weight:800;color:#2ecc71;" id="dashWinRate">—</div>
-        <div style="font-size:.68rem;color:var(--muted);margin-top:3px;">獲利筆數 / 總結案筆數</div>
+        <div style="font-size:.66rem;color:var(--muted);margin-top:4px;">獲利筆數 / 總結案筆數</div>
       </div>
       <div class="card" style="padding:14px;text-align:center;">
-        <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px;">📊 持股數</div>
+        <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px;">📊 持股種類</div>
         <div style="font-size:1.3rem;font-weight:800;color:var(--blue);" id="holdingsCount">—</div>
-        <div style="font-size:.68rem;color:var(--muted);margin-top:3px;">目前持有股票種類</div>
+        <div style="font-size:.66rem;color:var(--muted);margin-top:4px;">目前持有股票種類數</div>
       </div>
     </div>
     <div class="desk-grid-2" style="gap:14px;margin-bottom:14px;">
