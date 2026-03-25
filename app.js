@@ -17,9 +17,8 @@ function setStockName(code, name){
   const n=String(name).trim();
   if(!n) return;
   const existing=stockNameCache[code]||'';
-  const isChinese=s=>/[\u4e00-\u9fff]/.test(s);
-  // 已有中文名稱則不覆蓋（避免英文名蓋掉台灣股名）
-  if(isChinese(existing)) return;
+  // 已有中文名稱則不覆蓋（避免 Yahoo 英文名蓋掉台灣股名）
+  if(existing&&/[\u4e00-\u9fff]/.test(existing)) return;
   stockNameCache[code]=n;
 }
 
@@ -108,7 +107,7 @@ function getTWDateStr(){const tw=getTWDate();return`${tw.getUTCFullYear()}${Stri
 // ─── State ─────────────────────────────────────────────
 
 function getEmptyState(){
-  return{cash:INITIAL_CASH,holdings:{},history:[],realizedTrades:[],assetHistory:[],watchlist:[],realizedPnL:0,feeDiscount:0.6,priceSource:'auto',savedAt:null};
+  return{cash:INITIAL_CASH,holdings:{},history:[],realizedTrades:[],assetHistory:[],watchlist:[],realizedPnL:0,feeDiscount:0.6,priceSource:'auto',alerts:{},dividendChecked:{},savedAt:null};
 }
 
 function loadState(){
@@ -655,15 +654,18 @@ function _watchChangeCellHTML(q){
 
 function buildWatchRow(symbol,q){
   const name = getStockName(symbol);
+  const alert= state.alerts?.[symbol];
+  const alertBadge= alert?`<span title="停損:${alert.stopLoss||'—'} 停利:${alert.takeProfit||'—'}" style="font-size:.6rem;color:#f3b73b;margin-left:4px;">🔔</span>`:'';
   return`
     <td>
-      <div class="font-mono font-bold">${symbol}</div>
-      ${name?`<div style="font-size:.72rem;color:#8b949e;margin-top:1px;">${name}</div>`:''}
+      <div class="font-mono font-bold">${symbol}${alertBadge}</div>
+      ${name?`<div style="font-size:.72rem;color:#8b949e;margin-top:1px;cursor:pointer;text-decoration:underline dotted;" onclick="toggleFundamentals('${symbol}')">${name}</div>`:'<div style="font-size:.72rem;color:#555;margin-top:1px;cursor:pointer;" onclick="toggleFundamentals(''+symbol+'')">📊 查看基本面</div>'}
     </td>
     <td class="wl-price">${_watchPriceCellHTML(q)}</td>
     <td class="wl-change">${_watchChangeCellHTML(q)}</td>
     <td>
       <button class="text-xs text-blue-400 hover:underline mr-2" data-trade="${symbol}">操盤</button>
+      <button class="text-xs hover:underline mr-2" style="color:#f3b73b;" data-alert="${symbol}">🔔</button>
       <button class="text-xs hover:underline" style="color:#ff4d4d;" data-remove="${symbol}">移除</button>
     </td>`;
 }
@@ -698,6 +700,7 @@ function bindWatchlistEvents(){
     };
   });
   tbody.querySelectorAll('[data-remove]').forEach(btn=>{btn.onclick=()=>removeFromWatchlist(btn.dataset.remove);});
+  tbody.querySelectorAll('[data-alert]').forEach(btn=>{btn.onclick=()=>setAlert(btn.dataset.alert);});
 }
 
 function renderWatchlistImmediate(){
@@ -803,7 +806,7 @@ function buildHoldingRow(symbol,h,q){
 
   return`
     <td>
-      <div class="font-mono font-bold">${symbol}</div>
+      <div class="font-mono font-bold">${symbol}${(state.alerts?.[symbol])?'<span style="font-size:.6rem;color:#f3b73b;margin-left:4px;">🔔</span>':''}</div>
       ${name?`<div style="font-size:.72rem;color:#8b949e;margin-top:1px;">${name}</div>`:''}
     </td>
     <td>${h.shares} 股</td>
@@ -816,7 +819,8 @@ function buildHoldingRow(symbol,h,q){
       ${isUp?'+':''}${formatMoney(pnl)}
     </td>
     <td>
-      <button class="text-xs text-blue-400 hover:underline" data-sell="${symbol}">快速賣出</button>
+      <button class="text-xs text-blue-400 hover:underline mr-2" data-sell="${symbol}">賣出</button>
+      <button class="text-xs hover:underline" style="color:#f3b73b;" data-setalert="${symbol}">🔔</button>
     </td>`;
 }
 
@@ -833,6 +837,7 @@ function renderHoldingsImmediate(){
     const tr=document.createElement('tr');tr.dataset.hsymbol=symbol;
     tr.innerHTML=buildHoldingRow(symbol,h,q);tbody.appendChild(tr);
   }
+  tbody.querySelectorAll('[data-setalert]').forEach(btn=>{btn.onclick=()=>setAlert(btn.dataset.setalert);});
   tbody.querySelectorAll('[data-sell]').forEach(btn=>{btn.onclick=()=>{document.getElementById('tradeSymbol').value=btn.dataset.sell;};});
   document.getElementById('holdingsValue').textContent='$ '+formatMoney(total);
   if(typeof renderHoldingsOverview==='function')renderHoldingsOverview();
@@ -844,8 +849,10 @@ async function refreshHoldingsPrices(){
   for(const symbol of Object.keys(state.holdings)){
     const h=state.holdings[symbol];const q=await fetchQuote(symbol);
     const tr=tbody.querySelector(`[data-hsymbol="${symbol}"]`);
+    if(q?.price>0) checkAlerts(symbol,q.price);
     if(tr){
       tr.innerHTML=buildHoldingRow(symbol,h,q);
+      tbody.querySelectorAll('[data-setalert]').forEach(btn=>{btn.onclick=()=>setAlert(btn.dataset.setalert);});
       tbody.querySelectorAll('[data-sell]').forEach(btn=>{btn.onclick=()=>{document.getElementById('tradeSymbol').value=btn.dataset.sell;};});
     }
     total+=((q?.price>0)?q.price:h.avgPrice)*h.shares;
@@ -891,6 +898,19 @@ function renderDashboardQuick(hv){
   const el=document.getElementById('totalPnL');
   el.textContent=`${pnl>=0?'+':''}${formatMoney(pnl)} 元`;
   el.className=`text-xl font-bold ${pnl>=0?'text-up':'text-down'}`;
+  // ── 最大回撤
+  const dd=calcMaxDrawdown();
+  const ddEl=document.getElementById('maxDrawdown');
+  if(ddEl) ddEl.textContent=dd!=null?`-${dd}%`:'—';
+  // ── 持股數
+  const hcEl=document.getElementById('holdingsCount');
+  if(hcEl) hcEl.textContent=Object.keys(state.holdings||{}).length+' 種';
+  // ── 勝率
+  const trades=state.realizedTrades||[];
+  const wins=trades.filter(t=>t.netPnl>0).length;
+  const wr=trades.length?((wins/trades.length)*100).toFixed(1)+'%':'—';
+  const wrEl=document.getElementById('dashWinRate');
+  if(wrEl) wrEl.textContent=wr;
 }
 
 // ─── Backup ────────────────────────────────────────────
@@ -965,6 +985,201 @@ function startWatchlistAutoRefresh(){
 // 舊名稱相容
 function scheduleNextRefresh(){ startWatchlistAutoRefresh(); }
 
+
+// ═══════════════════════════════════════════════════════
+// 中文股名預載 (TWSE OpenAPI batch)
+// ═══════════════════════════════════════════════════════
+async function preloadStockNames(){
+  try{
+    for(const url of[
+      'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL',
+      'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL'
+    ]){
+      const r=await timedFetch(url,10000);
+      if(!r.ok)continue;
+      const arr=await r.json();
+      if(!Array.isArray(arr)||arr.length<50)continue;
+      let count=0;
+      for(const item of arr){
+        const code=String(item.Code||item['證券代號']||'').trim();
+        const name=String(item.Name||item.StockName||item['證券名稱']||'').trim();
+        if(code&&name&&/[\u4e00-\u9fff]/.test(name)){stockNameCache[code]=name;count++;}
+      }
+      console.log(`[StockNames] ✅ TWSE 載入 ${count} 筆中文股名`);
+      if(count>100)break;
+    }
+    // TPEx
+    const r2=await timedFetch('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes',10000);
+    if(r2.ok){
+      const arr2=await r2.json();
+      if(Array.isArray(arr2)){
+        let c2=0;
+        for(const item of arr2){
+          const code=String(item.SecuritiesCompanyCode||'').trim();
+          const name=String(item.CompanyName||item.Name||'').trim();
+          if(code&&name&&/[\u4e00-\u9fff]/.test(name)&&!stockNameCache[code]){stockNameCache[code]=name;c2++;}
+        }
+        console.log(`[StockNames] ✅ TPEx 載入 ${c2} 筆中文股名`);
+      }
+    }
+    // 更新目前追蹤清單顯示
+    renderWatchlistImmediate();
+    renderHoldingsImmediate();
+    renderHoldingsOverview();
+  }catch(e){console.warn('[StockNames]',e.message);}
+}
+
+// ═══════════════════════════════════════════════════════
+// 最大回撤計算
+// ═══════════════════════════════════════════════════════
+function calcMaxDrawdown(){
+  const hist=state.assetHistory||[];
+  if(hist.length<2)return null;
+  let peak=hist[0].total,maxDD=0;
+  for(const h of hist){
+    if(h.total>peak)peak=h.total;
+    const dd=peak>0?(peak-h.total)/peak*100:0;
+    if(dd>maxDD)maxDD=dd;
+  }
+  return maxDD.toFixed(2);
+}
+
+// ═══════════════════════════════════════════════════════
+// 停損停利警示
+// ═══════════════════════════════════════════════════════
+let _alertBlinkTimer=null;
+function setAlert(symbol){
+  symbol=normalizeSymbol(symbol);
+  const cur=state.alerts?.[symbol]||{};
+  const sl=prompt(`${symbol} 停損價（跌到此價自動提醒，留空取消）：`,cur.stopLoss||'');
+  if(sl===null)return;
+  const tp=prompt(`${symbol} 停利價（漲到此價自動提醒，留空取消）：`,cur.takeProfit||'');
+  if(tp===null)return;
+  if(!state.alerts)state.alerts={};
+  const slNum=num(sl),tpNum=num(tp);
+  if(!slNum&&!tpNum){delete state.alerts[symbol];showToast(`✅ 已清除 ${symbol} 警示`);saveState(state);renderWatchlistImmediate();renderHoldingsImmediate();return;}
+  state.alerts[symbol]={stopLoss:slNum||null,takeProfit:tpNum||null,triggered:false};
+  saveState(state);
+  showToast(`🔔 ${symbol} 停損:${slNum||'—'} / 停利:${tpNum||'—'} 已設定`);
+  renderWatchlistImmediate();renderHoldingsImmediate();
+}
+
+function checkAlerts(symbol,price){
+  if(!state.alerts||!price)return;
+  const a=state.alerts[symbol];
+  if(!a||a.triggered)return;
+  let hit=null;
+  if(a.stopLoss&&price<=a.stopLoss)hit={type:'🔴 停損',val:a.stopLoss};
+  if(a.takeProfit&&price>=a.takeProfit)hit={type:'🟢 停利',val:a.takeProfit};
+  if(!hit)return;
+  a.triggered=true;saveState(state);
+  const msg=`⚠️ ${symbol} ${hit.type}觸發！現價 ${price} 已${hit.type.includes('停損')?'跌穿':'突破'} ${hit.val}`;
+  showToast(msg);
+  const origTitle=document.title;
+  let blink=true;
+  if(_alertBlinkTimer)clearInterval(_alertBlinkTimer);
+  _alertBlinkTimer=setInterval(()=>{document.title=blink?`⚠️ ${symbol} ${hit.type}！`:'台股操盤 v2.2';blink=!blink;},600);
+  setTimeout(()=>{clearInterval(_alertBlinkTimer);document.title=origTitle;},15000);
+}
+
+// ═══════════════════════════════════════════════════════
+// 基本面資料（Yahoo Finance v10/quoteSummary）
+// ═══════════════════════════════════════════════════════
+const _fundCache={};
+async function fetchFundamentals(symbol){
+  if(_fundCache[symbol]&&Date.now()-_fundCache[symbol].ts<3600000)return _fundCache[symbol].data;
+  const ts=Date.now();
+  const PROXIES=[
+    u=>`https://corsproxy.io/?${encodeURIComponent(u)}&_cb=${ts}`,
+    u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
+  ];
+  for(const sfx of['.TW','.TWO']){
+    const target=`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}${sfx}?modules=defaultKeyStatistics,financialData,earningsTrend&_=${ts}`;
+    for(const url of[target,...PROXIES.map(px=>px(target))]){
+      try{
+        const r=await timedFetch(url,8000);if(!r.ok)continue;
+        const text=await r.text();if(!text||text.startsWith('<'))continue;
+        const json=JSON.parse(text);
+        const res=json?.quoteSummary?.result?.[0];if(!res)continue;
+        const ks=res.defaultKeyStatistics||{};
+        const fd=res.financialData||{};
+        const et=res.earningsTrend||{};
+        const epsArr=(et.trend||[]).slice(0,4).map(t=>({
+          period:t.period,
+          eps:num(t.epsActual?.raw)??num(t.earningsEstimate?.avg?.raw)
+        })).filter(t=>t.eps!=null);
+        const data={
+          pe:num(ks.trailingPE?.raw),
+          forwardPE:num(ks.forwardPE?.raw),
+          dividendYield:ks.dividendYield?.raw!=null?(ks.dividendYield.raw*100).toFixed(2):null,
+          eps:num(ks.trailingEps?.raw),
+          epsQuarters:epsArr
+        };
+        _fundCache[symbol]={data,ts:Date.now()};
+        return data;
+      }catch(_){}
+    }
+  }
+  return null;
+}
+
+async function toggleFundamentals(symbol){
+  const rowId=`fund-${symbol}`;
+  const existing=document.getElementById(rowId);
+  if(existing){existing.remove();return;}
+  const tbody=document.getElementById('watchlistBody');
+  const tr=tbody.querySelector(`[data-symbol="${symbol}"]`);
+  if(!tr)return;
+  const fRow=document.createElement('tr');fRow.id=rowId;
+  fRow.innerHTML=`<td colspan="4" style="padding:8px 16px;background:#0a0f16;border-left:3px solid #388bfd;">
+    <span style="font-size:.78rem;color:var(--muted);">📊 載入基本面資料…</span></td>`;
+  tr.after(fRow);
+  const d=await fetchFundamentals(symbol);
+  if(!d){fRow.innerHTML=`<td colspan="4" style="padding:8px 16px;background:#0a0f16;border-left:3px solid #ff4d4d;">
+    <span style="font-size:.78rem;color:#ff4d4d;">❌ 無法取得基本面資料（請確認代號或稍後再試）</span></td>`;return;}
+  const eps4=d.epsQuarters.length?d.epsQuarters.map(q=>`<span style="margin-right:12px;">${q.period}：<strong>${q.eps}</strong></span>`).join(''):'—';
+  fRow.innerHTML=`<td colspan="4" style="padding:10px 16px;background:#0a0f16;border-left:3px solid #388bfd;">
+    <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:.82rem;align-items:center;">
+      <span>📈 本益比(TTM)：<strong style="color:#f3b73b;font-size:1rem;">${d.pe?d.pe.toFixed(1):'—'}</strong></span>
+      <span>🔮 預估本益比：<strong style="color:#f3b73b;">${d.forwardPE?d.forwardPE.toFixed(1):'—'}</strong></span>
+      <span>💰 殖利率：<strong style="color:#2ecc71;font-size:1rem;">${d.dividendYield?d.dividendYield+'%':'—'}</strong></span>
+      <span>📊 EPS(TTM)：<strong style="color:#fff;">${d.eps??'—'}</strong></span>
+    </div>
+    <div style="margin-top:8px;font-size:.78rem;color:var(--muted);">近四季 EPS：${eps4}</div>
+  </td>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// 除息自動模擬（FinMind TaiwanStockDividend）
+// ═══════════════════════════════════════════════════════
+async function checkDividends(){
+  const today=getTWDate().toISOString().slice(0,10);
+  if(!state.dividendChecked)state.dividendChecked={};
+  for(const symbol of Object.keys(state.holdings)){
+    const h=state.holdings[symbol];
+    if(!h?.shares)continue;
+    const key=`${symbol}_${today}`;
+    if(state.dividendChecked[key])continue;
+    try{
+      const url=`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockDividend&stock_id=${symbol}&start_date=${daysAgo(3)}&token=${encodeURIComponent(_r())}`;
+      const r=await timedFetch(url,8000);if(!r.ok)continue;
+      const json=await r.json();
+      if(json.status!==200||!Array.isArray(json.data))continue;
+      for(const d of json.data){
+        if(d.date!==today)continue;
+        const cashDiv=num(d.CashDividend||d.cash_dividend||0)||0;
+        if(cashDiv<=0)continue;
+        const income=Math.round(cashDiv*h.shares);
+        if(income<=0)continue;
+        state.cash+=income;
+        state.dividendChecked[key]=true;
+        state.history.unshift({time:new Date().toLocaleString('zh-TW'),symbol,side:'dividend',shares:h.shares,price:cashDiv,amount:income,fee:0});
+        saveState(state);renderDashboardQuick();renderHistory();
+        showToast(`💰 ${symbol} 除息：每股 ${cashDiv} 元 × ${h.shares} 股 = ${formatMoney(income)} 元已入帳！`);
+      }
+    }catch(e){console.warn('[Dividend]',e.message);}
+  }
+}
 // ─── Console 診斷 ──────────────────────────────────────
 
 window.testAPI=async function(symbol='2330'){
@@ -1450,4 +1665,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   refreshWatchlistPrices().then(()=>refreshHoldingsPrices());
   scheduleNextRefresh();
+  // 啟動時預載中文股名 + 檢查除息
+  preloadStockNames();
+  checkDividends();
 });
