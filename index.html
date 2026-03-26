@@ -142,8 +142,31 @@
       .desk-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
     }
     @media(max-width:767px){#sideNav{display:none;}}
+    /* ── Scenario Modal (v3.2) ── */
     .mini-loader{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.22);border-top-color:#60a5fa;border-radius:999px;animation:miniSpin .75s linear infinite;vertical-align:middle;}
     @keyframes miniSpin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+    #scenarioModal{display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);align-items:center;justify-content:center;}
+    #scenarioModal.show{display:flex;}
+    .scenario-box{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:24px 20px 20px;width:min(96vw,520px);max-height:92vh;overflow-y:auto;position:relative;}
+    .scenario-box h2{font-size:1.05rem;font-weight:700;color:#f0f6fc;margin-bottom:16px;}
+    .scenario-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+    .scenario-label{font-size:.7rem;color:#8b949e;margin-bottom:3px;}
+    .scenario-inp{width:100%;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:7px 10px;color:#f0f6fc;font-size:.92rem;outline:none;}
+    .scenario-inp:focus{border-color:#388bfd;}
+    .scenario-result-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:#0d1117;border:1px solid #21262d;border-radius:10px;padding:14px;margin:14px 0;}
+    .s-stat-label{font-size:.65rem;color:#8b949e;margin-bottom:2px;}
+    .s-stat-val{font-size:1rem;font-weight:700;color:#f0f6fc;}
+    .s-profit-block{grid-column:span 2;text-align:center;padding:8px 0 4px;}
+    .s-profit-big{font-size:1.55rem;font-weight:800;}
+    .s-roi{font-size:1.1rem;font-weight:700;margin-top:2px;}
+    .scenario-fee-note{font-size:.68rem;color:#6b7280;text-align:center;margin-bottom:12px;}
+    .scenario-bar-wrap{height:6px;background:#21262d;border-radius:3px;margin-bottom:16px;overflow:hidden;}
+    .scenario-bar{height:100%;background:linear-gradient(90deg,#22c55e,#4ade80);width:var(--bar-pct,0%);border-radius:3px;transition:width .4s;}
+    .btn-scenario-apply{width:100%;padding:11px;border-radius:8px;background:linear-gradient(135deg,#388bfd,#1d4ed8);color:#fff;font-weight:700;font-size:.95rem;border:none;cursor:pointer;}
+    .btn-scenario-apply:disabled{background:#21262d;color:#555;cursor:not-allowed;}
+    .btn-scenario-close{position:absolute;top:12px;right:14px;background:none;border:none;color:#8b949e;font-size:1.3rem;cursor:pointer;line-height:1;}
+    .btn-open-scenario{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;background:#21262d;color:#60a5fa;border:1px solid #30363d;cursor:pointer;font-size:.88rem;font-weight:600;width:100%;}
+    .btn-open-scenario:hover{background:#30363d;}
 
   </style>
 </head>
@@ -155,7 +178,7 @@
     <span style="font-size:1.2rem;">📈</span>
     <div>
       <div style="font-weight:800;color:var(--text);font-size:.92rem;line-height:1.2;">
-        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.1</span>
+        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.2</span>
       </div>
       <div id="lastSaved" style="font-size:.65rem;color:#555;line-height:1.2;">最後儲存：—</div>
     </div>
@@ -384,6 +407,9 @@
             <label class="sec-title" style="display:block;margin-bottom:4px;">成交價（留空自動取得）</label>
             <input id="tradePrice" class="inp" type="number" step="0.01" placeholder="自動取得現價"/>
           </div>
+          <div style="margin-bottom:4px;">
+            <button class="btn-open-scenario" id="btnOpenScenario">📊 投資模擬試算</button>
+          </div>
           <div style="display:flex;gap:8px;">
             <button class="btn btn-red" id="btnBuy" style="flex:1;">買入 ▲</button>
             <button class="btn btn-green" id="btnSell" style="flex:1;">賣出 ▼</button>
@@ -516,7 +542,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
 <!-- App -->
-<script src="app.js?v=3.1"></script>
+<script src="app.js?v=3.2"></script>
 
 <!-- SPA 導覽 -->
 <script>
@@ -547,5 +573,45 @@
   window.__currentPage = function(){ return cur; };
 })();
 </script>
+
+  <!-- ════ 投資模擬試算 Modal (v3.2) ════ -->
+  <div id="scenarioModal" role="dialog" aria-modal="true">
+    <div class="scenario-box">
+      <button class="btn-scenario-close" id="btnCloseScenario" aria-label="關閉">✕</button>
+      <h2>📊 投資模擬試算</h2>
+      <div style="margin-bottom:10px;">
+        <div class="scenario-label">股票代號</div>
+        <input list="scenarioSymbols" id="scenarioSymbol" class="scenario-inp" placeholder="e.g. 2330" autocomplete="off"/>
+        <datalist id="scenarioSymbols"></datalist>
+        <div id="scenarioSymbolName" style="font-size:.72rem;color:#8b949e;margin-top:3px;">請輸入股票代號</div>
+      </div>
+      <div class="scenario-row">
+        <div>
+          <div class="scenario-label">基本設定 — 預計買入價</div>
+          <input id="scenarioEntryPrice" class="scenario-inp" type="number" step="0.01" placeholder="e.g. 550"/>
+        </div>
+        <div>
+          <div class="scenario-label">預計股數</div>
+          <input id="scenarioShares" class="scenario-inp" type="number" min="1" placeholder="e.g. 1000"/>
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <div class="scenario-label">目標賣出價</div>
+        <input id="scenarioExitPrice" class="scenario-inp" type="number" step="0.01" placeholder="e.g. 600"/>
+      </div>
+      <div class="scenario-result-grid">
+        <div><div class="s-stat-label">預計投入成本</div><div id="scenarioBuyCost" class="s-stat-val">—</div></div>
+        <div><div class="s-stat-label">預計獲利金額</div><div id="scenarioSellNet" class="s-stat-val">—</div></div>
+        <div class="s-profit-block">
+          <div class="s-stat-label" style="margin-bottom:4px;">預計淨獲利 <span style="font-size:.62rem;color:#6b7280;">① 已扣除所有稅費</span></div>
+          <div id="scenarioProfit" class="s-profit-big">—</div>
+          <div id="scenarioRoi" class="s-roi">—</div>
+        </div>
+      </div>
+      <div class="scenario-bar-wrap"><div id="scenarioBar" class="scenario-bar" style="--bar-pct:0%;"></div></div>
+      <p id="scenarioFeeNote" class="scenario-fee-note">—</p>
+      <button class="btn-scenario-apply" id="btnApplyScenario" disabled>以此條件下單</button>
+    </div>
+  </div>
 </body>
 </html>
