@@ -169,10 +169,16 @@
     .btn-open-scenario:hover{background:linear-gradient(135deg,#2d7ef8,#1a5ed4);}
 
     /* ── AI 診斷報告 (v3.3) ── */
-    .ai-rec-card{border-left:3px solid #388bfd;padding:12px 14px;}
-    .ai-rec-title{font-size:.75rem;color:#8b949e;margin-bottom:4px;font-weight:600;}
-    .ai-rec-tag{display:inline-block;font-size:.78rem;font-weight:700;border-radius:4px;padding:2px 8px;margin-bottom:6px;background:#21262d;}
-    .ai-rec-body{font-size:.82rem;line-height:1.55;color:#c9d1d9;}
+    .ai-rec-card{padding:12px 14px;border-radius:12px;}
+    .ai-rec-title{font-size:.82rem;margin-bottom:6px;font-weight:800;letter-spacing:.2px;}
+    .ai-rec-tag{display:inline-block;font-size:.8rem;font-weight:800;border-radius:6px;padding:4px 10px;margin-bottom:8px;background:#21262d;}
+    .ai-rec-body{font-size:.88rem;line-height:1.7;color:#e5e7eb;}
+    #aiHolderCard{background:linear-gradient(180deg,rgba(12,74,52,.34),rgba(17,24,39,.95));border:1px solid rgba(46,204,113,.28);}
+    #aiHolderTitle{color:#2ecc71;}
+    #aiHolderTag{background:rgba(46,204,113,.12);color:#43d17e!important;}
+    #aiEntryCard{background:linear-gradient(180deg,rgba(127,29,29,.28),rgba(17,24,39,.95));border:1px solid rgba(248,113,113,.25);}
+    #aiEntryTitle{color:#ff6b6b;}
+    #aiEntryTag{background:rgba(248,113,113,.12);color:#ff7b7b!important;}
     .ai-section-body{font-size:.84rem;color:#c9d1d9;line-height:1.6;padding:8px 0 2px;border-radius:6px;}
     .ai-indicator-row{font-size:.78rem;color:#8b949e;display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
     .ai-indi-chip{display:inline-flex;align-items:center;gap:4px;background:#0d1117;border:1px solid #21262d;border-radius:5px;padding:3px 8px;}
@@ -194,7 +200,11 @@
     .ai-query-main{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
     .ai-query-badge{font-size:1.25rem;font-weight:900;color:#fff;background:rgba(0,0,0,.18);padding:6px 12px;border-radius:10px;letter-spacing:.5px;}
     .ai-query-name{font-size:1.18rem;font-weight:800;color:#fff;}
-    .ai-query-sub{font-size:.75rem;color:#dbeafe;margin-top:2px;}
+    
+    .ai-score-pill{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;font-size:1.02rem;font-weight:900;white-space:nowrap;color:#fff;box-shadow:0 8px 18px rgba(0,0,0,.18);}
+    .ai-score-pill.good{background:linear-gradient(135deg,#16a34a,#22c55e);}
+    .ai-score-pill.mid{background:linear-gradient(135deg,#d97706,#f59e0b);}
+    .ai-score-pill.risk{background:linear-gradient(135deg,#dc2626,#ef4444);}
 
   </style>
 </head>
@@ -206,7 +216,7 @@
     <span style="font-size:1.2rem;">📈</span>
     <div>
       <div style="font-weight:800;color:var(--text);font-size:.92rem;line-height:1.2;">
-        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.4</span>
+        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.5</span>
       </div>
       <div id="lastSaved" style="font-size:.65rem;color:#555;line-height:1.2;">最後儲存：—</div>
     </div>
@@ -582,12 +592,12 @@
       <!-- 建議卡片 -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
         <div class="card ai-rec-card" id="aiHolderCard">
-          <div class="ai-rec-title" id="aiHolderTitle">🏦 持有者建議</div>
+          <div class="ai-rec-title" id="aiHolderTitle">💼 賣出建議</div>
           <div class="ai-rec-tag" id="aiHolderTag">—</div>
           <div class="ai-rec-body" id="aiHolderAdvice">—</div>
         </div>
         <div class="card ai-rec-card" id="aiEntryCard">
-          <div class="ai-rec-title" id="aiEntryTitle">🚀 進場者建議</div>
+          <div class="ai-rec-title" id="aiEntryTitle">🛒 買入建議</div>
           <div class="ai-rec-tag" id="aiEntryTag">—</div>
           <div class="ai-rec-body" id="aiEntryAdvice">—</div>
         </div>
@@ -634,7 +644,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
 <!-- App -->
-<script src="app.js?v=3.4"></script>
+<script src="app.js?v=3.5"></script>
 
 <!-- SPA 導覽 -->
 <script>
