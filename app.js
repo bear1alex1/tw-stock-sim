@@ -1,7 +1,7 @@
-const APP_VERSION = '3.2';   // ← 只改這裡就能更版
+const APP_VERSION = '3.3';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v3.2  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.3  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -2061,12 +2061,271 @@ window.__onPageEnter=function(page){
   if(page==='portfolio'){renderHoldingsImmediate();renderRealized();renderHistory();}
   if(page==='trade'){renderSourceSelector();updateFeeLabel();}
   if(page==='cloud'){initFirebase();refreshCloudUI();}
+  if(page==='aiReport'){initAIReportPage();}
 };
 
 // ═══════════════════════════════════════════════════════
 //  Init
 // ═══════════════════════════════════════════════════════
 
+
+
+// ═══════════════════════════════════════════════════════
+//  AI 診斷報告 (v3.3) - 規則引擎版
+// ═══════════════════════════════════════════════════════
+const aiReportCache = {};
+
+function calcMA(values, period){
+  const out=new Array(values.length).fill(null);
+  let sum=0;
+  for(let i=0;i<values.length;i++){
+    sum+=num(values[i])||0;
+    if(i>=period)sum-=num(values[i-period])||0;
+    if(i>=period-1)out[i]=parseFloat((sum/period).toFixed(2));
+  }
+  return out;
+}
+
+function renderAISymbolOptions(){
+  const dl=document.getElementById('aiSymbols');
+  if(!dl)return;
+  const syms=[...new Set([...(state.watchlist||[]),...Object.keys(state.holdings||{})])].sort();
+  dl.innerHTML=syms.map(function(s){
+    const n=getStockName(s)||'';
+    return '<option value="'+s+'">'+s+(n?' '+n:'')+'</option>';
+  }).join('');
+}
+
+async function fetchAIReportData(symbol){
+  symbol=normalizeSymbol(symbol);
+  if(!symbol)return null;
+  const cached=aiReportCache[symbol];
+  if(cached&&Date.now()-cached.ts<15*60*1000)return cached.data;
+  const start=daysAgo(150);
+  const url='https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id='+encodeURIComponent(symbol)+'&start_date='+start+'&token='+encodeURIComponent(_r());
+  const r=await timedFetch(url,12000);
+  if(!r.ok)throw new Error('AI 資料讀取失敗');
+  const j=await r.json();
+  let arr=(j&&j.data)||[];
+  arr=arr.map(function(it){
+    return {
+      date:String(it.date||''),
+      open:num(it.open||it.Open||it.start_price),
+      high:num(it.max||it.high||it.High||it.max_price),
+      low:num(it.min||it.low||it.Low||it.min_price),
+      close:num(it.close||it.Close||it.end_price),
+      volume:num(it.Trading_Volume||it.trading_volume||it.volume||it.TradingShares||0)
+    };
+  }).filter(function(it){return it.date&&it.close>0;}).sort(function(a,b){return a.date.localeCompare(b.date);});
+  aiReportCache[symbol]={ts:Date.now(),data:arr};
+  return arr;
+}
+
+function _aiColor(isUp){return isUp?'#ff4d4d':'#2ecc71';}
+
+function analyzeAICandlePattern(rows){
+  const last=rows[rows.length-1], prev=rows[rows.length-2]||last;
+  const body=Math.abs(last.close-last.open);
+  const range=Math.max(0.01,last.high-last.low);
+  const upper=last.high-Math.max(last.open,last.close);
+  const lower=Math.min(last.open,last.close)-last.low;
+  const isBull=last.close>=last.open;
+  if(body/range<0.18)return '近一日 K 線接近十字，代表多空拉鋸，短線方向尚未明朗，建議搭配後續量能與均線位置確認。';
+  if(isBull&&body/range>0.62&&last.close>prev.close)return '近一日 K 線偏強，實體明顯且收在相對高位，代表短線買盤仍有延續性，可留意是否形成續攻。';
+  if(!isBull&&body/range>0.62&&last.close<prev.close)return '近一日 K 線偏弱，實體黑K明顯，賣壓主導盤勢，若後續量能放大，短線仍需保守應對。';
+  if(lower/range>0.35&&isBull)return '近一日出現下影線，低檔有承接，但尚未形成明確反轉，建議觀察是否站回短均線。';
+  if(upper/range>0.35&&!isBull)return '近一日上影線較長，顯示上檔壓力仍在，若無法帶量突破，容易持續震盪整理。';
+  return '近期 K 線呈現一般震盪結構，暫未出現極端轉折訊號，可配合均線與量價關係綜合判讀。';
+}
+
+function analyzeAIVolumePrice(rows){
+  const last=rows[rows.length-1], prev=rows[rows.length-2]||last;
+  const vols=rows.map(r=>r.volume||0);
+  const avg5=(vols.slice(-6,-1).reduce((a,b)=>a+b,0)/Math.max(1,Math.min(5,vols.length-1)))||0;
+  const volRatio=avg5>0?(last.volume/avg5):1;
+  const up=last.close>=prev.close;
+  if(volRatio>=1.6&&up)return '今日屬於量增上漲，表示市場追價意願轉強，若股價同步站穩 MA20，通常有利延續波段攻勢。';
+  if(volRatio>=1.6&&!up)return '今日出現放量下跌，代表賣壓明顯宣洩，短線風險升高，建議先觀察是否止跌再考慮布局。';
+  if(volRatio<=0.75&&up)return '今日量縮上漲，屬於溫和墊高，代表籌碼相對穩定，但若後續無法補量，突破力道可能有限。';
+  if(volRatio<=0.75&&!up)return '今日量縮下跌，代表市場追殺意願有限，但底部訊號仍未成形，較適合等待整理完成。';
+  return '近期量價變化偏中性，尚未出現明顯爆量攻擊或恐慌性出貨，建議與均線方向一起觀察。';
+}
+
+function analyzeAIData(symbol, rows){
+  const name=getStockName(symbol)||'';
+  const sample=rows.slice(-60);
+  const closes=sample.map(r=>r.close);
+  const vols=sample.map(r=>r.volume||0);
+  const ma5=calcMA(closes,5);
+  const ma20=calcMA(closes,20);
+  const ma60=calcMA(closes,60);
+  const last=sample[sample.length-1];
+  const prev=sample[sample.length-2]||last;
+  const lastClose=last.close;
+  const m5=ma5[ma5.length-1]||lastClose;
+  const m20=ma20[ma20.length-1]||lastClose;
+  const m60=ma60[ma60.length-1]||lastClose;
+  const prevM5=ma5[ma5.length-2]||m5;
+  const prevM20=ma20[ma20.length-2]||m20;
+  const recent20=sample.slice(-20);
+  const high20=Math.max.apply(null,recent20.map(r=>r.high||r.close));
+  const low20=Math.min.apply(null,recent20.map(r=>r.low||r.close));
+  let score=0;
+  if(lastClose>m20)score+=2; else score-=2;
+  if(m5>m20)score+=2; else score-=2;
+  if(m20>m60)score+=2; else score-=1;
+  if(m20>(ma20[ma20.length-6]||m20))score+=1; else score-=1;
+  if(lastClose>=high20*0.985)score+=1;
+  if(lastClose<=low20*1.015)score-=1;
+  if(lastClose>prev.close)score+=1; else score-=1;
+  const avg5v=(vols.slice(-6,-1).reduce((a,b)=>a+b,0)/Math.max(1,Math.min(5,vols.length-1)))||0;
+  const volRatio=avg5v>0?(last.volume/avg5v):1;
+  if(volRatio>1.4&&lastClose>prev.close)score+=1;
+  if(volRatio>1.4&&lastClose<prev.close)score-=1;
+
+  let regime='震盪';
+  if(score>=5)regime='多方偏強';
+  else if(score>=2)regime='多方整理';
+  else if(score<=-5)regime='空方偏弱';
+  else if(score<=-2)regime='空方整理';
+
+  const cross = (prevM5<=prevM20&&m5>m20)?'黃金交叉':(prevM5>=prevM20&&m5<m20)?'死亡交叉':'無明確交叉';
+  const holderTag = score>=5?'續抱偏多':score>=2?'續抱觀察':score<=-5?'減碼防守':'保守續抱';
+  const entryTag  = score>=5?'拉回找買點':score>=2?'等待突破':score<=-5?'暫不進場':'觀望為主';
+  const holderAdvice = score>=5
+    ? '趨勢維持多方結構，股價站穩月線且短均線仍向上，若你已持有，可續抱並以 MA20 作為波段防守。'
+    : score>=2
+    ? '目前仍偏多方整理，但上攻力道尚未完全放大，持有者可續抱觀察，留意是否跌破 MA20。'
+    : score<=-5
+    ? '走勢轉弱且短中期均線下彎，若已持有，宜優先控管風險，跌破前低時建議嚴格執行減碼。'
+    : '目前偏弱勢震盪，若已持有，不宜過度攤平，較適合等待型態重新轉穩後再評估加碼。';
+  const entryAdvice = score>=5
+    ? '目前屬強勢整理或偏多推升，可等待回測 MA5 或 MA20 不破時分批布局，避免追高一次重押。'
+    : score>=2
+    ? '目前仍有多方基礎，但短線尚未完全脫離整理，進場者可等待帶量突破近 20 日高點再跟進。'
+    : score<=-5
+    ? '目前空方較強，不建議急著接刀，較適合先觀望，等待止跌、量縮或重新站回月線後再評估。'
+    : '目前方向不夠明確，建議暫時觀望，等趨勢與量能同步改善後再提高進場勝率。';
+
+  const techSummary = '【'+regime+'】股價'+(lastClose>m20?'站上':'跌破')+'月線，MA5 '+(m5>m20?'位於':'跌破')+' MA20，'+cross+'；近20日區間約 '+formatPrice(low20)+' ～ '+formatPrice(high20)+'，目前收盤 '+formatPrice(lastClose)+'。';
+  const candlePattern = analyzeAICandlePattern(sample);
+  const volumePrice = analyzeAIVolumePrice(sample);
+  const indicatorHtml = [
+    '<span class="ai-indi-chip">收盤 '+formatPrice(lastClose)+'</span>',
+    '<span class="ai-indi-chip">MA5 '+formatPrice(m5)+'</span>',
+    '<span class="ai-indi-chip">MA20 '+formatPrice(m20)+'</span>',
+    '<span class="ai-indi-chip">MA60 '+formatPrice(m60)+'</span>',
+    '<span class="ai-indi-chip">量比 '+(volRatio||1).toFixed(2)+'x</span>',
+    '<span class="ai-indi-chip">交叉 '+cross+'</span>'
+  ].join('');
+  return {symbol,name,rows:sample,ma5,ma20,ma60,score,regime,holderTag,entryTag,holderAdvice,entryAdvice,techSummary,candlePattern,volumePrice,indicatorHtml,lastClose,m20};
+}
+
+function renderAIChart(report){
+  const cvs=document.getElementById('aiTrendCanvas');
+  if(!cvs||!report||!report.rows||!report.rows.length)return;
+  const rect=cvs.getBoundingClientRect();
+  const dpr=window.devicePixelRatio||1;
+  const w=Math.max(320,Math.floor((rect.width||cvs.parentElement.clientWidth||640)*dpr));
+  const h=Math.max(180,Math.floor((rect.height||180)*dpr));
+  cvs.width=w;cvs.height=h;
+  const ctx=cvs.getContext('2d');
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='#111827';ctx.fillRect(0,0,w,h);
+  const pad={l:44*dpr,r:18*dpr,t:14*dpr,b:24*dpr};
+  const plotW=w-pad.l-pad.r, plotH=h-pad.t-pad.b;
+  const vals=[];
+  report.rows.forEach((r,i)=>{vals.push(r.close); if(report.ma5[i]!=null)vals.push(report.ma5[i]); if(report.ma20[i]!=null)vals.push(report.ma20[i]);});
+  const minV=Math.min.apply(null,vals)*0.98;
+  const maxV=Math.max.apply(null,vals)*1.02;
+  const yOf=v=>pad.t + (maxV-v)/(maxV-minV||1)*plotH;
+  const xOf=i=>pad.l + (i/(report.rows.length-1||1))*plotW;
+  ctx.strokeStyle='rgba(255,255,255,.08)'; ctx.lineWidth=1*dpr;
+  for(let g=0;g<4;g++){
+    const y=pad.t + g*(plotH/3);
+    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(w-pad.r,y); ctx.stroke();
+  }
+  ctx.fillStyle='rgba(255,255,255,.55)'; ctx.font=(11*dpr)+'px sans-serif';
+  [maxV,(maxV+minV)/2,minV].forEach(function(v,idx){
+    const y=pad.t + idx*(plotH/2);
+    ctx.fillText(formatPrice(v),4*dpr,y+4*dpr);
+  });
+  function drawSeries(arr,color,dashed){
+    ctx.save();
+    ctx.strokeStyle=color; ctx.lineWidth=2*dpr;
+    if(dashed)ctx.setLineDash([5*dpr,4*dpr]);
+    ctx.beginPath();
+    let started=false;
+    for(let i=0;i<arr.length;i++){
+      const v=arr[i]; if(v==null)continue;
+      const x=xOf(i), y=yOf(v);
+      if(!started){ctx.moveTo(x,y); started=true;} else ctx.lineTo(x,y);
+    }
+    ctx.stroke(); ctx.restore();
+  }
+  drawSeries(report.rows.map(r=>r.close),'#60a5fa',false);
+  drawSeries(report.ma5,'#fbbf24',true);
+  drawSeries(report.ma20,'#34d399',false);
+  ctx.fillStyle='rgba(255,255,255,.45)';
+  const labels=[report.rows[0].date, report.rows[Math.floor(report.rows.length/2)].date, report.rows[report.rows.length-1].date];
+  [0,0.5,1].forEach(function(p,idx){
+    const x=pad.l + plotW*p;
+    ctx.fillText(labels[idx].replace(/\d{4}-/,'').replace('-','/'),x-18*dpr,h-6*dpr);
+  });
+}
+
+function renderAIReport(report){
+  const title='🤖 AI 診斷報告：'+report.symbol+(report.name?' '+report.name:'');
+  const chartTitle='📈 近期走勢圖（近60日）';
+  const holderUp=report.score>=2;
+  const entryUp=report.score>=2;
+  document.getElementById('aiReportTitle').textContent=title;
+  document.getElementById('aiChartTitle').textContent=chartTitle;
+  document.getElementById('aiHolderTag').textContent=report.holderTag;
+  document.getElementById('aiHolderTag').style.color=_aiColor(holderUp);
+  document.getElementById('aiEntryTag').textContent=report.entryTag;
+  document.getElementById('aiEntryTag').style.color=_aiColor(entryUp);
+  document.getElementById('aiHolderAdvice').textContent=report.holderAdvice;
+  document.getElementById('aiEntryAdvice').textContent=report.entryAdvice;
+  document.getElementById('aiTechSummary').textContent=report.techSummary;
+  document.getElementById('aiCandlePattern').textContent=report.candlePattern;
+  document.getElementById('aiVolumePrice').textContent=report.volumePrice;
+  document.getElementById('aiIndicatorBar').innerHTML=report.indicatorHtml;
+  document.getElementById('aiReportOutput').style.display='block';
+  renderAIChart(report);
+}
+
+async function generateAIReport(symbolArg){
+  const input=document.getElementById('aiSymbol');
+  const loading=document.getElementById('aiReportLoading');
+  const out=document.getElementById('aiReportOutput');
+  if(!input||!loading||!out)return;
+  const symbol=normalizeSymbol(symbolArg||input.value||'');
+  if(!symbol){showToast('❌ 請先輸入股票代號');return;}
+  input.value=symbol;
+  loading.style.display='block';
+  out.style.display='none';
+  try{
+    await fetchChineseName(symbol);
+    const rows=await fetchAIReportData(symbol);
+    if(!rows||rows.length<30)throw new Error('歷史資料不足');
+    const report=analyzeAIData(symbol,rows);
+    renderAIReport(report);
+  }catch(e){
+    showToast('❌ AI 診斷失敗：'+(e.message||'請稍後再試'));
+  }finally{
+    loading.style.display='none';
+  }
+}
+
+function initAIReportPage(){
+  renderAISymbolOptions();
+  const input=document.getElementById('aiSymbol');
+  if(!input)return;
+  if(!input.value){
+    input.value=normalizeSymbol(document.getElementById('tradeSymbol')?.value||state.watchlist?.[0]||Object.keys(state.holdings||{})[0]||'');
+  }
+}
 
 // ═══════════════════════════════════════════════════════
 //  投資模擬試算 (v3.2)
@@ -2219,6 +2478,8 @@ document.addEventListener('DOMContentLoaded',()=>{
     document.getElementById('tradeSymbol').value=normalizeSymbol(document.getElementById('tradeSymbol').value);
   });
   document.getElementById('tradeQty').addEventListener('keydown',e=>{if(e.key==='Enter')executeTrade('buy');});
+  document.getElementById('btnGenAIReport')?.addEventListener('click',function(){generateAIReport();});
+  document.getElementById('aiSymbol')?.addEventListener('keydown',function(e){if(e.key==='Enter')generateAIReport();});
   document.getElementById('btnOpenScenario')?.addEventListener('click',openScenarioModal);
   document.getElementById('btnCloseScenario')?.addEventListener('click',closeScenarioModal);
   document.getElementById('btnApplyScenario')?.addEventListener('click',applyScenarioToTrade);
