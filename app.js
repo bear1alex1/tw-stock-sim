@@ -1,7 +1,7 @@
-const APP_VERSION = '2.9';   // ← 只改這裡就能更版
+const APP_VERSION = '3.0';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v2.9  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.0  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -175,17 +175,18 @@ async function fetchMIS(symbol){
         const json=JSON.parse(text);
         const item=json?.msgArray?.[0];
         if(!item?.c)continue;
-        // ▼ 擷取名稱
         const stockN=item.n||item.nf||'';
         if(stockN) setStockName(symbol,stockN);
+        const ms=getMarketState();
         const z=(item.z&&item.z!=='-'&&item.z!=='0'&&item.z!=='--')?num(item.z):null;
         const y=num(item.y);
-        const ms=getMarketState();
-        const price=(ms==='REGULAR'&&z)?z:(z??y);
+        // 盤中若沒有成交價 z，代表 MIS 只回參考價，不能拿來覆蓋既有漲跌
+        if(ms==='REGULAR'&&!z)continue;
+        const price=z??y;
         if(!price||price<=0)continue;
-        const base=ms==='REGULAR'?y:(y??null);
-        const change=base?parseFloat((price-base).toFixed(2)):null;
-        const changePct=base?parseFloat((change/base*100).toFixed(2)):null;
+        const base=y??null;
+        const change=base!==null?parseFloat((price-base).toFixed(2)):null;
+        const changePct=(base!==null&&base!==0)?parseFloat((change/base*100).toFixed(2)):null;
         console.log(`[MIS] ✅ ${symbol}(${ex}) ${price}`);
         return{price,previousClose:base,change,changePct,marketState:ms,source:'MIS'};
       }catch(e){console.warn(`[MIS] ${e.message}`);}
@@ -1068,28 +1069,30 @@ async function fetchPriceBatch(){
     }
   }
 
-  // ── B. 補 TWSE/TPEx（日資料，僅當 Yahoo 缺值或非盤中）──
-  const [twMap,tpMap]=await Promise.allSettled([loadTwse(),loadTpex()])
-    .then(r=>[(r[0].status==='fulfilled'?r[0].value:null),(r[1].status==='fulfilled'?r[1].value:null)]);
+  // ── B. 非盤中才補 TWSE/TPEx 日資料；盤中避免用日資料覆蓋即時漲跌 ──
+  if(!preferLive){
+    const [twMap,tpMap]=await Promise.allSettled([loadTwse(),loadTpex()])
+      .then(r=>[(r[0].status==='fulfilled'?r[0].value:null),(r[1].status==='fulfilled'?r[1].value:null)]);
 
-  for(const s of syms){
-    if(resolved[s])continue;
-    if(twMap&&twMap[s]&&twMap[s].close>0){
-      const d=twMap[s];
-      resolved[s]={price:d.close,previousClose:d.prevClose,change:d.change,changePct:d.changePct,marketState:ms,source:'TWSE'};
-    }else if(tpMap&&tpMap[s]&&tpMap[s].close>0){
-      const d=tpMap[s];
-      resolved[s]={price:d.close,previousClose:d.prevClose,change:d.change,changePct:d.changePct,marketState:ms,source:'TPEx'};
+    for(const s of syms){
+      if(resolved[s])continue;
+      if(twMap&&twMap[s]&&twMap[s].close>0){
+        const d=twMap[s];
+        resolved[s]={price:d.close,previousClose:d.prevClose,change:d.change,changePct:d.changePct,marketState:ms,source:'TWSE'};
+      }else if(tpMap&&tpMap[s]&&tpMap[s].close>0){
+        const d=tpMap[s];
+        resolved[s]={price:d.close,previousClose:d.prevClose,change:d.change,changePct:d.changePct,marketState:ms,source:'TPEx'};
+      }
     }
   }
 
-  // ── C. 逐股即時補洞，確保每檔盡量拿到更新值 ──
+  // ── C. 逐股即時補洞，優先 Yahoo，其次 MIS；失敗時保留舊值 ──
   const missing=syms.filter(s=>!resolved[s]);
   if(missing.length){
     const jobs=missing.map(async function(symbol){
       try{
         const q=preferLive
-          ? (await fetchMIS(symbol)) || (await fetchYahooBackup(symbol)) || (await fetchStooq(symbol)) || (await fetchFinMind(symbol))
+          ? (await fetchYahooBackup(symbol)) || (await fetchMIS(symbol)) || (await fetchStooq(symbol)) || (await fetchFinMind(symbol))
           : (await fetchYahooBackup(symbol)) || (await fetchMIS(symbol)) || (await fetchStooq(symbol)) || (await fetchFinMind(symbol));
         if(q&&q.price>0) resolved[symbol]=q;
       }catch(e){console.warn('[Batch-fill]',symbol,e.message);}
