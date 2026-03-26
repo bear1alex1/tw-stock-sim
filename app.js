@@ -1,7 +1,7 @@
-const APP_VERSION = '3.4';   // ← 只改這裡就能更版
+const APP_VERSION = '3.5';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v3.4  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.5  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -2293,23 +2293,26 @@ function analyzeAIData(symbol, rows){
   else if(score<=-5)regime='空方偏弱';
   else if(score<=-2)regime='空方整理';
 
+  const comprehensiveScore=Math.max(0,Math.min(100,Math.round(((score+9)/19)*100)));
+  const scoreLabel = comprehensiveScore>=80?'強勢偏多':comprehensiveScore>=65?'偏多觀察':comprehensiveScore>=45?'中性整理':comprehensiveScore>=30?'弱勢危險':'高風險';
+  const scoreClass = comprehensiveScore>=65?'good':comprehensiveScore>=45?'mid':'risk';
   const cross = (prevM5<=prevM20&&m5>m20)?'黃金交叉':(prevM5>=prevM20&&m5<m20)?'死亡交叉':'無明確交叉';
-  const holderTag = score>=5?'續抱偏多':score>=2?'續抱觀察':score<=-5?'減碼防守':'保守續抱';
-  const entryTag  = score>=5?'拉回找買點':score>=2?'等待突破':score<=-5?'暫不進場':'觀望為主';
+  const holderTag = comprehensiveScore>=80?'續抱為主':comprehensiveScore>=65?'保守續抱':comprehensiveScore>=45?'逢高調節':comprehensiveScore>=30?'減碼觀察':'建議賣出';
+  const entryTag  = comprehensiveScore>=80?'分批買入':comprehensiveScore>=65?'拉回布局':comprehensiveScore>=45?'等待突破':comprehensiveScore>=30?'觀望為主':'暫不買入';
   const holderAdvice = score>=5
-    ? '趨勢維持多方結構，股價站穩月線且短均線仍向上，若你已持有，可續抱並以 MA20 作為波段防守。'
+    ? '趨勢維持多方結構，若已持有可先續抱，並以 MA20 作為波段防守；若跌破月線再考慮調節。'
     : score>=2
-    ? '目前仍偏多方整理，但上攻力道尚未完全放大，持有者可續抱觀察，留意是否跌破 MA20。'
+    ? '目前屬整理偏多，賣出上不必過度急躁，但若短線跌破 MA20，建議先小幅調節部位。'
     : score<=-5
-    ? '走勢轉弱且短中期均線下彎，若已持有，宜優先控管風險，跌破前低時建議嚴格執行減碼。'
-    : '目前偏弱勢震盪，若已持有，不宜過度攤平，較適合等待型態重新轉穩後再評估加碼。';
+    ? '走勢明顯轉弱，建議優先執行減碼或停損，避免在空方結構中持續承受回檔風險。'
+    : '目前仍偏弱勢震盪，賣出建議以風險控管為主，逢反彈調節會比急著攤平更合適。';
   const entryAdvice = score>=5
-    ? '目前屬強勢整理或偏多推升，可等待回測 MA5 或 MA20 不破時分批布局，避免追高一次重押。'
+    ? '目前結構偏強，買入可採分批布局，較適合等回測 MA5 或 MA20 不破時再切入。'
     : score>=2
-    ? '目前仍有多方基礎，但短線尚未完全脫離整理，進場者可等待帶量突破近 20 日高點再跟進。'
+    ? '目前仍有多方基礎，但買入時不宜躁進，較適合等待帶量突破近 20 日高點後再跟進。'
     : score<=-5
-    ? '目前空方較強，不建議急著接刀，較適合先觀望，等待止跌、量縮或重新站回月線後再評估。'
-    : '目前方向不夠明確，建議暫時觀望，等趨勢與量能同步改善後再提高進場勝率。';
+    ? '目前空方較強，買入勝率偏低，不建議急著接刀，宜先觀望等待止跌訊號。'
+    : '目前方向仍不明確，買入建議以觀望為主，待趨勢與量能同步改善後再提高勝率。';
 
   const techSummary = '【'+regime+'】股價'+(lastClose>m20?'站上':'跌破')+'月線，MA5 '+(m5>m20?'位於':'跌破')+' MA20，'+cross+'；近20日區間約 '+formatPrice(low20)+' ～ '+formatPrice(high20)+'，目前收盤 '+formatPrice(lastClose)+'。';
   const candlePattern = analyzeAICandlePattern(sample);
@@ -2322,7 +2325,7 @@ function analyzeAIData(symbol, rows){
     '<span class="ai-indi-chip">量比 '+(volRatio||1).toFixed(2)+'x</span>',
     '<span class="ai-indi-chip">交叉 '+cross+'</span>'
   ].join('');
-  return {symbol,name,rows:sample,ma5,ma20,ma60,score,regime,holderTag,entryTag,holderAdvice,entryAdvice,techSummary,candlePattern,volumePrice,indicatorHtml,lastClose,m20};
+  return {symbol,name,rows:sample,ma5,ma20,ma60,score,comprehensiveScore,scoreLabel,scoreClass,regime,holderTag,entryTag,holderAdvice,entryAdvice,techSummary,candlePattern,volumePrice,indicatorHtml,lastClose,m20};
 }
 
 function renderAIChart(report){
@@ -2381,22 +2384,21 @@ function renderAIChart(report){
 function renderAIReport(report){
   const title='🤖 AI 診斷報告';
   const chartTitle='📈 近期走勢圖（近60日）';
-  const holderUp=report.score>=2;
-  const entryUp=report.score>=2;
   document.getElementById('aiReportTitle').textContent=title;
   const focus=document.getElementById('aiQueryFocus');
   if(focus){
     focus.innerHTML='<div class="ai-query-main">'
       +'<span class="ai-query-badge">'+report.symbol+'</span>'
-      +'<div><div class="ai-query-name">'+(report.name||'未命名股票')+'</div><div class="ai-query-sub">AI 診斷對象｜'+report.regime+'｜分數 '+report.score+'</div></div>'
-      +'</div>';
+      +'<div><div class="ai-query-name">'+(report.name||'未命名股票')+'</div><div class="ai-query-sub">AI 診斷對象｜'+report.regime+'｜原始分數 '+report.score+'</div></div>'
+      +'</div>'
+      +'<div class="ai-score-pill '+report.scoreClass+'">綜合評分：'+report.comprehensiveScore+'分（'+report.scoreLabel+'）</div>';
     focus.classList.add('show');
   }
   document.getElementById('aiChartTitle').textContent=chartTitle;
+  document.getElementById('aiHolderTitle').textContent='💼 賣出建議';
+  document.getElementById('aiEntryTitle').textContent='🛒 買入建議';
   document.getElementById('aiHolderTag').textContent=report.holderTag;
-  document.getElementById('aiHolderTag').style.color=_aiColor(holderUp);
   document.getElementById('aiEntryTag').textContent=report.entryTag;
-  document.getElementById('aiEntryTag').style.color=_aiColor(entryUp);
   document.getElementById('aiHolderAdvice').textContent=report.holderAdvice;
   document.getElementById('aiEntryAdvice').textContent=report.entryAdvice;
   document.getElementById('aiTechSummary').textContent=report.techSummary;
