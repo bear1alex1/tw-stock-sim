@@ -1,7 +1,7 @@
-const APP_VERSION = '3.0';   // ← 只改這裡就能更版
+const APP_VERSION = '3.1';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v3.0  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.1  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -638,7 +638,6 @@ function _mergeQuote(oldQ,newQ){
 }
 
 function _watchPriceCellHTML(q,opt={}){
-  const loading=!!opt.loading;
   const price=q&&q.price?q.price:null;
   const src=q&&q.source?'<span style="font-size:.58rem;color:#444;margin-left:3px;">['+q.source+']</span>':'';
   const chg=q&&q.change!=null?q.change:null;
@@ -648,8 +647,7 @@ function _watchPriceCellHTML(q,opt={}){
   const isLimitUp=pct!==null&&pct>=9.5;
   const isLimitDown=pct!==null&&pct<=-9.5;
   const limitCls=isLimitUp?' price-limit-up':(isLimitDown?' price-limit-down':'');
-  const loadingTag=loading?'<span style="font-size:.58rem;color:#6b7280;margin-left:4px;">…</span>':'';
-  return '<span class="price-cell'+limitCls+'" style="font-weight:600;'+(color?('color:'+color+';'):'')+'">'+formatPrice(price)+'</span>'+src+loadingTag;
+  return '<span class="price-cell'+limitCls+'" style="font-weight:600;'+(color?('color:'+color+';'):'')+'">'+formatPrice(price)+'</span>'+src;
 }
 function _watchChangeCellHTML(q,opt={}){
   const loading=!!opt.loading;
@@ -667,8 +665,8 @@ function _watchChangeCellHTML(q,opt={}){
   }else{
     html+='<div style="color:#444;">—</div>';
   }
-  html+='<div style="display:flex;gap:4px;margin-top:4px;">';
-  html+='<span class="badge '+(loading?'badge-wait':badgeCls)+'">'+(loading?'讀取中':(q?arrow:'—'))+'</span>';
+  html+='<div style="display:flex;gap:4px;margin-top:4px;align-items:center;">';
+  html+='<span class="badge '+(loading?'badge-wait':badgeCls)+'">'+(loading?'<span class="mini-loader" aria-label="loading"></span>':(q?arrow:'—'))+'</span>';
   html+='<span class="badge '+getMarketBadgeClass(ms)+'">'+getMarketLabel(ms)+'</span>';
   html+='</div>';
   return html;
