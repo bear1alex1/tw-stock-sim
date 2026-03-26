@@ -1,7 +1,7 @@
-const APP_VERSION = '3.3';   // ← 只改這裡就能更版
+const APP_VERSION = '3.4';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v3.3  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.4  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -23,6 +23,107 @@ function setStockName(code, name){
   const existing=stockNameCache[code]||'';
   if(existing&&/[\u4e00-\u9fff]/.test(existing)) return;
   stockNameCache[code]=n;
+}
+
+function getStockMeta(symbol){ return stockMetaCache[normalizeSymbol(symbol)]||{}; }
+function getSymbolMatches(keyword, limit=8){
+  const q=normalizeSymbol(keyword||'');
+  if(!q)return [];
+  const items=Object.keys(stockNameCache).filter(function(code){
+    const name=getStockName(code)||'';
+    return code.startsWith(q)||name.indexOf(q)>=0;
+  }).sort(function(a,b){
+    const ae=a===q?0:a.startsWith(q)?1:2;
+    const be=b===q?0:b.startsWith(q)?1:2;
+    return ae-be || a.localeCompare(b);
+  }).slice(0,limit);
+  return items.map(function(code){
+    const meta=getStockMeta(code);
+    return {code:code,name:getStockName(code)||'',industry:meta.industry_category||meta.type||''};
+  });
+}
+function renderSymbolHint(inputId, hintId){
+  const input=document.getElementById(inputId);
+  const hint=document.getElementById(hintId);
+  if(!input||!hint)return;
+  const symbol=normalizeSymbol(input.value||'');
+  if(!symbol){
+    hint.textContent='請輸入股票代號';
+    hint.classList.remove('strong');
+    return;
+  }
+  const name=getStockName(symbol)||'';
+  if(name){
+    hint.textContent=symbol+' '+name;
+    hint.classList.add('strong');
+    return;
+  }
+  hint.textContent=symbol+' 載入名稱中…';
+  hint.classList.add('strong');
+  fetchChineseName(symbol).then(function(){
+    const h=document.getElementById(hintId), i=document.getElementById(inputId);
+    if(!h||!i)return;
+    const s=normalizeSymbol(i.value||'');
+    if(!s)return;
+    const n=getStockName(s)||'';
+    h.textContent=n?(s+' '+n):(s+' 查無名稱');
+  });
+}
+function hideSymbolSuggest(suggestId){
+  const box=document.getElementById(suggestId);
+  if(box){box.innerHTML='';box.classList.remove('show');}
+}
+function showSymbolSuggest(inputId, suggestId, hintId){
+  const input=document.getElementById(inputId);
+  const box=document.getElementById(suggestId);
+  if(!input||!box)return;
+  const q=normalizeSymbol(input.value||'');
+  renderSymbolHint(inputId,hintId);
+  if(!q){hideSymbolSuggest(suggestId);return;}
+  if(!_stockInfoLoaded)preloadStockNames();
+  const matches=getSymbolMatches(q,6);
+  if(!matches.length){
+    box.innerHTML='';
+    box.classList.remove('show');
+    return;
+  }
+  box.innerHTML=matches.map(function(it){
+    return '<div class="symbol-suggest-item" data-fill-for="'+inputId+'" data-code="'+it.code+'">'
+      +'<span class="symbol-suggest-code">'+it.code+'</span>'
+      +'<span class="symbol-suggest-name">'+(it.name||'—')+'</span>'
+      +(it.industry?'<span class="symbol-suggest-meta">'+it.industry+'</span>':'')
+      +'</div>';
+  }).join('');
+  box.classList.add('show');
+  box.querySelectorAll('[data-fill-for]').forEach(function(item){
+    item.onclick=function(){
+      input.value=item.dataset.code;
+      hideSymbolSuggest(suggestId);
+      renderSymbolHint(inputId,hintId);
+      if(inputId==='aiSymbol')generateAIReport(item.dataset.code);
+      if(inputId==='scenarioSymbol')calculateScenarioProfit();
+      if(inputId==='tradeSymbol')updateFeePreview();
+    };
+  });
+}
+function bindSymbolAutocomplete(inputId, suggestId, hintId){
+  const input=document.getElementById(inputId);
+  if(!input)return;
+  input.addEventListener('focus',function(){showSymbolSuggest(inputId,suggestId,hintId);});
+  input.addEventListener('input',function(){
+    input.value=normalizeSymbol(input.value||'');
+    showSymbolSuggest(inputId,suggestId,hintId);
+  });
+  input.addEventListener('blur',function(){
+    input.value=normalizeSymbol(input.value||'');
+    renderSymbolHint(inputId,hintId);
+    setTimeout(function(){hideSymbolSuggest(suggestId);},180);
+  });
+}
+function refreshAllSymbolHints(){
+  [['tradeSymbol','tradeSymbolHint'],['searchInput','searchInputHint'],['aiSymbol','aiSymbolHint'],['scenarioSymbol','scenarioSymbolName']].forEach(function(pair){
+    if(document.getElementById(pair[0]))renderSymbolHint(pair[0],pair[1]);
+  });
 }
 
 // ─── Token ────────────────────────────────────────────
@@ -1243,6 +1344,9 @@ async function preloadStockNames(){
         renderWatchlistImmediate();
         renderHoldingsImmediate();
         if(typeof renderHoldingsOverview==='function')renderHoldingsOverview();
+        if(typeof renderAISymbolOptions==='function')renderAISymbolOptions();
+        if(typeof renderScenarioSymbolOptions==='function')renderScenarioSymbolOptions();
+        refreshAllSymbolHints();
       }
     }catch(e){
       console.warn('[FinMind-StockInfo]',e.message);
@@ -2275,11 +2379,19 @@ function renderAIChart(report){
 }
 
 function renderAIReport(report){
-  const title='🤖 AI 診斷報告：'+report.symbol+(report.name?' '+report.name:'');
+  const title='🤖 AI 診斷報告';
   const chartTitle='📈 近期走勢圖（近60日）';
   const holderUp=report.score>=2;
   const entryUp=report.score>=2;
   document.getElementById('aiReportTitle').textContent=title;
+  const focus=document.getElementById('aiQueryFocus');
+  if(focus){
+    focus.innerHTML='<div class="ai-query-main">'
+      +'<span class="ai-query-badge">'+report.symbol+'</span>'
+      +'<div><div class="ai-query-name">'+(report.name||'未命名股票')+'</div><div class="ai-query-sub">AI 診斷對象｜'+report.regime+'｜分數 '+report.score+'</div></div>'
+      +'</div>';
+    focus.classList.add('show');
+  }
   document.getElementById('aiChartTitle').textContent=chartTitle;
   document.getElementById('aiHolderTag').textContent=report.holderTag;
   document.getElementById('aiHolderTag').style.color=_aiColor(holderUp);
@@ -2303,6 +2415,7 @@ async function generateAIReport(symbolArg){
   const symbol=normalizeSymbol(symbolArg||input.value||'');
   if(!symbol){showToast('❌ 請先輸入股票代號');return;}
   input.value=symbol;
+  renderSymbolHint('aiSymbol','aiSymbolHint');
   loading.style.display='block';
   out.style.display='none';
   try{
@@ -2325,6 +2438,7 @@ function initAIReportPage(){
   if(!input.value){
     input.value=normalizeSymbol(document.getElementById('tradeSymbol')?.value||state.watchlist?.[0]||Object.keys(state.holdings||{})[0]||'');
   }
+  renderSymbolHint('aiSymbol','aiSymbolHint');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -2474,6 +2588,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
 
   document.getElementById('searchInput').addEventListener('keydown',e=>{if(e.key==='Enter')addToWatchlist();});
+  bindSymbolAutocomplete('tradeSymbol','tradeSymbolSuggest','tradeSymbolHint');
+  bindSymbolAutocomplete('searchInput','searchInputSuggest','searchInputHint');
+  bindSymbolAutocomplete('aiSymbol','aiSymbolSuggest','aiSymbolHint');
+  bindSymbolAutocomplete('scenarioSymbol','scenarioSymbolSuggest','scenarioSymbolName');
   document.getElementById('tradeSymbol').addEventListener('blur',()=>{
     document.getElementById('tradeSymbol').value=normalizeSymbol(document.getElementById('tradeSymbol').value);
   });
@@ -2503,6 +2621,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   renderHoldingsOverview();
   renderWatchlistImmediate();
   renderSourceSelector();
+  refreshAllSymbolHints();
   setTimeout(()=>{renderCharts();recordAssetSnapshot();},800);
 
   // [v2.6] 統一智慧調度器，取代原本雙 Timer
