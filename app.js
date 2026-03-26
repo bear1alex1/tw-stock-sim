@@ -1134,13 +1134,12 @@ async function fetchPriceBatch(){
           pc.classList.add(cls);
           pc.addEventListener('animationend',function h(){pc.classList.remove(cls);pc.removeEventListener('animationend',h);},{once:true});
         }
-        const nameDiv=tr.querySelector('[data-fund]');
+        const nameDiv=tr.querySelector('[data-name]');
         if(nameDiv){
           const cached=stockNameCache[symbol];
           if(cached&&!/^—+$/.test(cached)&&nameDiv.textContent!==cached){
             nameDiv.textContent=cached;
             nameDiv.style.color='#8b949e';
-            nameDiv.style.textDecoration='underline dotted';
           }
         }
       }
@@ -2132,10 +2131,10 @@ function calculateScenarioProfit(){
   var bar=document.getElementById('scenarioBar');
   if(bEl)bEl.textContent='$'+formatMoney(buyCost);
   if(sEl)sEl.textContent='$'+formatMoney(sellNet);
-  if(pEl){pEl.textContent=(profit>=0?'+':'')+formatMoney(profit)+'元';pEl.style.color=profit>=0?'#22c55e':'#ff6b6b';}
-  if(rEl){rEl.textContent=(roi>=0?'+':'')+roi.toFixed(2)+'%';rEl.style.color=roi>=0?'#22c55e':'#ff6b6b';}
+  if(pEl){pEl.textContent=(profit>=0?'+':'')+formatMoney(profit)+'元';pEl.style.color=profit>=0?'#ff4d4d':'#2ecc71';}
+  if(rEl){rEl.textContent=(roi>=0?'+':'')+roi.toFixed(2)+'%';rEl.style.color=roi>=0?'#ff4d4d':'#2ecc71';}
   if(nEl)nEl.textContent='已扣除所有稅費 | 折數 '+discount+' | '+(isETF(sym)?'ETF稅0.1%':'股票稅0.3%');
-  if(bar)bar.style.setProperty('--bar-pct',Math.min(Math.abs(roi),30)/30*100+'%');
+  if(bar){bar.style.setProperty('--bar-pct',Math.min(Math.abs(roi),30)/30*100+'%');bar.style.background=profit>=0?'linear-gradient(90deg,#ff4d4d,#ff7676)':'linear-gradient(90deg,#2ecc71,#52d68a)';}
   var btn=document.getElementById('btnApplyScenario');
   if(btn)btn.disabled=false;
   return{sym,shares,entry,exit,buyCost,sellNet,profit,roi};
