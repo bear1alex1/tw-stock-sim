@@ -1,7 +1,7 @@
-const APP_VERSION = '3.5';   // ← 只改這裡就能更版
+const APP_VERSION = '3.5.1';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v3.5  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.5.1  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -2295,7 +2295,7 @@ function analyzeAIData(symbol, rows){
 
   const comprehensiveScore=Math.max(0,Math.min(100,Math.round(((score+9)/19)*100)));
   const scoreLabel = comprehensiveScore>=80?'強勢偏多':comprehensiveScore>=65?'偏多觀察':comprehensiveScore>=45?'中性整理':comprehensiveScore>=30?'弱勢危險':'高風險';
-  const scoreClass = comprehensiveScore>=65?'good':comprehensiveScore>=45?'mid':'risk';
+  const scoreClass = comprehensiveScore>=65?'risk':comprehensiveScore>=45?'mid':'good';
   const cross = (prevM5<=prevM20&&m5>m20)?'黃金交叉':(prevM5>=prevM20&&m5<m20)?'死亡交叉':'無明確交叉';
   const holderTag = comprehensiveScore>=80?'續抱為主':comprehensiveScore>=65?'保守續抱':comprehensiveScore>=45?'逢高調節':comprehensiveScore>=30?'減碼觀察':'建議賣出';
   const entryTag  = comprehensiveScore>=80?'分批買入':comprehensiveScore>=65?'拉回布局':comprehensiveScore>=45?'等待突破':comprehensiveScore>=30?'觀望為主':'暫不買入';
