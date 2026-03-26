@@ -168,6 +168,15 @@
     .btn-open-scenario{display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:8px;background:linear-gradient(135deg,#1d6eef,#1352c4);color:#fff;border:none;cursor:pointer;font-size:.95rem;font-weight:700;width:100%;}
     .btn-open-scenario:hover{background:linear-gradient(135deg,#2d7ef8,#1a5ed4);}
 
+    /* ── AI 診斷報告 (v3.3) ── */
+    .ai-rec-card{border-left:3px solid #388bfd;padding:12px 14px;}
+    .ai-rec-title{font-size:.75rem;color:#8b949e;margin-bottom:4px;font-weight:600;}
+    .ai-rec-tag{display:inline-block;font-size:.78rem;font-weight:700;border-radius:4px;padding:2px 8px;margin-bottom:6px;background:#21262d;}
+    .ai-rec-body{font-size:.82rem;line-height:1.55;color:#c9d1d9;}
+    .ai-section-body{font-size:.84rem;color:#c9d1d9;line-height:1.6;padding:8px 0 2px;border-radius:6px;}
+    .ai-indicator-row{font-size:.78rem;color:#8b949e;display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
+    .ai-indi-chip{display:inline-flex;align-items:center;gap:4px;background:#0d1117;border:1px solid #21262d;border-radius:5px;padding:3px 8px;}
+
   </style>
 </head>
 <body>
@@ -208,6 +217,7 @@
   <button class="side-item" data-page="market"><span class="icon">📡</span>行情追蹤</button>
   <button class="side-item" data-page="portfolio"><span class="icon">📦</span>持股帳務</button>
   <button class="side-item" data-page="trade"><span class="icon">💹</span>交易設定</button>
+  <button class="side-item" data-page="aiReport"><span class="icon">🤖</span>AI 診斷</button>
   <button class="side-item" data-page="cloud"
     style="margin-top:auto;border:1px solid #1a4a1a;color:#2ecc71;background:#0a1a0a;">
     <span class="icon">☁️</span>雲端備份
@@ -523,6 +533,67 @@
     </div>
   </div>
 
+
+  <!-- ════ PAGE 5: AI 診斷報告 (v3.3) ════ -->
+  <div id="page-aiReport" class="page">
+    <div class="card" style="margin-bottom:12px;">
+      <div class="sec-title" id="aiReportTitle">🤖 AI 診斷報告</div>
+      <div style="display:flex;gap:8px;">
+        <input list="aiSymbols" id="aiSymbol" class="inp" placeholder="輸入代號 e.g. 2330 / 0050" style="flex:1;" autocomplete="off"/>
+        <datalist id="aiSymbols"></datalist>
+        <button class="btn btn-blue" id="btnGenAIReport" style="padding:9px 18px;font-size:.9rem;">🔍 分析</button>
+      </div>
+    </div>
+    <div id="aiReportLoading" style="display:none;text-align:center;padding:40px 0;color:var(--muted);">
+      <div class="mini-loader" style="width:24px;height:24px;border-width:3px;margin:0 auto 12px;display:block;"></div>
+      <div>載入歷史資料中，請稍候…</div>
+    </div>
+    <div id="aiReportOutput" style="display:none;">
+      <!-- 走勢圖 -->
+      <div class="card" style="margin-bottom:12px;">
+        <div class="sec-title" id="aiChartTitle">📈 近期走勢圖（近60日）</div>
+        <canvas id="aiTrendCanvas" style="width:100%;height:180px;display:block;"></canvas>
+        <div style="display:flex;gap:16px;font-size:.7rem;color:var(--muted);margin-top:6px;padding:0 4px;">
+          <span style="color:#60a5fa;">─ 收盤價</span>
+          <span style="color:#fbbf24;">- - MA5（週線）</span>
+          <span style="color:#34d399;">─ MA20（月線）</span>
+        </div>
+      </div>
+      <!-- 建議卡片 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div class="card ai-rec-card" id="aiHolderCard">
+          <div class="ai-rec-title" id="aiHolderTitle">🏦 持有者建議</div>
+          <div class="ai-rec-tag" id="aiHolderTag">—</div>
+          <div class="ai-rec-body" id="aiHolderAdvice">—</div>
+        </div>
+        <div class="card ai-rec-card" id="aiEntryCard">
+          <div class="ai-rec-title" id="aiEntryTitle">🚀 進場者建議</div>
+          <div class="ai-rec-tag" id="aiEntryTag">—</div>
+          <div class="ai-rec-body" id="aiEntryAdvice">—</div>
+        </div>
+      </div>
+      <!-- 技術分析三段 -->
+      <div class="card" style="margin-bottom:10px;">
+        <div class="sec-title">📊 綜合技術判定</div>
+        <div id="aiTechSummary" class="ai-section-body">—</div>
+      </div>
+      <div class="card" style="margin-bottom:10px;">
+        <div class="sec-title">🕯 K線型態解析</div>
+        <div id="aiCandlePattern" class="ai-section-body">—</div>
+      </div>
+      <div class="card" style="margin-bottom:10px;">
+        <div class="sec-title">⚖️ 量價關係心法</div>
+        <div id="aiVolumePrice" class="ai-section-body">—</div>
+      </div>
+      <!-- 指標數值條 -->
+      <div class="card ai-indicator-row" style="margin-bottom:10px;">
+        <div id="aiIndicatorBar">—</div>
+      </div>
+      <p style="font-size:.65rem;color:#6b7280;text-align:center;padding:8px 4px;">
+        ⚠️ 以上建議僅供參考，基於技術分析計算，不構成投資建議。投資有風險，請自行評估。
+      </p>
+    </div>
+  </div>
 </main>
 
 <!-- ── Bottom Nav（手機）── -->
@@ -531,6 +602,7 @@
   <button class="nav-item" data-page="market"><span class="icon">📡</span>行情</button>
   <button class="nav-item" data-page="portfolio"><span class="icon">📦</span>帳務</button>
   <button class="nav-item" data-page="trade"><span class="icon">💹</span>交易</button>
+  <button class="nav-item" data-page="aiReport"><span class="icon">🤖</span>AI</button>
   <button class="nav-item" data-page="cloud"><span class="icon">☁️</span>雲端</button>
 </nav>
 
@@ -542,7 +614,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
 <!-- App -->
-<script src="app.js?v=3.2"></script>
+<script src="app.js?v=3.3"></script>
 
 <!-- SPA 導覽 -->
 <script>
