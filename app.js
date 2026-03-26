@@ -1,7 +1,7 @@
-const APP_VERSION = '2.8';   // ← 只改這裡就能更版
+const APP_VERSION = '2.9';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v2.8  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v2.9  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -620,7 +620,24 @@ function setVirtualCash(){
 // ═══════════════════════════════════════════════════════
 
 // ── 只更新價格/漲跌欄（避免閃爍）─────────────────────────
-function _watchPriceCellHTML(q){
+function _mergeQuote(oldQ,newQ){
+  if(!oldQ&&!newQ)return null;
+  if(!oldQ)return newQ;
+  if(!newQ)return oldQ;
+  return {
+    ...oldQ,
+    ...newQ,
+    price:(newQ.price!=null&&newQ.price>0)?newQ.price:oldQ.price,
+    previousClose:newQ.previousClose!=null?newQ.previousClose:oldQ.previousClose,
+    change:newQ.change!=null?newQ.change:oldQ.change,
+    changePct:newQ.changePct!=null?newQ.changePct:oldQ.changePct,
+    marketState:newQ.marketState||oldQ.marketState,
+    source:newQ.source||oldQ.source
+  };
+}
+
+function _watchPriceCellHTML(q,opt={}){
+  const loading=!!opt.loading;
   const price=q&&q.price?q.price:null;
   const src=q&&q.source?'<span style="font-size:.58rem;color:#444;margin-left:3px;">['+q.source+']</span>':'';
   const chg=q&&q.change!=null?q.change:null;
@@ -630,9 +647,11 @@ function _watchPriceCellHTML(q){
   const isLimitUp=pct!==null&&pct>=9.5;
   const isLimitDown=pct!==null&&pct<=-9.5;
   const limitCls=isLimitUp?' price-limit-up':(isLimitDown?' price-limit-down':'');
-  return '<span class="price-cell'+limitCls+'" style="font-weight:600;'+(color?('color:'+color+';'):'')+'">'+formatPrice(price)+'</span>'+src;
+  const loadingTag=loading?'<span style="font-size:.58rem;color:#6b7280;margin-left:4px;">…</span>':'';
+  return '<span class="price-cell'+limitCls+'" style="font-weight:600;'+(color?('color:'+color+';'):'')+'">'+formatPrice(price)+'</span>'+src+loadingTag;
 }
-function _watchChangeCellHTML(q){
+function _watchChangeCellHTML(q,opt={}){
+  const loading=!!opt.loading;
   const chg=q&&q.change!=null?q.change:null;
   const pct=q&&q.changePct!=null?q.changePct:null;
   const ms=getMarketState();
@@ -643,12 +662,12 @@ function _watchChangeCellHTML(q){
   let html='';
   if(chg!==null&&pct!==null){
     html+='<div class="'+chgCls+'" style="font-weight:700;">'+(isUp?'+':'')+chg.toFixed(2);
-    html+=' <span style="font-size:.78rem;font-weight:400;">('+( isUp?'+':'')+pct.toFixed(2)+'%)</span></div>';
+    html+=' <span style="font-size:.78rem;font-weight:400;">('+(isUp?'+':'')+pct.toFixed(2)+'%)</span></div>';
   }else{
     html+='<div style="color:#444;">—</div>';
   }
   html+='<div style="display:flex;gap:4px;margin-top:4px;">';
-  html+='<span class="badge '+badgeCls+'">'+(q?arrow:'讀取中')+'</span>';
+  html+='<span class="badge '+(loading?'badge-wait':badgeCls)+'">'+(loading?'讀取中':(q?arrow:'—'))+'</span>';
   html+='<span class="badge '+getMarketBadgeClass(ms)+'">'+getMarketLabel(ms)+'</span>';
   html+='</div>';
   return html;
@@ -720,15 +739,34 @@ function renderWatchlistImmediate(){
 async function refreshWatchlistPrices(){
   const tbody=document.getElementById('watchlistBody');
   if(!state.watchlist.length)return;
+
+  state.watchlist.forEach(function(symbol){
+    const tr=tbody.querySelector('[data-symbol="'+symbol+'"]');
+    if(!tr)return;
+    const oldQ=quoteCache[symbol]&&quoteCache[symbol].data?quoteCache[symbol].data:null;
+    const pc=tr.querySelector('.wl-price');
+    const cc=tr.querySelector('.wl-change');
+    if(pc)pc.innerHTML=_watchPriceCellHTML(oldQ,{loading:true});
+    if(cc)cc.innerHTML=_watchChangeCellHTML(oldQ,{loading:true});
+  });
+
   const results=await Promise.allSettled(state.watchlist.map(function(s){return fetchQuote(s);}));
+
   state.watchlist.forEach(function(symbol,i){
-    const q=results[i].status==='fulfilled'?results[i].value:null;
+    const oldQ=quoteCache[symbol]&&quoteCache[symbol].data?quoteCache[symbol].data:null;
+    const newQ=results[i].status==='fulfilled'?results[i].value:null;
+    const q=_mergeQuote(oldQ,newQ);
     const tr=tbody.querySelector('[data-symbol="'+symbol+'"]');
     if(!tr)return;
     const pc=tr.querySelector('.wl-price');
     const cc=tr.querySelector('.wl-change');
-    if(pc)pc.innerHTML=_watchPriceCellHTML(q);
-    if(cc)cc.innerHTML=_watchChangeCellHTML(q);
+
+    if(newQ&&newQ.price){
+      quoteCache[symbol]={data:q,ts:Date.now()};
+    }
+
+    if(pc)pc.innerHTML=_watchPriceCellHTML(q,{loading:false});
+    if(cc)cc.innerHTML=_watchChangeCellHTML(q,{loading:false});
   });
 }
 
@@ -968,6 +1006,21 @@ async function fetchPriceBatch(){
   console.log('[Batch] tick '+new Date().toLocaleTimeString('zh-TW')+' n='+syms.length+' live='+preferLive);
 
   const resolved={};
+  const wlBody=document.getElementById('watchlistBody');
+  const hlBody=document.getElementById('holdingsBody');
+
+  // 先進入讀取中，但保留上一筆成功值
+  if(wlBody){
+    for(const symbol of syms){
+      const tr=wlBody.querySelector('tr[data-symbol="'+symbol+'"]');
+      if(!tr)continue;
+      const oldQ=quoteCache[symbol]&&quoteCache[symbol].data?quoteCache[symbol].data:null;
+      const pc=tr.querySelector('.wl-price');
+      const cc=tr.querySelector('.wl-change');
+      if(pc)pc.innerHTML=_watchPriceCellHTML(oldQ,{loading:true});
+      if(cc)cc.innerHTML=_watchChangeCellHTML(oldQ,{loading:true});
+    }
+  }
 
   // ── A. 盤中優先 Yahoo 批量即時報價，避免日資料造成整頁靜止 ──
   if(preferLive){
@@ -1044,24 +1097,25 @@ async function fetchPriceBatch(){
     await Promise.allSettled(jobs);
   }
 
-  // ── D. 更新 quoteCache + DOM（含閃爍動畫）──
-  const wlBody=document.getElementById('watchlistBody');
-  const hlBody=document.getElementById('holdingsBody');
-
+  // ── D. 更新 quoteCache + DOM（失敗時保留上一筆成功值）──
   for(const symbol of syms){
-    const q=resolved[symbol];
+    const incoming=resolved[symbol]||null;
+    const oldQ=quoteCache[symbol]&&quoteCache[symbol].data?quoteCache[symbol].data:null;
+    const q=_mergeQuote(oldQ,incoming);
     if(!q||!q.price)continue;
-    const oldQ=quoteCache[symbol]&&quoteCache[symbol].data;
-    const oldPrice=oldQ?oldQ.price:null;
-    quoteCache[symbol]={data:q,ts:Date.now()};
+    const oldPrice=oldQ&&oldQ.price?oldQ.price:null;
+
+    if(incoming&&incoming.price){
+      quoteCache[symbol]={data:q,ts:Date.now()};
+    }
 
     if(wlBody){
       const tr=wlBody.querySelector('tr[data-symbol="'+symbol+'"]');
       if(tr){
         const pc=tr.querySelector('.wl-price');
         const cc=tr.querySelector('.wl-change');
-        if(pc)pc.innerHTML=_watchPriceCellHTML(q);
-        if(cc)cc.innerHTML=_watchChangeCellHTML(q);
+        if(pc)pc.innerHTML=_watchPriceCellHTML(q,{loading:false});
+        if(cc)cc.innerHTML=_watchChangeCellHTML(q,{loading:false});
         if(pc&&oldPrice&&q.price!==oldPrice){
           const cls=q.price>oldPrice?'price-flash-up':'price-flash-down';
           pc.classList.remove('price-flash-up','price-flash-down');
