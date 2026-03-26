@@ -1,7 +1,7 @@
-const APP_VERSION = '2.6';   // ← 只改這裡就能更版
+const APP_VERSION = '2.7';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v2.6  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v2.7  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -603,7 +603,14 @@ function setVirtualCash(){
 function _watchPriceCellHTML(q){
   const price=q&&q.price?q.price:null;
   const src=q&&q.source?'<span style="font-size:.58rem;color:#444;margin-left:3px;">['+q.source+']</span>':'';
-  return '<span style="font-weight:600;">'+formatPrice(price)+'</span>'+src;
+  const chg=q&&q.change!=null?q.change:null;
+  const pct=q&&q.changePct!=null?q.changePct:null;
+  let color='';
+  if(chg!==null) color=chg>0?'#ff4d4d':chg<0?'#2ecc71':'#8b949e';
+  const isLimitUp=pct!==null&&pct>=9.5;
+  const isLimitDown=pct!==null&&pct<=-9.5;
+  const limitCls=isLimitUp?' price-limit-up':(isLimitDown?' price-limit-down':'');
+  return '<span class="price-cell'+limitCls+'" style="font-weight:600;'+(color?('color:'+color+';'):'')+'">'+formatPrice(price)+'</span>'+src;
 }
 function _watchChangeCellHTML(q){
   const chg=q&&q.change!=null?q.change:null;
@@ -960,28 +967,37 @@ async function fetchPriceBatch(){
     const ts=Date.now();
     for(const sfx of['.TW','.TWO']){
       const symStr=missing.map(s=>s+sfx).join(',');
-      const url='https://query1.finance.yahoo.com/v7/finance/quote?symbols='+symStr
+      const baseUrl='https://query1.finance.yahoo.com/v7/finance/quote?symbols='+symStr
         +'&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketPreviousClose,shortName,longName'
         +'&lang=zh-TW&region=TW&_='+ts;
-      try{
-        const r=await timedFetch(url,6000);
-        if(!r.ok)continue;
-        const text=await r.text();
-        if(!text||text.trim().startsWith('<'))continue;
-        const j=JSON.parse(text);
-        const quotes=(j&&j.quoteResponse&&j.quoteResponse.result)||[];
-        for(const q of quotes){
-          const sym=normalizeSymbol((q.symbol||'').replace(/\.(TW|TWO)$/i,''));
-          if(!sym||resolved[sym])continue;
-          const price=num(q.regularMarketPrice);
-          if(!price||price<=0)continue;
-          const yName=q.longName||q.shortName||'';
-          if(yName)setStockName(sym,yName.replace(/\s*\(.*?\)/g,'').trim());
-          resolved[sym]={price,previousClose:num(q.regularMarketPreviousClose),
-            change:num(q.regularMarketChange),changePct:num(q.regularMarketChangePercent),
-            marketState:ms,source:'Yahoo'};
-        }
-      }catch(e){console.warn('[Batch-Y7]',e.message);}
+      const urls=[
+        baseUrl,
+        'https://corsproxy.io/?'+encodeURIComponent(baseUrl),
+        'https://api.allorigins.win/raw?url='+encodeURIComponent(baseUrl)
+      ];
+      let quotes=[];
+      for(const url of urls){
+        try{
+          const r=await timedFetch(url,5000);
+          if(!r.ok)continue;
+          const text=await r.text();
+          if(!text||text.trim().startsWith('<'))continue;
+          const j=JSON.parse(text);
+          const rows=(j&&j.quoteResponse&&j.quoteResponse.result)||[];
+          if(rows.length){quotes=rows;break;}
+        }catch(e){console.warn('[Batch-Y7]',e.message);}
+      }
+      for(const q of quotes){
+        const sym=normalizeSymbol((q.symbol||'').replace(/\.(TW|TWO)$/i,''));
+        if(!sym||resolved[sym])continue;
+        const price=num(q.regularMarketPrice);
+        if(!price||price<=0)continue;
+        const yName=q.longName||q.shortName||'';
+        if(yName)setStockName(sym,yName.replace(/\s*\(.*?\)/g,'').trim());
+        resolved[sym]={price,previousClose:num(q.regularMarketPreviousClose),
+          change:num(q.regularMarketChange),changePct:num(q.regularMarketChangePercent),
+          marketState:ms,source:'Yahoo'};
+      }
     }
   }
 
