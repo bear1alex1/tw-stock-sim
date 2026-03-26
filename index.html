@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-  <title>台股虛擬操盤 v2.8</title>
+  <title>台股虛擬操盤 v2.6</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
@@ -142,26 +142,8 @@
       .desk-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
     }
     @media(max-width:767px){#sideNav{display:none;}}
-    @keyframes limitUpPulse {
-      0%,100%{ box-shadow:0 0 4px 2px rgba(255,77,77,0.50); }
-      50%{ box-shadow:0 0 10px 5px rgba(255,77,77,0.90); }
-    }
-    @keyframes limitDownPulse {
-      0%,100%{ box-shadow:0 0 4px 2px rgba(46,204,113,0.50); }
-      50%{ box-shadow:0 0 10px 5px rgba(46,204,113,0.90); }
-    }
-    .price-limit-up{
-      animation:limitUpPulse 1s ease-in-out infinite;
-      background:rgba(255,77,77,0.15);
-      border-radius:4px;
-      padding:1px 5px;
-    }
-    .price-limit-down{
-      animation:limitDownPulse 1s ease-in-out infinite;
-      background:rgba(46,204,113,0.15);
-      border-radius:4px;
-      padding:1px 5px;
-    }
+    .mini-loader{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.22);border-top-color:#60a5fa;border-radius:999px;animation:miniSpin .75s linear infinite;vertical-align:middle;}
+    @keyframes miniSpin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
 
   </style>
 </head>
@@ -173,7 +155,7 @@
     <span style="font-size:1.2rem;">📈</span>
     <div>
       <div style="font-weight:800;color:var(--text);font-size:.92rem;line-height:1.2;">
-        台股虛擬操盤系統 <span class="vtag" id="appVersion">v2.8</span>
+        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.1</span>
       </div>
       <div id="lastSaved" style="font-size:.65rem;color:#555;line-height:1.2;">最後儲存：—</div>
     </div>
@@ -534,7 +516,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
 <!-- App -->
-<script src="app.js?v=2.6"></script>
+<script src="app.js?v=3.1"></script>
 
 <!-- SPA 導覽 -->
 <script>
