@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-  <title>台股虛擬操盤 v2.6</title>
+  <title>台股虛擬操盤 v3.9.0</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
@@ -275,6 +275,26 @@
     @media(max-width:700px){.screen-mode-grid,.screen-extra-grid{grid-template-columns:1fr;}}
 
 
+  
+    .screen-admin-btn{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:999px;border:1px solid rgba(96,165,250,.26);background:linear-gradient(180deg,#172334,#111a27);color:#b9d7ff;cursor:pointer;transition:all .18s;box-shadow:0 8px 18px rgba(0,0,0,.14);}
+    .screen-admin-btn:hover{transform:translateY(-1px);border-color:#60a5fa;color:#fff;box-shadow:0 12px 22px rgba(56,139,253,.18);}
+    .screen-admin-status{font-size:.75rem;color:#8fb3e8;}
+    .screen-admin-status.ok{color:#ffb3b3;}
+    .screen-admin-tools{display:none;margin-top:12px;padding:12px;border:1px dashed rgba(239,68,68,.24);border-radius:12px;background:linear-gradient(180deg,rgba(74,14,14,.18),rgba(31,14,14,.08));}
+    .screen-admin-tools.show{display:block;}
+    .screen-admin-chip{display:inline-flex;align-items:center;padding:5px 10px;border-radius:999px;font-size:.72rem;font-weight:900;background:rgba(239,68,68,.14);color:#ffb1b1;border:1px solid rgba(239,68,68,.24);margin-right:6px;margin-bottom:6px;}
+    .screen-option-lock{color:#8b949e;}
+    .screen-pdf-note{font-size:.74rem;color:#9fb4d2;margin-top:6px;line-height:1.55;}
+    .screen-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.54);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:9999;padding:16px;}
+    .screen-modal-backdrop.show{display:flex;}
+    .screen-modal{width:min(460px,100%);background:#121a26;border:1px solid rgba(96,165,250,.18);border-radius:16px;padding:18px;box-shadow:0 26px 60px rgba(0,0,0,.35);}
+    .screen-modal-title{font-size:1rem;font-weight:900;color:#fff;margin-bottom:10px;}
+    .screen-modal-sub{font-size:.8rem;color:#9fb4d2;line-height:1.65;margin-bottom:12px;}
+    .screen-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;}
+    .screen-modal-msg{font-size:.76rem;color:#8fb3e8;margin-top:8px;min-height:18px;}
+    .screen-offscreen-pdf{position:fixed;left:-20000px;top:0;width:1180px;z-index:-1;background:#0d1117;padding:24px;}
+
+
   </style>
 </head>
 <body>
@@ -285,7 +305,7 @@
     <span style="font-size:1.2rem;">📈</span>
     <div>
       <div style="font-weight:800;color:var(--text);font-size:.92rem;line-height:1.2;">
-        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.8.2</span>
+        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.9.0</span>
       </div>
       <div id="lastSaved" style="font-size:.65rem;color:#555;line-height:1.2;">最後儲存：—</div>
     </div>
@@ -306,7 +326,27 @@
   @media(min-width:768px){
     #btnExport,#btnImportTop,#btnReset{display:inline-flex!important;}
   }
-</style>
+
+    .screen-admin-btn{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:999px;border:1px solid rgba(96,165,250,.26);background:linear-gradient(180deg,#172334,#111a27);color:#b9d7ff;cursor:pointer;transition:all .18s;box-shadow:0 8px 18px rgba(0,0,0,.14);}
+    .screen-admin-btn:hover{transform:translateY(-1px);border-color:#60a5fa;color:#fff;box-shadow:0 12px 22px rgba(56,139,253,.18);}
+    .screen-admin-status{font-size:.75rem;color:#8fb3e8;}
+    .screen-admin-status.ok{color:#ffb3b3;}
+    .screen-admin-tools{display:none;margin-top:12px;padding:12px;border:1px dashed rgba(239,68,68,.24);border-radius:12px;background:linear-gradient(180deg,rgba(74,14,14,.18),rgba(31,14,14,.08));}
+    .screen-admin-tools.show{display:block;}
+    .screen-admin-chip{display:inline-flex;align-items:center;padding:5px 10px;border-radius:999px;font-size:.72rem;font-weight:900;background:rgba(239,68,68,.14);color:#ffb1b1;border:1px solid rgba(239,68,68,.24);margin-right:6px;margin-bottom:6px;}
+    .screen-option-lock{color:#8b949e;}
+    .screen-pdf-note{font-size:.74rem;color:#9fb4d2;margin-top:6px;line-height:1.55;}
+    .screen-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.54);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:9999;padding:16px;}
+    .screen-modal-backdrop.show{display:flex;}
+    .screen-modal{width:min(460px,100%);background:#121a26;border:1px solid rgba(96,165,250,.18);border-radius:16px;padding:18px;box-shadow:0 26px 60px rgba(0,0,0,.35);}
+    .screen-modal-title{font-size:1rem;font-weight:900;color:#fff;margin-bottom:10px;}
+    .screen-modal-sub{font-size:.8rem;color:#9fb4d2;line-height:1.65;margin-bottom:12px;}
+    .screen-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;}
+    .screen-modal-msg{font-size:.76rem;color:#8fb3e8;margin-top:8px;min-height:18px;}
+    .screen-offscreen-pdf{position:fixed;left:-20000px;top:0;width:1180px;z-index:-1;background:#0d1117;padding:24px;}
+
+
+  </style>
 
 <!-- ── Desktop Side Nav ── -->
 <nav id="sideNav">
@@ -638,7 +678,29 @@
   <!-- ════ PAGE 5: 篩選器 ════ -->
   <div id="page-screener" class="page">
     <div class="card" style="margin-bottom:12px;">
-      <div class="sec-title">🧭 條件篩選器</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;">
+        <div class="sec-title" style="margin:0;">🧭 條件篩選器</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div id="screenAdminStatus" class="screen-admin-status">一般模式｜全掃已鎖定</div>
+          <button class="screen-admin-btn" id="screenAdminEntry" type="button" aria-label="管理員">🛡️</button>
+        </div>
+      </div>
+      <div id="screenAdminTools" class="screen-admin-tools">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:.88rem;font-weight:900;color:#fff;">管理員工具</div>
+            <div class="screen-pdf-note">解鎖後才可顯示與啟用管理員模式，前端仍會在執行流程再次驗證權限。</div>
+          </div>
+          <div>
+            <span class="screen-admin-chip">管理模式</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          <button class="btn btn-blue" type="button" data-admin-act="fullscan">🔓 開啟全掃選項</button>
+          <button class="btn" type="button" data-admin-act="widerange">📈 允許大範圍掃描</button>
+          <button class="btn" type="button" data-admin-act="lockback">🔒 鎖回一般模式</button>
+        </div>
+      </div>
       <div class="screen-mode-grid">
         <div>
           <label class="screen-field-label">篩選資料池</label>
@@ -647,7 +709,7 @@
             <option value="holdings">持股庫存</option>
             <option value="union">追蹤 + 持股</option>
             <option value="custom">自訂清單</option>
-            <option value="allStocks">全部股票</option>
+            <option value="allStocks" hidden disabled>全部股票（管理員）</option>
             <option value="range">代號範圍</option>
           </select>
         </div>
@@ -762,10 +824,11 @@
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
       <button class="btn btn-blue" id="btnRunScreener" style="padding:12px 24px;font-size:.96rem;">🔍 開始篩選</button>
       <button class="btn" id="btnStopScreener" style="padding:12px 22px;display:none;">⏹️ 停止掃描</button>
+      <button class="btn" id="btnExportScreenPdf" style="padding:12px 22px;">🧾 匯出 PDF</button>
       <button class="btn" id="btnClearScreener" style="padding:12px 22px;">🗑️ 一鍵清除</button>
     </div>
 
-    <div class="card" style="margin-bottom:12px;">
+    <div class="card" id="screenResultCard" style="margin-bottom:12px;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <div class="sec-title" style="margin:0;">📋 篩選結果</div>
         <div id="screenRunStatus" class="muted" style="font-size:.78rem;">尚未開始篩選</div>
@@ -890,8 +953,11 @@
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
 <!-- App -->
-<script src="app.js?v=3.8.2"></script>
+<script src="app.js?v=3.9.0"></script>
 
 <!-- SPA 導覽 -->
 <script>
@@ -968,5 +1034,19 @@
       <button class="btn-scenario-apply" id="btnApplyScenario" disabled>以此條件下單</button>
     </div>
   </div>
+
+<div id="screenAdminModal" class="screen-modal-backdrop" aria-hidden="true">
+  <div class="screen-modal" role="dialog" aria-modal="true" aria-labelledby="screenAdminModalTitle">
+    <div id="screenAdminModalTitle" class="screen-modal-title">🛡️ 管理員驗證</div>
+    <div class="screen-modal-sub">輸入管理員密碼後，系統會以 SHA-256 雜湊比對驗證，通過後才會顯示管理員專用控制項。</div>
+    <input id="screenAdminPassword" class="inp" type="password" placeholder="請輸入管理員密碼" autocomplete="current-password" />
+    <div id="screenAdminModalMsg" class="screen-modal-msg"></div>
+    <div class="screen-modal-actions">
+      <button class="btn" type="button" id="btnScreenAdminCancel">取消</button>
+      <button class="btn btn-blue" type="button" id="btnScreenAdminSubmit">驗證並解鎖</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
