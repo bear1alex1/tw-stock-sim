@@ -1,7 +1,7 @@
 const APP_VERSION = '3.9.0';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v3.9.3  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.9.5  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -2603,7 +2603,7 @@ async function exportScreenerPdf(){
     const now=new Date();
     head.innerHTML=''
       +'<div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:6px;">台股虛擬操盤系統｜篩選結果報表</div>'
-      +'<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：'+now.toLocaleDateString('zh-TW')+'｜匯出時間：'+now.toLocaleTimeString('zh-TW')+'｜版本：v3.9.3</div>'
+      +'<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：'+now.toLocaleDateString('zh-TW')+'｜匯出時間：'+now.toLocaleTimeString('zh-TW')+'｜版本：v3.9.5</div>'
       +'<div style="font-size:12px;color:#dbeafe;line-height:1.8;margin-bottom:14px;">篩選條件：'+formatScreenCriteria(_screenLastResult.criteria||{}).join('、')+'</div>';
     const clone=source.cloneNode(true);
     clone.style.marginTop='0';
@@ -4094,9 +4094,9 @@ document.addEventListener('DOMContentLoaded',()=>{
 })();
 
 
-/* v3.9.3 wizard + screener start fix */
+/* v3.9.5 wizard + screener start fix */
 (function(){
-  var HOTFIX_VER = 'v3.9.3';
+  var HOTFIX_VER = 'v3.9.5';
   function byId(id){ return document.getElementById(id); }
   function setText(id, txt){ var el=byId(id); if(el) el.textContent = txt; }
   function cloneBind(id, evt, fn){
@@ -4229,7 +4229,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 
 window.TWO_STAGE = window.TWO_STAGE || undefined;
-/* ===== v3.9.3 two-stage screener patch ===== */
+/* ===== v3.9.5 two-stage screener patch ===== */
 (function () {
   window.TWO_STAGE = window.TWO_STAGE || {
 
@@ -4556,7 +4556,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 })();
 
 
-/* ===== v3.9.4 screener wizard patch ===== */
+/* ===== v3.9.5 screener wizard patch ===== */
 (function(){
   function wizText(id, text){ var el=document.getElementById(id); if(el) el.textContent=text; }
   function wizStep(id, state){
