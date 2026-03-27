@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-  <title>台股虛擬操盤 v3.9.2</title>
+  <title>台股虛擬操盤 v3.9.3</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
@@ -308,7 +308,7 @@
     <span style="font-size:1.2rem;">📈</span>
     <div>
       <div style="font-weight:800;color:var(--text);font-size:.92rem;line-height:1.2;">
-        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.9.2</span>
+        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.9.3</span>
       </div>
       <div id="lastSaved" style="font-size:.65rem;color:#555;line-height:1.2;">最後儲存：—</div>
     </div>
@@ -825,7 +825,8 @@
     </div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-      <button class="btn btn-blue" id="btnRunScreener" style="padding:12px 24px;font-size:.96rem;">🔍 開始篩選</button>
+      <button class="btn btn-blue" id="btnRunScreener" style="padding:12px 24px;font-size:.96rem;">⚡ 先做輕篩</button>
+                        <button class="btn btn-ghost" id="btnRunDeepScreener" style="padding:12px 22px;display:none;border:1px solid rgba(96,165,250,.28);color:var(--blue);">🧠 對結果做深篩</button>
       <button class="btn" id="btnStopScreener" style="padding:12px 22px;display:none;">⏹️ 停止掃描</button>
       <button class="btn" id="btnExportScreenPdf" style="padding:12px 22px;">🧾 匯出 PDF</button>
       <button class="btn" id="btnClearScreener" style="padding:12px 22px;">🗑️ 一鍵清除</button>
