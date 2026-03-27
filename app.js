@@ -4092,3 +4092,137 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
   window.__applyV391Hotfix = applyHotfix;
 })();
+
+
+/* v3.9.2 wizard + screener start fix */
+(function(){
+  var HOTFIX_VER = 'v3.9.2';
+  function byId(id){ return document.getElementById(id); }
+  function setText(id, txt){ var el=byId(id); if(el) el.textContent = txt; }
+  function cloneBind(id, evt, fn){
+    var el = byId(id); if(!el || !el.parentNode) return null;
+    var clone = el.cloneNode(true); el.parentNode.replaceChild(clone, el);
+    clone.addEventListener(evt, fn); return clone;
+  }
+  function setActive(btns, key, value){
+    btns.forEach(function(btn){ btn.classList.toggle('active', btn.dataset[key] === value); });
+  }
+  function clearActiveFilters(){
+    document.querySelectorAll('[data-screen-filter].active').forEach(function(el){ el.classList.remove('active'); });
+  }
+  function setFilterActive(key, on){
+    var el = document.querySelector('[data-screen-filter="'+key+'"]');
+    if(el) el.classList.toggle('active', !!on);
+  }
+  function setInputValue(id, value){ var el=byId(id); if(el) el.value = value == null ? '' : String(value); }
+  function currentWizardState(){
+    var s = window.__screenWizardState || { universe:'watchlist', preset:'entry', risk:'balanced' };
+    window.__screenWizardState = s;
+    return s;
+  }
+  function applyWizardToInputs(){
+    var s = currentWizardState();
+    setInputValue('screenUniverse', s.universe || 'watchlist');
+    clearActiveFilters();
+    ['screenMinTotal','screenMinFund','screenMaxRsi','screenMinVolRatio','screenMinRevYoY','screenMinEPS'].forEach(function(id){ setInputValue(id,''); });
+    setInputValue('screenSortBy', 'totalDesc');
+    setInputValue('screenLimit', s.risk === 'aggressive' ? 30 : s.risk === 'conservative' ? 15 : 20);
+
+    var presets = {
+      entry: {
+        filters:['buyFit'], minTotal:{conservative:72,balanced:65,aggressive:58}, minFund:{conservative:65,balanced:58,aggressive:50}, minRevYoY:{conservative:12,balanced:8,aggressive:5}, minEPS:{conservative:8,balanced:5,aggressive:3}, maxRsi:{conservative:68,balanced:75,aggressive:82}, sortBy:'totalDesc'
+      },
+      breakout: {
+        filters:['buyFit','volumeSpike'], minTotal:{conservative:70,balanced:62,aggressive:55}, minFund:{conservative:55,balanced:48,aggressive:40}, minVolRatio:{conservative:1.8,balanced:1.5,aggressive:1.2}, maxRsi:{conservative:72,balanced:80,aggressive:88}, sortBy:'volDesc'
+      },
+      rebound: {
+        filters:['oversold'], minTotal:{conservative:58,balanced:50,aggressive:42}, minFund:{conservative:45,balanced:35,aggressive:25}, maxRsi:{conservative:28,balanced:32,aggressive:38}, minRevYoY:{conservative:0,balanced:-5,aggressive:''}, sortBy:'rsiAsc'
+      },
+      exit: {
+        filters:['sellWatch'], minTotal:{conservative:'',balanced:'',aggressive:''}, minFund:{conservative:'',balanced:'',aggressive:''}, maxRsi:{conservative:'',balanced:'',aggressive:''}, minVolRatio:{conservative:'',balanced:'',aggressive:''}, sortBy:'totalDesc'
+      }
+    };
+    var p = presets[s.preset] || presets.entry;
+    (p.filters || []).forEach(function(k){ setFilterActive(k, true); });
+    if (p.minTotal) setInputValue('screenMinTotal', p.minTotal[s.risk]);
+    if (p.minFund) setInputValue('screenMinFund', p.minFund[s.risk]);
+    if (p.maxRsi) setInputValue('screenMaxRsi', p.maxRsi[s.risk]);
+    if (p.minVolRatio) setInputValue('screenMinVolRatio', p.minVolRatio[s.risk]);
+    if (p.minRevYoY) setInputValue('screenMinRevYoY', p.minRevYoY[s.risk]);
+    if (p.minEPS) setInputValue('screenMinEPS', p.minEPS[s.risk]);
+    setInputValue('screenSortBy', p.sortBy || 'totalDesc');
+    if (typeof setScreenPoolHint === 'function') setScreenPoolHint();
+    updateWizardSummary();
+  }
+  function updateWizardSummary(){
+    var s = currentWizardState();
+    var uMap = { watchlist:'追蹤清單', holdings:'持股庫存', union:'追蹤 + 持股', custom:'自訂清單' };
+    var pMap = { entry:'找偏多進場', breakout:'找放量突破', rebound:'找超賣反彈', exit:'檢查賣出觀察' };
+    var rMap = { conservative:'保守', balanced:'平衡', aggressive:'積極' };
+    setText('wizardSummaryText', '目前設定：從' + (uMap[s.universe] || s.universe) + (pMap[s.preset] || s.preset) + '，使用' + (rMap[s.risk] || s.risk) + '條件。');
+  }
+  function bindWizardButtons(){
+    document.querySelectorAll('[data-wiz-universe]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var s = currentWizardState(); s.universe = btn.dataset.wizUniverse; setActive([].slice.call(document.querySelectorAll('[data-wiz-universe]')), 'wizUniverse', s.universe); applyWizardToInputs();
+      });
+    });
+    document.querySelectorAll('[data-wiz-preset]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var s = currentWizardState(); s.preset = btn.dataset.wizPreset; setActive([].slice.call(document.querySelectorAll('[data-wiz-preset]')), 'wizPreset', s.preset); applyWizardToInputs();
+      });
+    });
+    document.querySelectorAll('[data-wiz-risk]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var s = currentWizardState(); s.risk = btn.dataset.wizRisk; setActive([].slice.call(document.querySelectorAll('[data-wiz-risk]')), 'wizRisk', s.risk); applyWizardToInputs();
+      });
+    });
+    cloneBind('btnRunScreenerWizard', 'click', function(){
+      try {
+        applyWizardToInputs();
+        setText('screenRunStatus', '已套用步驟化條件，準備開始篩選…');
+        var adv = byId('screenAdvPanel');
+        if (adv) adv.classList.remove('show');
+        if (typeof runScreener === 'function') runScreener();
+      } catch (e) {
+        setText('screenRunStatus', '開始篩選失敗：' + (e && e.message ? e.message : e));
+        alert('開始篩選失敗：' + (e && e.message ? e.message : e));
+      }
+    });
+    cloneBind('btnWizardMore', 'click', function(){
+      var adv = byId('screenAdvPanel');
+      if (!adv) return;
+      var show = !adv.classList.contains('show');
+      adv.classList.toggle('show', show);
+      this.textContent = show ? '先回到簡單模式' : '我想微調細節';
+    });
+  }
+  function reinforceStartButton(){
+    cloneBind('btnRunScreener', 'click', function(){
+      try {
+        setText('screenRunStatus', '開始篩選中…');
+        if (typeof runScreener === 'function') runScreener();
+      } catch (e) {
+        setText('screenRunStatus', '開始篩選失敗：' + (e && e.message ? e.message : e));
+        alert('開始篩選失敗：' + (e && e.message ? e.message : e));
+      }
+    });
+  }
+  function hideOverwhelmingBlocks(){
+    var modeCard = document.querySelector('#page-screener .screen-mode-grid');
+    if (modeCard && modeCard.parentNode && modeCard.parentNode.classList) modeCard.parentNode.classList.add('screen-quick-hidden');
+  }
+  function applyV392(){
+    setText('appVersion', HOTFIX_VER);
+    document.title = HOTFIX_VER;
+    currentWizardState();
+    reinforceStartButton();
+    bindWizardButtons();
+    hideOverwhelmingBlocks();
+    applyWizardToInputs();
+    setText('screenRunStatus', '請先依步驟選股票池、目的與風格，再按「開始篩選」。');
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', applyV392, { once:true });
+  else setTimeout(applyV392, 0);
+  window.__applyV392 = applyV392;
+})();
