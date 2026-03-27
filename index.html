@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>台股虛擬操盤 v3.9.14</title>
+  <title>台股虛擬操盤 v3.9.16</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
@@ -1835,6 +1835,61 @@
       50% { box-shadow: 0 0 0 8px rgba(220,38,38,0); }
     }
 
+    
+    .screen-step-block {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .screen-job-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .screen-job-btn {
+      border: 1px solid rgba(96, 165, 250, .22) !important;
+      background: #182233 !important;
+      color: #dbeafe !important;
+      padding: 12px 14px !important;
+      border-radius: 12px !important;
+      font-size: .88rem !important;
+      font-weight: 800 !important;
+    }
+    .screen-job-btn:hover {
+      border-color: #60a5fa !important;
+      transform: translateY(-1px);
+    }
+    .screen-job-btn.active {
+      background: linear-gradient(180deg, #28405f, #1d2c42) !important;
+      border-color: #7fb5ff !important;
+      color: #fff !important;
+      box-shadow: 0 0 0 1px rgba(96, 165, 250, .2) inset, 0 10px 24px rgba(56, 139, 253, .16);
+    }
+    .screen-job-btn.is-disabled {
+      opacity: .48 !important;
+      cursor: not-allowed !important;
+      transform: none !important;
+    }
+    .screen-step-panel {
+      display: none;
+      padding: 12px;
+      border: 1px solid rgba(96, 165, 250, .18);
+      border-radius: 12px;
+      background: rgba(56, 139, 253, .05);
+    }
+    .screen-step-panel.show {
+      display: block;
+    }
+    .screen-step-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+    .screen-step-focus {
+      box-shadow: 0 0 0 2px rgba(96, 165, 250, .3), 0 16px 34px rgba(56, 139, 253, .16);
+    }
+
     .screen-action-row {
       display: flex;
       gap: 10px;
@@ -1852,7 +1907,7 @@
       <span style="font-size:1.2rem;">📈</span>
       <div>
         <div style="font-weight:800;color:var(--text);font-size:.92rem;line-height:1.2;">
-          台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.9.14</span>
+          台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.9.16</span>
         </div>
         <div id="lastSaved" style="font-size:.65rem;color:#555;line-height:1.2;">最後儲存：—</div>
       </div>
@@ -2424,80 +2479,96 @@
             <button class="btn" type="button" data-admin-act="lockback">🔒 鎖回一般模式</button>
           </div>
         </div>
-        <div class="screen-mode-grid">
-          <div>
-            <label class="screen-field-label">篩選資料池</label>
-            <select id="screenUniverse" class="inp">
-              <option value="watchlist">追蹤清單</option>
-              <option value="holdings">持股庫存</option>
-              <option value="union">追蹤 + 持股</option>
-              <option value="custom">自訂清單</option>
-              <option value="allStocks" hidden disabled>全部股票（管理員）</option>
-              <option value="range">代號範圍</option>
-            </select>
+        <div class="screen-step-block">
+          <div class="screen-wizard-wrap">
+            <div class="screen-wizard-step" id="screenJobStep">
+              <div class="screen-wizard-num">1</div>
+              <div style="flex:1;">
+                <div class="screen-wizard-title">步驟 1：選擇掃描工作</div>
+                <div class="screen-wizard-desc">先點選 6 個工作按鈕之一；選到「指定區間」會立即展開起訖代號欄位，選到「指定清單」會立即展開代號清單輸入框。</div>
+                <div class="screen-job-grid">
+                  <button class="btn screen-job-btn" type="button" data-screen-job="allStocks">全台股</button>
+                  <button class="btn screen-job-btn" type="button" data-screen-job="watchlist">自選清單</button>
+                  <button class="btn screen-job-btn" type="button" data-screen-job="holdings">持股清單</button>
+                  <button class="btn screen-job-btn" type="button" data-screen-job="union">自選 + 持股</button>
+                  <button class="btn screen-job-btn" type="button" data-screen-job="custom">指定清單</button>
+                  <button class="btn screen-job-btn" type="button" data-screen-job="range">指定區間</button>
+                </div>
+                <div id="screenCustomPanel" class="screen-step-panel">
+                  <label class="screen-field-label">指定清單代號</label>
+                  <textarea id="screenCustomList" class="inp" rows="3" placeholder="輸入代號，以逗號、空白或換行分隔，例如：2330, 2317, 0050" style="width:100%;resize:vertical;"></textarea>
+                  <div class="screen-inline-note">只有在「指定清單」模式下會使用這個欄位。</div>
+                </div>
+                <div id="screenRangePanel" class="screen-step-panel">
+                  <div class="screen-extra-grid" style="margin-top:0;">
+                    <div>
+                      <label class="screen-field-label">代號起始</label>
+                      <input id="screenRangeStart" class="inp" type="number" min="1" max="9999" placeholder="例如 1 或 1101" />
+                    </div>
+                    <div>
+                      <label class="screen-field-label">代號結束</label>
+                      <input id="screenRangeEnd" class="inp" type="number" min="1" max="9999" placeholder="例如 3000 或 9999" />
+                    </div>
+                    <div>
+                      <label class="screen-field-label">類別模式</label>
+                      <select id="screenCategoryType" class="inp">
+                        <option value="none">不指定</option>
+                        <option value="industry">官方產業</option>
+                        <option value="concept">主流概念</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="screen-field-label">類別值</label>
+                      <select id="screenCategoryValue" class="inp">
+                        <option value=""></option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="screen-inline-note">「指定區間」會依起訖代號建立候選池，再套用類別與條件篩選。</div>
+                </div>
+                <div class="screen-step-actions">
+                  <button class="btn btn-blue" id="btnConfirmScreenWork" type="button">確認工作，下一步 →</button>
+                </div>
+                <select id="screenUniverse" class="inp" style="display:none;">
+                  <option value="watchlist">追蹤清單</option>
+                  <option value="holdings">持股庫存</option>
+                  <option value="union">追蹤 + 持股</option>
+                  <option value="custom">自訂清單</option>
+                  <option value="allStocks" hidden disabled>全部股票（管理員）</option>
+                  <option value="range">代號範圍</option>
+                </select>
+                <div class="screen-stat" style="margin-top:10px;">
+                  <span id="screenPoolHint">目前將使用追蹤清單作為篩選資料池。</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <div>
-            <label class="screen-field-label">自訂代號清單</label>
-            <textarea id="screenCustomList" class="inp" rows="2" placeholder="輸入代號，以逗號、空白或換行分隔，例如：2330, 2317, 0050"
-              style="width:100%;resize:vertical;"></textarea>
-            <div class="screen-inline-note">只有在「自訂清單」模式下會使用這個欄位。</div>
-          </div>
-        </div>
-        <div class="screen-extra-grid">
-          <div>
-            <label class="screen-field-label">代號起始</label>
-            <input id="screenRangeStart" class="inp" type="number" min="1" max="9999" placeholder="例如 1 或 1101" />
-          </div>
-          <div>
-            <label class="screen-field-label">代號結束</label>
-            <input id="screenRangeEnd" class="inp" type="number" min="1" max="9999" placeholder="例如 3000 或 9999" />
-          </div>
-          <div>
-            <label class="screen-field-label">類別模式</label>
-            <select id="screenCategoryType" class="inp">
-              <option value="none">不指定</option>
-              <option value="industry">官方產業</option>
-              <option value="concept">主流概念</option>
-            </select>
-          </div>
-          <div>
-            <label class="screen-field-label">類別選項</label>
-            <select id="screenCategoryValue" class="inp">
-              <option value="">全部類別</option>
-            </select>
-          </div>
-        </div>
-        <div class="screen-safe-note" style="margin-top:12px;">
-          安全掃描建議：單次 100 檔內最佳，超過 100 檔會先跳出警告並要求確認；超過 150 檔則不執行，以避免請求過多造成延遲、失敗或資料來源限流。
-        </div>
-        <div class="screen-stat" style="margin-top:10px;">
-          <span id="screenPoolHint">目前將使用追蹤清單作為篩選資料池。</span>
-        </div>
       </div>
 
-      <!-- ── 簡易篩選條件（指示燈模式）── -->
-      <div class="card" style="margin-bottom:12px;">
-        <div class="sec-title">🎯 簡易篩選條件</div>
+      <!-- ── 步驟 2：勾選篩選條件 ── -->
+      <div class="card" id="screenFilterCard" style="margin-bottom:12px;">
+        <div class="sec-title">步驟 2：勾選篩選條件</div>
+        <div class="screen-inline-note" style="margin-bottom:10px;">適合買進 / 考慮賣出 / 量能異動 / 超跌反彈，點擊卡片即可切換開關；不勾選也能直接進行全母體掃描。</div>
         <div class="screen-grid">
-          <div class="card screen-card indicator-mode" data-screen-filter="buyFit">
+          <div class="card screen-card" data-screen-filter="buyFit">
             <div class="screen-card-top">
               <div class="screen-card-title">適合買進</div><span class="screen-tag buy">買入</span>
             </div>
             <div class="screen-card-desc">收盤站上 MA20，且綜合評分偏高。</div>
           </div>
-          <div class="card screen-card indicator-mode" data-screen-filter="sellWatch">
+          <div class="card screen-card" data-screen-filter="sellWatch">
             <div class="screen-card-top">
               <div class="screen-card-title">考慮賣出</div><span class="screen-tag sell">賣出</span>
             </div>
             <div class="screen-card-desc">收盤跌破 MA20，且綜合評分偏弱。</div>
           </div>
-          <div class="card screen-card indicator-mode" data-screen-filter="volumeSpike">
+          <div class="card screen-card" data-screen-filter="volumeSpike">
             <div class="screen-card-top">
               <div class="screen-card-title">量能異動</div><span class="screen-tag filter">篩選</span>
             </div>
             <div class="screen-card-desc">今日成交量大於 5 日均量 1.5 倍。</div>
           </div>
-          <div class="card screen-card indicator-mode" data-screen-filter="oversold">
+          <div class="card screen-card" data-screen-filter="oversold">
             <div class="screen-card-top">
               <div class="screen-card-title">超跌反彈</div><span class="screen-tag buy">買入</span>
             </div>
@@ -2725,7 +2796,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
   <!-- App -->
-  <script src="app.js?v=3.9.15"></script>
+  <script src="app.v3.9.16.js?v=v3.9.16"></script>
 
   <!-- SPA 導覽 -->
   <script>
