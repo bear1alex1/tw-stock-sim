@@ -1,7 +1,7 @@
 const APP_VERSION = '3.9.0';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v3.9.5  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.9.7  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -2549,6 +2549,7 @@ function renderScreenResults(rows, criteria, stats){
   });
   rows=rows.slice(0,Math.max(5,Math.min(100,criteria.limit||20)));
   _screenLastResult={rows:[...rows],criteria:criteria,stats:stats,generatedAt:new Date().toISOString()};
+  if(window.__wzSyncFromScreenResults)window.__wzSyncFromScreenResults(rows,criteria,stats);
   const scanned=stats&&stats.total!=null?stats.total:0;
   const ok=stats&&stats.ok!=null?stats.ok:0;
   const failed=stats&&stats.failed!=null?stats.failed:0;
@@ -2603,7 +2604,7 @@ async function exportScreenerPdf(){
     const now=new Date();
     head.innerHTML=''
       +'<div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:6px;">台股虛擬操盤系統｜篩選結果報表</div>'
-      +'<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：'+now.toLocaleDateString('zh-TW')+'｜匯出時間：'+now.toLocaleTimeString('zh-TW')+'｜版本：v3.9.5</div>'
+      +'<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：'+now.toLocaleDateString('zh-TW')+'｜匯出時間：'+now.toLocaleTimeString('zh-TW')+'｜版本：v3.9.7</div>'
       +'<div style="font-size:12px;color:#dbeafe;line-height:1.8;margin-bottom:14px;">篩選條件：'+formatScreenCriteria(_screenLastResult.criteria||{}).join('、')+'</div>';
     const clone=source.cloneNode(true);
     clone.style.marginTop='0';
@@ -4094,9 +4095,9 @@ document.addEventListener('DOMContentLoaded',()=>{
 })();
 
 
-/* v3.9.5 wizard + screener start fix */
+/* v3.9.7 wizard + screener start fix */
 (function(){
-  var HOTFIX_VER = 'v3.9.5';
+  var HOTFIX_VER = 'v3.9.7';
   function byId(id){ return document.getElementById(id); }
   function setText(id, txt){ var el=byId(id); if(el) el.textContent = txt; }
   function cloneBind(id, evt, fn){
@@ -4232,7 +4233,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 
 
 
-/* ===== v3.9.5 screener wizard patch ===== */
+/* ===== v3.9.7 screener wizard patch ===== */
 (function(){
   function wizText(id, text){ var el=document.getElementById(id); if(el) el.textContent=text; }
   function wizStep(id, state){
@@ -4315,7 +4316,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 
 
 
-/* ===== v3.9.6 interactive screener wizard ===== */
+/* ===== v3.9.7 interactive screener wizard ===== */
 (function(){
   var WZ = {
     step: 1,
@@ -4575,23 +4576,36 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
     WZ.deepDone=false;
     WZ.lightCount=0;
     renderWizard();
+    if(typeof _screenLastResult!=='undefined') _screenLastResult={rows:[],criteria:null,stats:null,generatedAt:null};
+    if(typeof TWO_STAGE!=='undefined'&&TWO_STAGE){ TWO_STAGE.lightRows=[]; TWO_STAGE.deepRows=[]; }
     var btn=document.getElementById('btnRunScreener');
     if(btn) btn.click();
+    var waited=0;
     var poll=setInterval(function(){
+      waited += 800;
       var rows=[];
-      if(typeof screenLastResult!=='undefined'&&screenLastResult&&Array.isArray(screenLastResult.rows)) rows=screenLastResult.rows;
+      if(typeof _screenLastResult!=='undefined' && _screenLastResult && Array.isArray(_screenLastResult.rows)) rows=_screenLastResult.rows;
       if(typeof TWO_STAGE!=='undefined'&&TWO_STAGE&&Array.isArray(TWO_STAGE.lightRows)&&TWO_STAGE.lightRows.length) rows=TWO_STAGE.lightRows;
       var running=document.getElementById('btnStopScreener');
-      var isRunning=running&&running.style.display!=='none';
-      if(!isRunning){
-        clearInterval(poll);
-        WZ.lightDone=true;
-        WZ.lightCount=rows.length;
-        WZ.step=4;
-        renderWizard();
-      }
+      var isRunning=!!(running && running.style.display!=='none');
+      var statusEl=document.getElementById('screenRunStatus');
+      var statusTxt=statusEl ? String(statusEl.textContent||'') : '';
+      var stillWorking=isRunning || /開始分析|掃描|批次|讀取|分析中/.test(statusTxt);
+      if(stillWorking && waited < 120000) return;
+      clearInterval(poll);
+      WZ.lightDone=true;
+      WZ.lightCount=rows.length;
+      WZ.step=4;
+      renderWizard();
     },800);
   };
+  window.__wzSyncFromScreenResults=function(rows,criteria,stats){
+    WZ.lightDone=true;
+    WZ.lightCount=Array.isArray(rows)?rows.length:0;
+    if(criteria&&criteria.__twoStage==='deep'){ WZ.deepDone=true; WZ.deepCount=WZ.lightCount; }
+    renderWizard();
+  };
+
   window.__wzRunDeep=function(){
     var deepBtn=document.getElementById('btnRunDeepScreener');
     if(deepBtn&&!deepBtn.disabled){
