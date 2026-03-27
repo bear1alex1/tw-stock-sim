@@ -298,6 +298,8 @@
   
 .screen-wizard-wrap{display:flex;flex-direction:column;gap:14px}.screen-wizard-step{display:flex;gap:12px;align-items:flex-start;padding:12px;border:1px solid var(--border2);border-radius:12px;background:linear-gradient(180deg,rgba(31,41,55,.55),rgba(17,24,39,.2))}.screen-wizard-num{width:30px;height:30px;border-radius:999px;background:#1f6feb;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;flex-shrink:0}.screen-wizard-title{font-size:.92rem;font-weight:800;color:#fff;margin-bottom:4px}.screen-wizard-desc{font-size:.77rem;color:#9fb4d2;margin-bottom:10px;line-height:1.6}.screen-wizard-grid{display:grid;gap:10px}.screen-wizard-grid.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.screen-wizard-grid.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.screen-wizard-btn{border:1px solid rgba(96,165,250,.22)!important;background:#182233!important}.screen-wizard-btn.active{background:linear-gradient(180deg,#28405f,#1d2c42)!important;border-color:#7fb5ff!important;color:#fff!important;box-shadow:0 0 0 1px rgba(96,165,250,.2) inset}.screen-wizard-note{padding:11px 12px;border:1px dashed rgba(96,165,250,.25);border-radius:10px;background:rgba(56,139,253,.06);color:#dbeafe;font-size:.82rem;line-height:1.7}.screen-quick-hidden{display:none!important}@media (max-width:1100px){.screen-wizard-grid.cols-4{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:700px){.screen-wizard-grid.cols-4,.screen-wizard-grid.cols-3{grid-template-columns:1fr}}
 
+  /* v3.9.14 simple filter cards passive style */
+  .screen-card { transition: border-color .15s, box-shadow .15s; }
 </style>
 </head>
 <body>
@@ -824,9 +826,23 @@
       </div>
     </div>
 
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-      <button class="btn btn-blue" id="btnRunScreener" style="padding:12px 24px;font-size:.96rem;">⚡ 先做輕篩</button>
-                        <button class="btn btn-ghost" id="btnRunDeepScreener" style="padding:12px 22px;display:none;border:1px solid rgba(96,165,250,.28);color:var(--blue);">🧠 對結果做深篩</button>
+    <!-- 操作步驟 wizard 佔位符 (JS 會填入) -->
+    <div class="card" id="screenInteractiveWizard" style="margin-bottom:12px;"></div>
+
+    <!-- 掃描進度卡 -->
+    <div class="card" id="screenProgressCard" style="margin-bottom:12px;display:none;">
+      <div class="sec-title" style="margin:0 0 8px 0;">⏳ 掃描進度</div>
+      <div id="screenProgressText" class="muted" style="margin-bottom:8px;font-size:.88rem;">等待開始</div>
+      <div style="height:10px;border-radius:999px;background:#0d1117;border:1px solid rgba(96,165,250,.2);overflow:hidden;">
+        <div id="screenProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#2563eb,#22c55e);transition:width .25s;border-radius:999px;"></div>
+      </div>
+      <div id="screenProgressMeta" class="muted" style="margin-top:6px;font-size:.76rem;">0 / 0</div>
+    </div>
+
+    <!-- 操作按鈕列 (在操作步驟下方) -->
+    <div id="screenActionRow" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+      <button class="btn btn-blue" id="btnRunScreener" style="padding:12px 24px;font-size:.96rem;">⚡ 開始篩選</button>
+      <button class="btn" id="btnRunDeepScan" style="padding:12px 22px;font-size:.96rem;background:#21262d;color:#6b7280;border:1px solid var(--border);cursor:not-allowed;" disabled>🧠 深度篩選（結果需≥2筆）</button>
       <button class="btn" id="btnStopScreener" style="padding:12px 22px;display:none;">⏹️ 停止掃描</button>
       <button class="btn" id="btnExportScreenPdf" style="padding:12px 22px;">🧾 匯出 PDF</button>
       <button class="btn" id="btnClearScreener" style="padding:12px 22px;">🗑️ 一鍵清除</button>
@@ -835,9 +851,9 @@
     <div class="card" id="screenResultCard" style="margin-bottom:12px;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <div class="sec-title" style="margin:0;">📋 篩選結果</div>
-        <div id="screenRunStatus" class="muted" style="font-size:.78rem;">尚未先做輕篩</div>
+        <div id="screenRunStatus" class="muted" style="font-size:.78rem;">尚未開始篩選</div>
       </div>
-      <div id="screenResultSummary" class="screen-stat" style="margin:10px 0 12px;">尚未先做輕篩。</div>
+      <div id="screenResultSummary" class="screen-stat" style="margin:10px 0 12px;">尚未開始篩選。</div>
       <div class="tbl-wrap">
         <table>
           <thead>
@@ -953,7 +969,7 @@
 <div id="toast"></div>
 
 <!-- Firebase SDK -->
-<script src="app.v3.9.14-2.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
@@ -961,7 +977,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <!-- App -->
-<script src="app.js?v=3.9.0"></script>
+<script src="app.v3.9.2-2.js"></script>
 
 <!-- SPA 導覽 -->
 <script>
@@ -1052,29 +1068,25 @@
   </div>
 </div>
 
-<div id="screenWizardFixMarker" style="display:none">v3.9.14-wizard-fix</div>
-
-
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="app.v3.9.2-2.js"></script>
 <script>
 (function(){
-  document.addEventListener('DOMContentLoaded', function(){
+  document.addEventListener('DOMContentLoaded',function(){
     var d=document.createElement('div');
-    d.id='v3914-debug-badge';
-    d.style.cssText='position:fixed;right:12px;bottom:12px;z-index:99999;background:#111827;color:#93c5fd;border:1px solid rgba(96,165,250,.35);padding:6px 10px;border-radius:999px;font:12px sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.35)';
-    d.textContent='JS: app.v3.9.2-2.js / v3.9.14';
+    d.style.cssText='position:fixed;right:10px;bottom:70px;z-index:99999;background:#111827;color:#4ade80;border:1px solid rgba(74,222,128,.3);padding:4px 10px;border-radius:999px;font:11px monospace';
+    d.textContent='✓ app.v3.9.2-2.js / v3.9.14';
     document.body.appendChild(d);
   });
 })();
 </script>
-
+<script>
+(function(){
+  document.addEventListener('DOMContentLoaded',function(){
+    var d=document.createElement('div');d.id='v3914-debug-badge';
+    d.style.cssText='position:fixed;right:10px;bottom:68px;z-index:99999;background:#0d1117;color:#4ade80;border:1px solid rgba(74,222,128,.3);padding:3px 10px;border-radius:999px;font:11px monospace;pointer-events:none;';
+    d.textContent='✓ app.v3.9.2-2.js v3.9.14';
+    document.body.appendChild(d);
+  });
+})();
+</script>
 </body>
 </html>
