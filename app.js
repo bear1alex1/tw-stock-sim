@@ -1,7 +1,7 @@
 const APP_VERSION = '3.9.0';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v3.9.8  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.9.10  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -2604,7 +2604,7 @@ async function exportScreenerPdf(){
     const now=new Date();
     head.innerHTML=''
       +'<div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:6px;">台股虛擬操盤系統｜篩選結果報表</div>'
-      +'<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：'+now.toLocaleDateString('zh-TW')+'｜匯出時間：'+now.toLocaleTimeString('zh-TW')+'｜版本：v3.9.8</div>'
+      +'<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：'+now.toLocaleDateString('zh-TW')+'｜匯出時間：'+now.toLocaleTimeString('zh-TW')+'｜版本：v3.9.10</div>'
       +'<div style="font-size:12px;color:#dbeafe;line-height:1.8;margin-bottom:14px;">篩選條件：'+formatScreenCriteria(_screenLastResult.criteria||{}).join('、')+'</div>';
     const clone=source.cloneNode(true);
     clone.style.marginTop='0';
@@ -2716,6 +2716,8 @@ async function runScreener(){
           fund:fund
         };
         okCount++;
+        window._screenLastScanItems = window._screenLastScanItems || [];
+        window._screenLastScanItems.push(item);
         if(evaluateScreenResult(item, criteria))rows.push(item);
       }catch(e){
         failCount++;
@@ -2994,6 +2996,8 @@ async function runScreener(){
           fund:fund
         };
         okCount++;
+        window._screenLastScanItems = window._screenLastScanItems || [];
+        window._screenLastScanItems.push(item);
         if(evaluateScreenResult(item, criteria))rows.push(item);
       }catch(e){
         failCount++;
@@ -4095,9 +4099,9 @@ document.addEventListener('DOMContentLoaded',()=>{
 })();
 
 
-/* v3.9.8 wizard + screener start fix */
+/* v3.9.10 wizard + screener start fix */
 (function(){
-  var HOTFIX_VER = 'v3.9.8';
+  var HOTFIX_VER = 'v3.9.10';
   function byId(id){ return document.getElementById(id); }
   function setText(id, txt){ var el=byId(id); if(el) el.textContent = txt; }
   function cloneBind(id, evt, fn){
@@ -4233,7 +4237,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 
 
 
-/* ===== v3.9.8 screener wizard patch ===== */
+/* ===== v3.9.10 screener wizard patch ===== */
 (function(){
   function wizText(id, text){ var el=document.getElementById(id); if(el) el.textContent=text; }
   function wizStep(id, state){
@@ -4316,7 +4320,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 
 
 
-/* ===== v3.9.8 interactive screener wizard ===== */
+/* ===== v3.9.10 interactive screener wizard ===== */
 (function(){
   var WZ = {
     step: 1,
@@ -4634,7 +4638,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 
 
 
-/* ===== v3.9.8 screener UX + allStocks safety patch ===== */
+/* ===== v3.9.10 screener UX + allStocks safety patch ===== */
 (function(){
   var SAFE_ALLSTOCK_LIMIT = 120;
   var injected = false;
@@ -4852,4 +4856,209 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
     setTimeout(initV398, 1500);
     setInterval(function(){ if(injected) syncDeepButtonState(); }, 1500);
   });
+})();
+
+
+/* ===== v3.9.10 allStocks universe fallback + wizard cleanup ===== */
+(function(){
+  if(document.getElementById('v399Style')) return;
+  var style=document.createElement('style');
+  style.id='v399Style';
+  style.textContent='#wzStep3,#wzStep4{display:none!important}';
+  document.head.appendChild(style);
+
+  function v399SetStatus(msg){
+    var el=document.getElementById('screenRunStatus');
+    if(el) el.textContent=msg;
+  }
+
+  async function v399FetchJson(url){
+    var urls=[url,'https://corsproxy.io/?'+encodeURIComponent(url),'https://api.allorigins.win/raw?url='+encodeURIComponent(url)];
+    for(var i=0;i<urls.length;i++){
+      try{
+        var r=await fetch(urls[i]);
+        if(!r.ok) continue;
+        var t=await r.text();
+        if(!t) continue;
+        var j=JSON.parse(t);
+        if(Array.isArray(j) && j.length) return j;
+      }catch(e){}
+    }
+    return [];
+  }
+
+  function v399ExtractCode(row){
+    var keys=['公司代號','證券代號','股票代號','代號','Code','code','CompanyCode','SecuritiesCompanyCode'];
+    for(var i=0;i<keys.length;i++){
+      var v=row&&row[keys[i]];
+      if(v && /^\d{4}$/.test(String(v).trim())) return String(v).trim();
+    }
+    for(var k in (row||{})){
+      var val=row[k];
+      if(val && /^\d{4}$/.test(String(val).trim())) return String(val).trim();
+    }
+    return '';
+  }
+
+  function v399ExtractName(row){
+    var keys=['公司名稱','證券名稱','股票名稱','名稱','Name','name','CompanyName','SecurityName'];
+    for(var i=0;i<keys.length;i++){
+      var v=row&&row[keys[i]];
+      if(v) return String(v).trim();
+    }
+    return '';
+  }
+
+  async function v399LoadAllStocks(){
+    var cached=[];
+    try{
+      cached=Object.keys(stockMetaCache||{}).filter(function(code){return /^\d{4}$/.test(code);});
+      if(cached.length>=200) return cached.sort();
+    }catch(e){}
+
+    v399SetStatus('載入全台股清單中…');
+    var twse=await v399FetchJson('https://openapi.twse.com.tw/v1/opendata/t187ap03_L');
+    var tpex=await v399FetchJson('https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O');
+    var merged=[].concat(Array.isArray(twse)?twse:[], Array.isArray(tpex)?tpex:[]);
+    var out=[];
+    merged.forEach(function(row){
+      var code=v399ExtractCode(row);
+      if(!code) return;
+      var name=v399ExtractName(row);
+      out.push(code);
+      if(name && !stockNameCache[code]) stockNameCache[code]=name;
+      if(!stockMetaCache[code]) stockMetaCache[code]={};
+      if(name && !stockMetaCache[code].stock_name) stockMetaCache[code].stock_name=name;
+      if(row['產業別'] && !stockMetaCache[code].industry_category) stockMetaCache[code].industry_category=String(row['產業別']).trim();
+    });
+    out=[...new Set(out)].filter(function(code){return /^\d{4}$/.test(code);}).sort();
+    if(out.length) return out;
+
+    try{
+      cached=Object.keys(stockNameCache||{}).filter(function(code){return /^\d{4}$/.test(code);});
+      if(cached.length) return cached.sort();
+    }catch(e){}
+    return [];
+  }
+
+  if(typeof getScreenerUniverse==='function' && !window.__v399UniverseWrapped){
+    window.__v399UniverseWrapped=true;
+    var __origGetScreenerUniverse=getScreenerUniverse;
+    getScreenerUniverse=async function(criteria){
+      criteria=criteria||{};
+      var mode=criteria.universe||'watchlist';
+      if(mode==='allStocks' || mode==='range'){
+        var all=await v399LoadAllStocks();
+        if(mode==='allStocks'){
+          v399SetStatus('已載入全台股清單 '+all.length+' 檔，開始篩選…');
+          return all.slice(0, 120);
+        }
+        var s=parseInt(criteria.rangeStart||'0',10);
+        var e=parseInt(criteria.rangeEnd||'0',10);
+        if(!isFinite(s)||!isFinite(e)||s<=0||e<=0||s>e) return [];
+        var arr=all.filter(function(code){ var n=parseInt(code,10); return isFinite(n)&&n>=s&&n<=e; });
+        v399SetStatus('已載入區間股票 '+arr.length+' 檔，開始篩選…');
+        return arr.slice(0, 120);
+      }
+      return __origGetScreenerUniverse(criteria);
+    };
+  }
+
+  if(typeof renderWizard==='function' && !window.__v399WizardWrapped){
+    window.__v399WizardWrapped=true;
+    var __origRenderWizard=renderWizard;
+    renderWizard=function(){
+      var out=__origRenderWizard();
+      var s3=document.getElementById('wzStep3');
+      var s4=document.getElementById('wzStep4');
+      if(s3) s3.style.display='none';
+      if(s4) s4.style.display='none';
+      return out;
+    };
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(function(){
+      var s3=document.getElementById('wzStep3');
+      var s4=document.getElementById('wzStep4');
+      if(s3) s3.style.display='none';
+      if(s4) s4.style.display='none';
+    }, 300);
+  });
+})();
+
+
+/* ===== v3.9.10 screener fallback result policy ===== */
+(function(){
+  if(window.__v3910PolicyPatched) return;
+  window.__v3910PolicyPatched = true;
+
+  var __origEvaluate = typeof evaluateScreenResult === 'function' ? evaluateScreenResult : null;
+  if(__origEvaluate){
+    evaluateScreenResult = function(item, criteria){
+      try{
+        var basicOk = __origEvaluate(item, criteria);
+        if(basicOk) return true;
+        if(!criteria) return false;
+        var simple = Array.isArray(criteria.simple) ? criteria.simple : [];
+        if(!simple.length && criteria.minTotal==null && criteria.minFund==null && criteria.maxRsi==null && criteria.minVolRatio==null && criteria.minRevYoY==null && criteria.minEPS==null) return true;
+        if(simple.includes('buyFit')){
+          var a = (item.price!=null && item.ma20!=null && item.price>=item.ma20) || (item.totalScore||0)>=60;
+          if(a) return true;
+        }
+        if(simple.includes('sellWatch')){
+          var b = (item.price!=null && item.ma20!=null && item.price<item.ma20) || (item.totalScore||0)<=45;
+          if(b) return true;
+        }
+        if(simple.includes('volumeSpike')){
+          if((item.volRatio||0) >= 1.2) return true;
+        }
+        if(simple.includes('oversold')){
+          if((item.rsi||999) <= 35) return true;
+        }
+        var gates = [];
+        if(criteria.minTotal!=null) gates.push((item.totalScore||0) >= criteria.minTotal);
+        if(criteria.minFund!=null) gates.push((item.fundScore||0) >= criteria.minFund);
+        if(criteria.maxRsi!=null && item.rsi!=null) gates.push(item.rsi <= criteria.maxRsi);
+        if(criteria.minVolRatio!=null && item.volRatio!=null) gates.push(item.volRatio >= criteria.minVolRatio);
+        if(criteria.minRevYoY!=null && item.revYoY!=null) gates.push(item.revYoY >= criteria.minRevYoY);
+        if(criteria.minEPS!=null && item.ttmEPS!=null) gates.push(item.ttmEPS >= criteria.minEPS);
+        if(gates.length && gates.every(Boolean)) return true;
+      } catch(e) {}
+      return false;
+    };
+  }
+
+  if(typeof renderScreenResults === 'function' && !window.__v3910RenderWrapped){
+    window.__v3910RenderWrapped = true;
+    var __origRender = renderScreenResults;
+    renderScreenResults = function(rows, criteria, stats){
+      rows = Array.isArray(rows) ? rows : [];
+      if(!rows.length && typeof _screenLastScanItems !== 'undefined' && Array.isArray(_screenLastScanItems) && _screenLastScanItems.length){
+        var fallback = _screenLastScanItems.slice().sort(function(a,b){ return (b.totalScore||0)-(a.totalScore||0); }).slice(0, Math.max(5, Math.min(20, _screenLastScanItems.length)));
+        if(criteria) criteria = Object.assign({}, criteria, { __fallbackUsed:true });
+        rows = fallback;
+      }
+      var out = __origRender(rows, criteria, stats);
+      var summary = document.getElementById('screenResultSummary');
+      if(summary && criteria && criteria.__fallbackUsed){
+        summary.innerHTML += '<span class="screen-result-chip" style="background:rgba(250,204,21,.10);color:#fde68a;border-color:rgba(250,204,21,.22);">已套用寬鬆候選回補</span>';
+      }
+      return out;
+    };
+  }
+
+  if(typeof runScreener === 'function' && !window.__v3910RunWrapped){
+    window.__v3910RunWrapped = true;
+    var __origRun = runScreener;
+    runScreener = async function(){
+      window._screenLastScanItems = [];
+      var origPush = Array.prototype.push;
+      try{
+        return await __origRun();
+      } finally {}
+    };
+  }
+
+  if(js && js.indexOf('if(evaluateScreenResult(item, criteria))rows.push(item);') !== -1){}
 })();
