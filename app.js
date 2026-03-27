@@ -1,7 +1,7 @@
-const APP_VERSION = '3.5.1';   // ← 只改這裡就能更版
+const APP_VERSION = '3.6';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v3.5.1  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.6  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -1346,6 +1346,7 @@ async function preloadStockNames(){
         if(typeof renderHoldingsOverview==='function')renderHoldingsOverview();
         if(typeof renderAISymbolOptions==='function')renderAISymbolOptions();
         if(typeof renderScenarioSymbolOptions==='function')renderScenarioSymbolOptions();
+        if(typeof renderScenarioHoldingOptions==='function')renderScenarioHoldingOptions();
         refreshAllSymbolHints();
       }
     }catch(e){
@@ -2446,6 +2447,54 @@ function initAIReportPage(){
 // ═══════════════════════════════════════════════════════
 //  投資模擬試算 (v3.2)
 // ═══════════════════════════════════════════════════════
+
+function getHoldingScenarioItems(){
+  return Object.keys(state.holdings||{}).sort().map(function(sym){
+    var h=state.holdings[sym]||{};
+    return {symbol:sym,shares:parseInt(h.shares||0,10)||0,avgPrice:num(h.avgPrice)||0,name:getStockName(sym)||''};
+  }).filter(function(it){return it.shares>0;});
+}
+function renderScenarioHoldingOptions(){
+  var sel=document.getElementById('scenarioHoldingSelect');
+  if(!sel)return;
+  var items=getHoldingScenarioItems();
+  sel.innerHTML='<option value="">請選擇持股庫存（可自動帶入買入價與股數）</option>' + items.map(function(it){
+    return '<option value="'+it.symbol+'">'+it.symbol+(it.name?' '+it.name:'')+'｜'+it.shares+'股｜均價 '+formatPrice(it.avgPrice)+'</option>';
+  }).join('');
+}
+function fillScenarioFromHolding(symbol, keepExit){
+  var sym=normalizeSymbol(symbol||'');
+  var h=(state.holdings||{})[sym];
+  var hint=document.getElementById('scenarioHoldingHint');
+  if(!h){
+    if(hint)hint.textContent='目前選取的代號不在持股庫存中，可手動輸入買入價、股數與賣出價進行試算。';
+    return false;
+  }
+  var avg=num(h.avgPrice)||0;
+  var shares=parseInt(h.shares||0,10)||0;
+  var inpSym=document.getElementById('scenarioSymbol');
+  var inpEntry=document.getElementById('scenarioEntryPrice');
+  var inpShares=document.getElementById('scenarioShares');
+  var sel=document.getElementById('scenarioHoldingSelect');
+  if(inpSym)inpSym.value=sym;
+  if(inpEntry&&avg>0)inpEntry.value=avg.toFixed(2);
+  if(inpShares&&shares>0)inpShares.value=shares;
+  if(sel)sel.value=sym;
+  if(hint)hint.textContent='已從持股庫存帶入：'+sym+(getStockName(sym)?' '+getStockName(sym):'')+'，均價 '+formatPrice(avg)+'，股數 '+shares+' 股。請手動輸入賣出價進行試算。';
+  _scenarioUpdateSymbolLabel();
+  if(!keepExit){
+    var exit=document.getElementById('scenarioExitPrice');
+    if(exit)exit.value='';
+  }
+  calculateScenarioProfit();
+  return true;
+}
+function syncScenarioHoldingSelect(){
+  var sym=normalizeSymbol(document.getElementById('scenarioSymbol')?.value||'');
+  var sel=document.getElementById('scenarioHoldingSelect');
+  if(sel)sel.value=(state.holdings&&state.holdings[sym])?sym:'';
+}
+
 function renderScenarioSymbolOptions(){
   var dl=document.getElementById('scenarioSymbols');
   if(!dl)return;
@@ -2458,16 +2507,28 @@ function renderScenarioSymbolOptions(){
 function _scenarioUpdateSymbolLabel(){
   var inp=document.getElementById('scenarioSymbol');
   var lbl=document.getElementById('scenarioSymbolName');
+  var hint=document.getElementById('scenarioHoldingHint');
   if(!inp||!lbl)return;
   var sym=normalizeSymbol(inp.value||'');
   inp.value=sym;
   var n=sym?getStockName(sym):'';
-  lbl.textContent=sym?(n||'載入名稱中…'):'請輸入股票代號';
+  lbl.textContent=sym?(n?(sym+' '+n):(sym+' 載入名稱中…')):'請輸入股票代號';
+  syncScenarioHoldingSelect();
+  var h=(state.holdings||{})[sym];
+  if(hint){
+    if(sym&&h)hint.textContent='此代號在持股庫存中，均價 '+formatPrice(h.avgPrice)+'，股數 '+h.shares+' 股，可一鍵帶入試算。';
+    else if(sym)hint.textContent='目前選取的代號不在持股庫存中，可手動輸入買入價、股數與賣出價進行試算。';
+    else hint.textContent='若選擇已持有股票，系統會自動帶入均價與股數，你只需輸入賣出價即可試算。';
+  }
   if(sym&&!n){
     fetchChineseName(sym).then(function(){
       var cur=document.getElementById('scenarioSymbolName');
-      if(cur&&cur.textContent==='載入名稱中…')cur.textContent=getStockName(sym)||sym;
+      if(cur){
+        var nm=getStockName(sym)||'';
+        cur.textContent=nm?(sym+' '+nm):sym;
+      }
       renderScenarioSymbolOptions();
+      renderScenarioHoldingOptions();
     });
   }
 }
@@ -2520,15 +2581,30 @@ function openScenarioModal(){
   var sym=normalizeSymbol(document.getElementById('tradeSymbol')?.value||'');
   var qty=document.getElementById('tradeQty')?.value||'';
   var pr=num(document.getElementById('tradePrice')?.value)||null;
+  renderScenarioSymbolOptions();
+  renderScenarioHoldingOptions();
   if(sym)document.getElementById('scenarioSymbol').value=sym;
   if(qty)document.getElementById('scenarioShares').value=qty;
   if(pr){document.getElementById('scenarioEntryPrice').value=pr.toFixed(2);}
   else if(sym&&quoteCache[sym]?.data?.price){document.getElementById('scenarioEntryPrice').value=quoteCache[sym].data.price.toFixed(2);}
-  renderScenarioSymbolOptions();
   _scenarioUpdateSymbolLabel();
   calculateScenarioProfit();
   modal.style.display='flex';
   modal.classList.add('show');
+}
+function openHoldingScenarioModal(){
+  var modal=document.getElementById('scenarioModal');
+  if(!modal)return;
+  renderScenarioSymbolOptions();
+  renderScenarioHoldingOptions();
+  var sym=normalizeSymbol(document.getElementById('tradeSymbol')?.value||'');
+  var items=getHoldingScenarioItems();
+  if((!sym||!state.holdings[sym])&&items.length)sym=items[0].symbol;
+  if(!sym||!state.holdings[sym]){showToast('❌ 目前沒有持股庫存可帶入');openScenarioModal();return;}
+  fillScenarioFromHolding(sym,false);
+  modal.style.display='flex';
+  modal.classList.add('show');
+  setTimeout(function(){document.getElementById('scenarioExitPrice')?.focus();},50);
 }
 function closeScenarioModal(){
   var modal=document.getElementById('scenarioModal');
@@ -2601,11 +2677,21 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('btnGenAIReport')?.addEventListener('click',function(){generateAIReport();});
   document.getElementById('aiSymbol')?.addEventListener('keydown',function(e){if(e.key==='Enter')generateAIReport();});
   document.getElementById('btnOpenScenario')?.addEventListener('click',openScenarioModal);
+  document.getElementById('btnHoldingScenario')?.addEventListener('click',openHoldingScenarioModal);
   document.getElementById('btnCloseScenario')?.addEventListener('click',closeScenarioModal);
   document.getElementById('btnApplyScenario')?.addEventListener('click',applyScenarioToTrade);
   document.getElementById('scenarioModal')?.addEventListener('click',function(e){if(e.target===this)closeScenarioModal();});
   ['scenarioSymbol','scenarioShares','scenarioEntryPrice','scenarioExitPrice'].forEach(function(id){
     document.getElementById(id)?.addEventListener('input',calculateScenarioProfit);
+  });
+  document.getElementById('scenarioHoldingSelect')?.addEventListener('change',function(){
+    if(this.value)fillScenarioFromHolding(this.value,true);
+    else _scenarioUpdateSymbolLabel();
+  });
+  document.getElementById('scenarioSymbol')?.addEventListener('change',function(){
+    var sym=normalizeSymbol(this.value||'');
+    if(sym&&state.holdings&&state.holdings[sym])fillScenarioFromHolding(sym,true);
+    else _scenarioUpdateSymbolLabel();
   });
 
   // 版號注入
