@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>台股虛擬操盤 v3.9.16</title>
+  <title>台股虛擬操盤 v3.9.17</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
@@ -1835,7 +1835,7 @@
       50% { box-shadow: 0 0 0 8px rgba(220,38,38,0); }
     }
 
-    
+
     .screen-step-block {
       display: flex;
       flex-direction: column;
@@ -1907,7 +1907,7 @@
       <span style="font-size:1.2rem;">📈</span>
       <div>
         <div style="font-weight:800;color:var(--text);font-size:.92rem;line-height:1.2;">
-          台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.9.16</span>
+          台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.9.17</span>
         </div>
         <div id="lastSaved" style="font-size:.65rem;color:#555;line-height:1.2;">最後儲存：—</div>
       </div>
@@ -2485,7 +2485,7 @@
               <div class="screen-wizard-num">1</div>
               <div style="flex:1;">
                 <div class="screen-wizard-title">步驟 1：選擇掃描工作</div>
-                <div class="screen-wizard-desc">先點選 6 個工作按鈕之一；選到「指定區間」會立即展開起訖代號欄位，選到「指定清單」會立即展開代號清單輸入框。</div>
+                <div class="screen-wizard-desc">點選 6 個按鈕之一即可選定掃描母體；選到「指定區間」會立即展開起訖代號欄位，選到「指定清單」會立即展開代號清單輸入框。</div>
                 <div class="screen-job-grid">
                   <button class="btn screen-job-btn" type="button" data-screen-job="allStocks">全台股</button>
                   <button class="btn screen-job-btn" type="button" data-screen-job="watchlist">自選清單</button>
@@ -2524,7 +2524,7 @@
                       </select>
                     </div>
                   </div>
-                  <div class="screen-inline-note">「指定區間」會依起訖代號建立候選池，再套用類別與條件篩選。</div>
+                  <div class="screen-inline-note">「指定區間」會依起訖代號建立候選池，再套用條件與分類篩選。</div>
                 </div>
                 <div class="screen-step-actions">
                   <button class="btn btn-blue" id="btnConfirmScreenWork" type="button">確認工作，下一步 →</button>
@@ -2796,7 +2796,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
   <!-- App -->
-  <script src="app.v3.9.16.js?v=v3.9.16"></script>
+  <script src="app.v3.9.17.js?v=v3.9.17"></script>
 
   <!-- SPA 導覽 -->
   <script>
