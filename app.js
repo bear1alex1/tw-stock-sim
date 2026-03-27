@@ -1,7 +1,7 @@
 const APP_VERSION = '3.9.0';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v3.9.11  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.9.12  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -2604,7 +2604,7 @@ async function exportScreenerPdf(){
     const now=new Date();
     head.innerHTML=''
       +'<div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:6px;">台股虛擬操盤系統｜篩選結果報表</div>'
-      +'<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：'+now.toLocaleDateString('zh-TW')+'｜匯出時間：'+now.toLocaleTimeString('zh-TW')+'｜版本：v3.9.11</div>'
+      +'<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：'+now.toLocaleDateString('zh-TW')+'｜匯出時間：'+now.toLocaleTimeString('zh-TW')+'｜版本：v3.9.12</div>'
       +'<div style="font-size:12px;color:#dbeafe;line-height:1.8;margin-bottom:14px;">篩選條件：'+formatScreenCriteria(_screenLastResult.criteria||{}).join('、')+'</div>';
     const clone=source.cloneNode(true);
     clone.style.marginTop='0';
@@ -4099,9 +4099,9 @@ document.addEventListener('DOMContentLoaded',()=>{
 })();
 
 
-/* v3.9.11 wizard + screener start fix */
+/* v3.9.12 wizard + screener start fix */
 (function(){
-  var HOTFIX_VER = 'v3.9.11';
+  var HOTFIX_VER = 'v3.9.12';
   function byId(id){ return document.getElementById(id); }
   function setText(id, txt){ var el=byId(id); if(el) el.textContent = txt; }
   function cloneBind(id, evt, fn){
@@ -4237,7 +4237,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 
 
 
-/* ===== v3.9.11 screener wizard patch ===== */
+/* ===== v3.9.12 screener wizard patch ===== */
 (function(){
   function wizText(id, text){ var el=document.getElementById(id); if(el) el.textContent=text; }
   function wizStep(id, state){
@@ -4320,7 +4320,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 
 
 
-/* ===== v3.9.11 interactive screener wizard ===== */
+/* ===== v3.9.12 interactive screener wizard ===== */
 (function(){
   var WZ = {
     step: 1,
@@ -4638,7 +4638,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 
 
 
-/* ===== v3.9.11 screener UX + allStocks safety patch ===== */
+/* ===== v3.9.12 screener UX + allStocks safety patch ===== */
 (function(){
   var SAFE_ALLSTOCK_LIMIT = 120;
   var injected = false;
@@ -4859,7 +4859,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 })();
 
 
-/* ===== v3.9.11 allStocks universe fallback + wizard cleanup ===== */
+/* ===== v3.9.12 allStocks universe fallback + wizard cleanup ===== */
 (function(){
   if(document.getElementById('v399Style')) return;
   var style=document.createElement('style');
@@ -4988,7 +4988,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 })();
 
 
-/* ===== v3.9.11 screener fallback result policy ===== */
+/* ===== v3.9.12 screener fallback result policy ===== */
 (function(){
   if(window.__v3910PolicyPatched) return;
   window.__v3910PolicyPatched = true;
@@ -5064,7 +5064,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 })();
 
 
-/* ===== v3.9.11 robust screener runner + progress UX ===== */
+/* ===== v3.9.12 robust screener runner + progress UX ===== */
 (function(){
   if(window.__v3911Patched) return;
   window.__v3911Patched = true;
@@ -5428,4 +5428,233 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
     setTimeout(init, 1500);
     setInterval(function(){ simplifyWizardDom(); syncSimpleCardsFromFilters(); renderActionButtonStates(); }, 1200);
   });
+})();
+
+
+/* ===== v3.9.12 clean screener override ===== */
+(function(){
+  if(window.__v3912Loaded) return;
+  window.__v3912Loaded = true;
+
+  var CTL = { mode:'idle', cancel:false };
+  function $(id){ return document.getElementById(id); }
+  function sleep2(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+  function N(v){ try { return typeof num==='function' ? num(v) : Number(v); } catch(e){ return Number(v); } }
+  function timeoutPromise(p, ms, label){ return Promise.race([p, new Promise(function(_,rej){ setTimeout(function(){ rej(new Error((label||'task')+' timeout')); }, ms); })]); }
+  function activeFilters(){ return Array.from(document.querySelectorAll('[data-screen-filter].active')).map(function(el){ return el.dataset.screenFilter; }); }
+  function filterLabel(k){ return ({buyFit:'適合買進',sellWatch:'考慮賣出',volumeSpike:'量能異動',oversold:'超跌反彈'})[k] || k; }
+  function setVersion(){
+    var el=$('appVersion'); if(el) el.textContent='v3.9.12';
+    document.title='v3.9.12';
+  }
+  function getUniverse(){
+    var mode = $('screenUniverse') ? $('screenUniverse').value : 'watchlist';
+    var arr = [];
+    if(mode==='watchlist') arr = (state&&state.watchlist?state.watchlist:[]).slice();
+    else if(mode==='holdings') arr = Object.keys(state&&state.holdings?state.holdings:{});
+    else if(mode==='union') arr = Array.from(new Set([].concat(state&&state.watchlist?state.watchlist:[], Object.keys(state&&state.holdings?state.holdings:{}))));
+    else if(mode==='custom') {
+      var raw = $('screenCustomList') ? $('screenCustomList').value : '';
+      arr = raw.split(/[\s,，;；]+/).map(function(x){ return normalizeSymbol(x); }).filter(Boolean);
+    } else if(mode==='range') {
+      var s = parseInt(($('screenRangeStart')||{}).value||'0',10), e = parseInt(($('screenRangeEnd')||{}).value||'0',10);
+      if(isFinite(s)&&isFinite(e)&&s>0&&e>=s){ for(var i=s;i<=Math.min(e,s+119);i++) arr.push(String(i).padStart(4,'0')); }
+    } else if(mode==='allStocks') {
+      try {
+        var pool = Object.keys(stockMetaCache||{}).filter(function(code){ return /^\d{4}$/.test(code); }).sort();
+        arr = pool.slice(0,120);
+      } catch(e) { arr = []; }
+    }
+    arr = Array.from(new Set(arr.map(function(x){ return normalizeSymbol(x); }).filter(Boolean)));
+    return arr;
+  }
+  function getCriteria(){
+    return {
+      simple: activeFilters(),
+      minTotal: N(($('screenMinTotal')||{}).value),
+      minFund: N(($('screenMinFund')||{}).value),
+      maxRsi: N(($('screenMaxRsi')||{}).value),
+      minVolRatio: N(($('screenMinVolRatio')||{}).value),
+      minRevYoY: N(($('screenMinRevYoY')||{}).value),
+      minEPS: N(($('screenMinEPS')||{}).value),
+      sortBy: ($('screenSortBy')||{}).value || 'totalDesc',
+      limit: parseInt((($('screenLimit')||{}).value || '20'),10)||20,
+      universe: ($('screenUniverse')||{}).value || 'watchlist'
+    };
+  }
+  function relaxedPass(item, criteria){
+    var simple = criteria.simple || [];
+    if(!simple.length && !criteria.minTotal && !criteria.minFund && !criteria.maxRsi && !criteria.minVolRatio && !criteria.minRevYoY && !criteria.minEPS) return true;
+    if(simple.includes('buyFit') && (((item.price!=null&&item.ma20!=null&&item.price>=item.ma20)) || (item.totalScore||0)>=55)) return true;
+    if(simple.includes('sellWatch') && (((item.price!=null&&item.ma20!=null&&item.price<item.ma20)) || (item.totalScore||0)<=45)) return true;
+    if(simple.includes('volumeSpike') && (item.volRatio||0)>=1.2) return true;
+    if(simple.includes('oversold') && (item.rsi||999)<=35) return true;
+    var gates=[];
+    if(criteria.minTotal!=null && !isNaN(criteria.minTotal)) gates.push((item.totalScore||0)>=criteria.minTotal);
+    if(criteria.minFund!=null && !isNaN(criteria.minFund)) gates.push((item.fundScore||0)>=criteria.minFund);
+    if(criteria.maxRsi!=null && !isNaN(criteria.maxRsi) && item.rsi!=null) gates.push(item.rsi<=criteria.maxRsi);
+    if(criteria.minVolRatio!=null && !isNaN(criteria.minVolRatio) && item.volRatio!=null) gates.push(item.volRatio>=criteria.minVolRatio);
+    if(criteria.minRevYoY!=null && !isNaN(criteria.minRevYoY) && item.revYoY!=null) gates.push(item.revYoY>=criteria.minRevYoY);
+    if(criteria.minEPS!=null && !isNaN(criteria.minEPS) && item.ttmEPS!=null) gates.push(item.ttmEPS>=criteria.minEPS);
+    return gates.length ? gates.every(Boolean) : false;
+  }
+  async function buildItem(symbol){
+    var rows = await timeoutPromise(fetchAIReportData(symbol), 12000, 'price');
+    if(!rows || rows.length<30) return {skip:true};
+    var tech = analyzeAIData(symbol, rows);
+    var fund = await timeoutPromise(analyzeAIFundamental(symbol, tech.name||getStockName(symbol)||''), 10000, 'fund');
+    var closes = rows.map(function(r){ return r.close; });
+    var vols = rows.map(function(r){ return N(r.volume)||0; });
+    var last = rows[rows.length-1]||{};
+    var avg5 = (vols.slice(-6,-1).reduce(function(a,b){return a+b;},0)/Math.max(1,Math.min(5,vols.length-1)))||0;
+    return {
+      symbol:symbol,
+      name:tech.name||getStockName(symbol)||'',
+      price:N(last.close),
+      ma20:N(tech.m20),
+      techScore:N(tech.comprehensiveScore)||0,
+      fundScore:N(fund.score)||0,
+      totalScore:Math.round((N(tech.comprehensiveScore)||0)*0.6 + (N(fund.score)||0)*0.4),
+      rsi:calcRSI(closes,14),
+      volRatio:avg5>0?((N(last.volume)||0)/avg5):null,
+      revYoY:extractMetricValue(fund.metrics,'月營收年增'),
+      ttmEPS:extractMetricValue(fund.metrics,'近四季 EPS'),
+      tech:tech,
+      fund:fund
+    };
+  }
+  function ensureProgress(){
+    if($('screenProgressCard')) return;
+    var card = document.createElement('div');
+    card.id='screenProgressCard';
+    card.className='card';
+    card.style.margin='0 0 12px 0';
+    card.style.display='none';
+    card.innerHTML='<div class="sec-title" style="margin:0 0 8px 0;">⏳ 掃描進度</div>'+
+      '<div id="screenProgressText" class="muted" style="margin-bottom:8px;">等待開始</div>'+
+      '<div style="height:10px;border-radius:999px;background:#0f172a;border:1px solid rgba(96,165,250,.25);overflow:hidden;"><div id="screenProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#2563eb,#22c55e);"></div></div>'+
+      '<div id="screenProgressMeta" class="muted" style="margin-top:8px;font-size:.78rem;">0 / 0</div>';
+    var result = $('screenResultCard');
+    var wiz = $('screenInteractiveWizard');
+    if(result && result.parentNode) result.parentNode.insertBefore(card, result);
+    if(wiz && wiz.parentNode && card.parentNode===wiz.parentNode) wiz.parentNode.insertBefore(card, result);
+  }
+  function updateProgress(show,text,pct,meta){
+    ensureProgress();
+    if($('screenProgressCard')) $('screenProgressCard').style.display = show ? '' : 'none';
+    if($('screenProgressText') && text!=null) $('screenProgressText').textContent = text;
+    if($('screenProgressBar') && pct!=null) $('screenProgressBar').style.width = Math.max(0,Math.min(100,pct))+'%';
+    if($('screenProgressMeta') && meta!=null) $('screenProgressMeta').textContent = meta;
+  }
+  function moveActionRow(){
+    var run=$('btnRunScreener'); if(!run) return;
+    var row=run.parentNode, wiz=$('screenInteractiveWizard'), prog=$('screenProgressCard'), result=$('screenResultCard');
+    if(!row||!row.parentNode) return;
+    if(wiz && row.previousElementSibling!==wiz) row.parentNode.insertBefore(row, (prog&&prog.parentNode===row.parentNode)?prog.nextSibling:(wiz.nextSibling));
+    else if(prog && row.previousElementSibling!==prog) row.parentNode.insertBefore(row, prog.nextSibling);
+    else if(result && row.nextElementSibling!==result) row.parentNode.insertBefore(row, result);
+  }
+  function mirrorCards(){
+    var selected = activeFilters();
+    document.querySelectorAll('[data-screen-filter]').forEach(function(el){
+      el.style.pointerEvents='none'; el.style.cursor='default';
+      el.classList.toggle('active', selected.indexOf(el.dataset.screenFilter)>=0);
+      var badge = el.querySelector('.v3912badge');
+      if(!badge){ badge=document.createElement('div'); badge.className='v3912badge'; badge.style.marginTop='6px'; badge.style.fontSize='.72rem'; badge.style.color='#93c5fd'; el.appendChild(badge); }
+      badge.textContent = selected.indexOf(el.dataset.screenFilter)>=0 ? '✓ 已由步驟2選取' : '由步驟2控制';
+    });
+  }
+  function buttonStates(){
+    var run=$('btnRunScreener'), deep=$('btnRunDeepScanTop'), deepR=$('btnRunDeepScanResult');
+    var rows = (window._screenLastResult && Array.isArray(_screenLastResult.rows)) ? _screenLastResult.rows.length : 0;
+    var pool = getUniverse().length;
+    if(run){ run.textContent = CTL.mode==='light' ? '■ 停止掃描' : '⚡ 開始篩選'; run.style.background = CTL.mode==='light' ? '#dc2626' : ''; run.disabled=false; }
+    [deep,deepR].forEach(function(btn){
+      if(!btn) return;
+      var ok = rows>=2 && pool>0 && pool<20;
+      btn.textContent = CTL.mode==='deep' ? '■ 停止掃描' : ('🧠 深度篩選' + (ok?'':'（母體<20且結果≥2）'));
+      btn.disabled = CTL.mode!=='deep' && !ok;
+      btn.style.background = CTL.mode==='deep' ? '#dc2626' : (ok ? '#16a34a' : '#21262d');
+      btn.style.color = (CTL.mode==='deep' || ok) ? '#fff' : '#6b7280';
+    });
+  }
+  function ensureDeepButtons(){
+    var run=$('btnRunScreener');
+    if(run && !$('btnRunDeepScanTop')){ var b=document.createElement('button'); b.id='btnRunDeepScanTop'; b.className='btn'; b.style.padding='12px 22px'; b.style.fontSize='.96rem'; run.insertAdjacentElement('afterend', b); }
+    var res=$('screenResultCard');
+    if(res){ var head=res.querySelector('div[style*="justify-content:space-between"]'); if(head && !$('btnRunDeepScanResult')){ var b2=document.createElement('button'); b2.id='btnRunDeepScanResult'; b2.className='btn btn-ghost'; b2.style.padding='8px 16px'; b2.style.fontSize='.84rem'; head.appendChild(b2); }}
+    var native=$('btnRunDeepScreener'); if(native) native.style.display='none';
+    var stop=$('btnStopScreener'); if(stop) stop.style.display='none';
+  }
+  function forceWizardView(){
+    ['wzStep3','wzStep4','wizardStep3','wizardStep4'].forEach(function(id){ var el=$(id); if(el) el.style.display='none'; });
+    var s2=$('wzStep2');
+    if(s2){ var t=s2.querySelector('.wz-head-title'); if(t) t.textContent='勾選篩選條件'; var btn=s2.querySelector('.wz-btn-primary'); if(btn){ btn.textContent='開始篩選'; btn.onclick=function(){ runLight(); }; } }
+  }
+  function bindButtons(){
+    ['btnRunScreener','btnRunDeepScanTop','btnRunDeepScanResult'].forEach(function(id){
+      var el=$(id); if(!el||!el.parentNode) return;
+      var clone=el.cloneNode(true); el.parentNode.replaceChild(clone, el);
+    });
+    $('btnRunScreener').onclick=function(e){ e.preventDefault(); runLight(); return false; };
+    if($('btnRunDeepScanTop')) $('btnRunDeepScanTop').onclick=function(e){ e.preventDefault(); runDeep(); return false; };
+    if($('btnRunDeepScanResult')) $('btnRunDeepScanResult').onclick=function(e){ e.preventDefault(); runDeep(); return false; };
+  }
+  async function runLight(){
+    if(CTL.mode==='light'){ CTL.cancel=true; return; }
+    var symbols=getUniverse(), criteria=getCriteria();
+    if(!symbols.length){ if($('screenRunStatus')) $('screenRunStatus').textContent='沒有可篩選的股票'; return; }
+    CTL.mode='light'; CTL.cancel=false; buttonStates();
+    if(typeof _screenLastResult!=='undefined') _screenLastResult={rows:[],criteria:criteria,stats:null,generatedAt:new Date().toISOString()};
+    if($('screenResultBody')) $('screenResultBody').innerHTML='';
+    if($('screenResultEmpty')) $('screenResultEmpty').style.display='';
+    if($('screenResultSummary')) $('screenResultSummary').textContent='開始掃描 '+symbols.length+' 檔…';
+    updateProgress(true,'開始掃描中…',0,'0 / '+symbols.length);
+    var rows=[], all=[]; var ok=0, fail=0, skip=0;
+    try{
+      for(var i=0;i<symbols.length;i++){
+        if(CTL.cancel) break;
+        var symbol=symbols[i];
+        if($('screenRunStatus')) $('screenRunStatus').textContent='掃描中 '+(i+1)+' / '+symbols.length+'：'+symbol+'｜成功 '+ok+'｜失敗 '+fail+'｜略過 '+skip;
+        updateProgress(true,'正在分析 '+symbol+'…',(i/symbols.length)*100,'成功 '+ok+'｜失敗 '+fail+'｜略過 '+skip);
+        try{
+          var item=await buildItem(symbol);
+          if(item&&item.skip) skip++;
+          else { ok++; all.push(item); if(relaxedPass(item,criteria)) rows.push(item); }
+        }catch(e){ fail++; }
+        if((i+1)%4===0) await sleep2(120);
+      }
+      if(!rows.length && all.length) rows=all.slice().sort(function(a,b){ return (b.totalScore||0)-(a.totalScore||0); }).slice(0, Math.max(5, Math.min(criteria.limit||20, all.length)));
+      if(typeof renderScreenResults==='function') renderScreenResults(rows, criteria, {total:symbols.length,ok:ok,failed:fail,skipped:skip});
+      if($('screenRunStatus')) $('screenRunStatus').textContent = CTL.cancel ? '掃描已停止' : ('篩選完成｜命中 '+rows.length+' 檔');
+      updateProgress(true, CTL.cancel ? '掃描已停止' : '篩選完成', 100, '命中 '+rows.length+' 檔');
+    } finally { CTL.mode='idle'; CTL.cancel=false; buttonStates(); }
+  }
+  async function runDeep(){
+    if(CTL.mode==='deep'){ CTL.cancel=true; return; }
+    var base=(window._screenLastResult&&Array.isArray(_screenLastResult.rows))?_screenLastResult.rows.slice():[];
+    if(base.length<2) return;
+    CTL.mode='deep'; CTL.cancel=false; buttonStates();
+    try{
+      var out=[];
+      for(var i=0;i<base.length;i++){
+        if(CTL.cancel) break;
+        var r=JSON.parse(JSON.stringify(base[i]));
+        r.totalScore=Math.max(0,Math.min(100,Math.round((r.totalScore||0)*0.6 + (r.techScore||0)*0.25 + (r.fundScore||0)*0.15 + ((r.price!=null&&r.ma20!=null&&r.price>=r.ma20)?8:0) + (((r.volRatio||0)>=1.2)?5:0))));
+        out.push(r);
+        if($('screenRunStatus')) $('screenRunStatus').textContent='深度篩選中 '+(i+1)+' / '+base.length;
+        updateProgress(true,'深度篩選中…',((i+1)/base.length)*100,(i+1)+' / '+base.length);
+        if((i+1)%4===0) await sleep2(60);
+      }
+      out.sort(function(a,b){ return (b.totalScore||0)-(a.totalScore||0); });
+      renderScreenResults(out, Object.assign({}, (window._screenLastResult&&_screenLastResult.criteria)||{}, {__twoStage:'deep'}), {total:base.length,ok:out.length,failed:0,skipped:0});
+      if($('screenRunStatus')) $('screenRunStatus').textContent=CTL.cancel?'深度篩選已停止':'深度篩選完成';
+      updateProgress(true,CTL.cancel?'深度篩選已停止':'深度篩選完成',100,'保留 '+out.length+' 檔');
+    } finally { CTL.mode='idle'; CTL.cancel=false; buttonStates(); }
+  }
+  function apply(){
+    setVersion(); ensureProgress(); ensureDeepButtons(); moveActionRow(); mirrorCards(); forceWizardView(); bindButtons(); buttonStates();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', function(){ apply(); setTimeout(apply,600); setTimeout(apply,1800); setInterval(apply,2500); }, {once:true});
+  else { apply(); setTimeout(apply,600); setTimeout(apply,1800); setInterval(apply,2500); }
 })();
