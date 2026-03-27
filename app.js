@@ -1,7 +1,7 @@
 const APP_VERSION = '3.9.0';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v3.9.7  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.9.8  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -2604,7 +2604,7 @@ async function exportScreenerPdf(){
     const now=new Date();
     head.innerHTML=''
       +'<div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:6px;">台股虛擬操盤系統｜篩選結果報表</div>'
-      +'<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：'+now.toLocaleDateString('zh-TW')+'｜匯出時間：'+now.toLocaleTimeString('zh-TW')+'｜版本：v3.9.7</div>'
+      +'<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：'+now.toLocaleDateString('zh-TW')+'｜匯出時間：'+now.toLocaleTimeString('zh-TW')+'｜版本：v3.9.8</div>'
       +'<div style="font-size:12px;color:#dbeafe;line-height:1.8;margin-bottom:14px;">篩選條件：'+formatScreenCriteria(_screenLastResult.criteria||{}).join('、')+'</div>';
     const clone=source.cloneNode(true);
     clone.style.marginTop='0';
@@ -4095,9 +4095,9 @@ document.addEventListener('DOMContentLoaded',()=>{
 })();
 
 
-/* v3.9.7 wizard + screener start fix */
+/* v3.9.8 wizard + screener start fix */
 (function(){
-  var HOTFIX_VER = 'v3.9.7';
+  var HOTFIX_VER = 'v3.9.8';
   function byId(id){ return document.getElementById(id); }
   function setText(id, txt){ var el=byId(id); if(el) el.textContent = txt; }
   function cloneBind(id, evt, fn){
@@ -4233,7 +4233,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 
 
 
-/* ===== v3.9.7 screener wizard patch ===== */
+/* ===== v3.9.8 screener wizard patch ===== */
 (function(){
   function wizText(id, text){ var el=document.getElementById(id); if(el) el.textContent=text; }
   function wizStep(id, state){
@@ -4316,7 +4316,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 
 
 
-/* ===== v3.9.7 interactive screener wizard ===== */
+/* ===== v3.9.8 interactive screener wizard ===== */
 (function(){
   var WZ = {
     step: 1,
@@ -4632,3 +4632,224 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
   });
 })();
 
+
+
+/* ===== v3.9.8 screener UX + allStocks safety patch ===== */
+(function(){
+  var SAFE_ALLSTOCK_LIMIT = 120;
+  var injected = false;
+
+  try { canUseAllStocks = function(){ return true; }; } catch(e) {}
+  try { canUseWideRange = function(){ return true; }; } catch(e) {}
+
+  if (typeof getScreenerUniverse === 'function' && !window.__v398WrappedUniverse) {
+    window.__v398WrappedUniverse = true;
+    var __origGetScreenerUniverse = getScreenerUniverse;
+    getScreenerUniverse = async function(criteria){
+      var arr = await __origGetScreenerUniverse(criteria);
+      if(criteria && criteria.universe === 'allStocks'){
+        var status = document.getElementById('screenRunStatus');
+        if(status) status.textContent = '全台股安全模式掃描中：已限制前 ' + SAFE_ALLSTOCK_LIMIT + ' 檔，避免長時間卡住';
+        return arr.slice(0, SAFE_ALLSTOCK_LIMIT);
+      }
+      return arr;
+    };
+  }
+
+  function ensureAllStocksVisible(){
+    var sel = document.getElementById('screenUniverse');
+    if(!sel) return;
+    var opt = sel.querySelector('option[value="allStocks"]');
+    if(opt){ opt.hidden = false; opt.disabled = false; }
+  }
+
+  function estimateUniverseCount(){
+    var sel = document.getElementById('screenUniverse');
+    var v = sel ? sel.value : 'watchlist';
+    if(v === 'watchlist') return Array.isArray(state&&state.watchlist) ? state.watchlist.length : 0;
+    if(v === 'holdings') return state && state.holdings ? Object.keys(state.holdings).length : 0;
+    if(v === 'union') {
+      var a = Array.isArray(state&&state.watchlist) ? state.watchlist : [];
+      var b = state && state.holdings ? Object.keys(state.holdings) : [];
+      return Array.from(new Set([].concat(a,b))).length;
+    }
+    if(v === 'custom') {
+      var ta = document.getElementById('screenCustomList');
+      return ta && ta.value ? ta.value.split(',').map(function(x){return String(x||'').trim();}).filter(Boolean).length : 0;
+    }
+    if(v === 'range') {
+      var s = parseInt((document.getElementById('screenRangeStart')||{}).value || '0', 10);
+      var e = parseInt((document.getElementById('screenRangeEnd')||{}).value || '0', 10);
+      if(isFinite(s) && isFinite(e) && s > 0 && e >= s) return e - s + 1;
+      return 0;
+    }
+    if(v === 'allStocks') {
+      try {
+        if(typeof getAllStockSymbols === 'function') return getAllStockSymbols().length || SAFE_ALLSTOCK_LIMIT;
+      } catch(e) {}
+      return SAFE_ALLSTOCK_LIMIT;
+    }
+    return 0;
+  }
+
+  function resultCount(){
+    try {
+      if(typeof _screenLastResult !== 'undefined' && _screenLastResult && Array.isArray(_screenLastResult.rows)) return _screenLastResult.rows.length;
+    } catch(e) {}
+    var tbody = document.getElementById('screenResultBody');
+    return tbody ? tbody.children.length : 0;
+  }
+
+  function ensureDeepButtons(){
+    var actionWrap = document.getElementById('btnRunScreener') ? document.getElementById('btnRunScreener').parentNode : null;
+    if(actionWrap && !document.getElementById('btnRunDeepScanTop')){
+      var btn = document.createElement('button');
+      btn.id = 'btnRunDeepScanTop';
+      btn.className = 'btn';
+      btn.style.padding = '12px 22px';
+      btn.style.fontSize = '.96rem';
+      btn.style.background = '#21262d';
+      btn.style.color = '#6b7280';
+      btn.style.border = '1px solid var(--border)';
+      btn.disabled = true;
+      btn.textContent = '🧠 深度篩選';
+      btn.onclick = function(){
+        var proxy = document.getElementById('btnRunDeepScanResult');
+        if(proxy && !proxy.disabled) proxy.click();
+      };
+      actionWrap.insertBefore(btn, document.getElementById('btnExportScreenPdf'));
+    }
+
+    var resultCard = document.getElementById('screenResultCard');
+    if(resultCard){
+      var header = resultCard.querySelector('div[style*="justify-content:space-between"]');
+      if(header && !document.getElementById('btnRunDeepScanResult')){
+        var btn2 = document.createElement('button');
+        btn2.id = 'btnRunDeepScanResult';
+        btn2.className = 'btn btn-ghost';
+        btn2.style.padding = '8px 16px';
+        btn2.style.fontSize = '.84rem';
+        btn2.style.background = '#21262d';
+        btn2.style.color = '#6b7280';
+        btn2.style.border = '1px solid var(--border)';
+        btn2.disabled = true;
+        btn2.textContent = '🧠 深度篩選';
+        btn2.onclick = function(){
+          var native = document.getElementById('btnRunDeepScreener');
+          if(native && !native.disabled) native.click();
+        };
+        header.appendChild(btn2);
+      }
+    }
+  }
+
+  function syncDeepButtonState(){
+    var pool = estimateUniverseCount();
+    var rows = resultCount();
+    var enableTop = pool > 0 && pool < 20;
+    var enableResult = rows >= 2;
+    [['btnRunDeepScanTop', enableTop, enableTop ? '🧠 深度篩選' : '🧠 深度篩選（母體需 < 20）'], ['btnRunDeepScanResult', enableResult, enableResult ? '🧠 深度篩選' : '🧠 深度篩選（至少 2 筆結果）']].forEach(function(cfg){
+      var el = document.getElementById(cfg[0]);
+      if(!el) return;
+      el.disabled = !cfg[1];
+      el.textContent = cfg[2];
+      el.style.background = cfg[1] ? '#16a34a' : '#21262d';
+      el.style.color = cfg[1] ? '#ffffff' : '#6b7280';
+      el.style.border = cfg[1] ? '1px solid rgba(34,197,94,.35)' : '1px solid var(--border)';
+      el.style.cursor = cfg[1] ? 'pointer' : 'not-allowed';
+    });
+  }
+
+  function simplifyWizard(){
+    var wiz = document.getElementById('screenInteractiveWizard');
+    if(!wiz) return;
+    var s3 = document.getElementById('wzStep3');
+    var s4 = document.getElementById('wzStep4');
+    if(s3) s3.style.display = 'none';
+    if(s4) s4.style.display = 'none';
+    var step2 = document.getElementById('wzStep2');
+    if(step2){
+      var btn = step2.querySelector('.wz-btn-primary');
+      if(btn){
+        btn.textContent = '開始篩選';
+        btn.onclick = function(){ if(window.__wzRunLight) window.__wzRunLight(); };
+      }
+      var title = step2.querySelector('.wz-head-title');
+      if(title) title.textContent = '勾選篩選條件並開始篩選';
+    }
+    var st3 = document.getElementById('wzStatus3');
+    var st4 = document.getElementById('wzStatus4');
+    if(st3) st3.parentNode.parentNode.style.display = 'none';
+    if(st4) st4.parentNode.parentNode.style.display = 'none';
+  }
+
+  function renameMainButtons(){
+    var run = document.getElementById('btnRunScreener');
+    if(run) run.textContent = '⚡ 開始篩選';
+    var nativeDeep = document.getElementById('btnRunDeepScreener');
+    if(nativeDeep) nativeDeep.style.display = 'none';
+    var hint = document.getElementById('screenStageHint');
+    if(hint) {
+      var t = hint.querySelector('#screenStageHintText');
+      if(t) t.textContent = '全台股改採安全模式掃描，避免長時間無回應；深度篩選需母體 < 20 或結果至少 2 筆後才可使用。';
+    }
+  }
+
+  function bindRefreshers(){
+    ['screenUniverse','screenCustomList','screenRangeStart','screenRangeEnd'].forEach(function(id){
+      var el = document.getElementById(id);
+      if(el && el.dataset.v398Bound !== '1'){
+        el.dataset.v398Bound = '1';
+        el.addEventListener('change', syncDeepButtonState);
+        el.addEventListener('input', syncDeepButtonState);
+      }
+    });
+    document.querySelectorAll('[data-screen-filter]').forEach(function(el){
+      if(el.dataset.v398Bound !== '1'){
+        el.dataset.v398Bound = '1';
+        el.addEventListener('click', function(){ setTimeout(syncDeepButtonState, 0); });
+      }
+    });
+  }
+
+  function patchLightRunner(){
+    if(window.__v398LightRunnerPatched || !window.__wzRunLight) return;
+    window.__v398LightRunnerPatched = true;
+    var orig = window.__wzRunLight;
+    window.__wzRunLight = function(){
+      var status = document.getElementById('screenRunStatus');
+      if(status) status.textContent = '開始篩選中…';
+      var resultBtn = document.getElementById('btnRunDeepScanResult');
+      if(resultBtn){ resultBtn.disabled = true; resultBtn.style.background='#21262d'; resultBtn.style.color='#6b7280'; }
+      return orig();
+    };
+  }
+
+  function initV398(){
+    ensureAllStocksVisible();
+    renameMainButtons();
+    ensureDeepButtons();
+    simplifyWizard();
+    bindRefreshers();
+    patchLightRunner();
+    syncDeepButtonState();
+    injected = true;
+  }
+
+  if(typeof renderScreenResults === 'function' && !window.__v398WrappedRender){
+    window.__v398WrappedRender = true;
+    var __origRenderScreenResults = renderScreenResults;
+    renderScreenResults = function(rows, criteria, stats){
+      var out = __origRenderScreenResults(rows, criteria, stats);
+      setTimeout(syncDeepButtonState, 50);
+      return out;
+    };
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    initV398();
+    setTimeout(initV398, 500);
+    setTimeout(initV398, 1500);
+    setInterval(function(){ if(injected) syncDeepButtonState(); }, 1500);
+  });
+})();
