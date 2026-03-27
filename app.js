@@ -1,7 +1,7 @@
-const APP_VERSION = '3.8.1';   // ← 只改這裡就能更版
+const APP_VERSION = '3.8.2';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v3.8.1  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.8.2  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -2197,30 +2197,112 @@ function calcRSI(values, period=14){
   const rs=avgGain/avgLoss;
   return parseFloat((100-(100/(1+rs))).toFixed(2));
 }
+
+const SCREEN_SCAN_SOFT_LIMIT = 100;
+const SCREEN_SCAN_HARD_LIMIT = 150;
+const SCREEN_BATCH_SIZE = 5;
+const SCREEN_BATCH_DELAY = 220;
+const SCREEN_CONCEPT_MAP = {
+  apple:['2317','2330','2308','2382','2357','3008','2324','4938','2474','3711','3406','6414','6669','3037','6269','6271'],
+  ai:['2330','2317','2382','3231','6669','2383','3017','2376','2356','3034','2329','3661','3653','3014'],
+  ev:['2308','2351','1319','1536','2201','2204','3017','3665','4931','2231','6288'],
+  server:['2317','2382','6669','3231','3017','2376','2329','3035','8210','3443','2356'],
+  cooling:['3324','3017','6125','6230','3653','3014','4938'],
+  cowos:['2330','3711','6239','3131','3583','2360','2467','3583','6147']
+};
+let _screenScanJob={running:false,cancelled:false};
+function sleep(ms){return new Promise(function(resolve){setTimeout(resolve,ms);});}
+function getAllStockSymbols(){
+  return Object.keys(stockMetaCache).filter(function(code){
+    return /^\d{4}$/.test(code) && !!(stockNameCache[code]||getStockMeta(code).stock_name||'');
+  }).sort();
+}
+function padStockCode(v){
+  const n=parseInt(String(v||'').trim(),10);
+  if(!isFinite(n) || n<0)return '';
+  return String(n).padStart(4,'0');
+}
 function setScreenPoolHint(){
   const sel=document.getElementById('screenUniverse');
   const hint=document.getElementById('screenPoolHint');
   const ta=document.getElementById('screenCustomList');
-  if(!sel||!hint||!ta)return;
+  const rs=document.getElementById('screenRangeStart');
+  const re=document.getElementById('screenRangeEnd');
+  if(!sel||!hint||!ta||!rs||!re)return;
   const v=sel.value||'watchlist';
-  ta.disabled=(v!=='custom');
-  ta.style.opacity=(v==='custom')?'1':'.55';
+  const customOn=(v==='custom');
+  const rangeOn=(v==='range');
+  ta.disabled=!customOn;
+  ta.style.opacity=customOn?'1':'.55';
+  rs.disabled=!rangeOn;
+  re.disabled=!rangeOn;
+  rs.style.opacity=rangeOn?'1':'.55';
+  re.style.opacity=rangeOn?'1':'.55';
   if(v==='watchlist')hint.textContent='目前將使用追蹤清單作為篩選資料池。';
   else if(v==='holdings')hint.textContent='目前將使用持股庫存作為篩選資料池。';
   else if(v==='union')hint.textContent='目前將合併追蹤清單與持股庫存進行篩選。';
-  else hint.textContent='目前將使用你手動輸入的自訂代號清單進行篩選。';
+  else if(v==='custom')hint.textContent='目前將使用你手動輸入的自訂代號清單進行篩選。';
+  else if(v==='allStocks')hint.textContent='目前將以全部股票代號作為候選池，再套用類別與條件篩選。';
+  else hint.textContent='目前將依代號範圍建立候選池，再套用類別與條件篩選。';
 }
-function getScreenerUniverse(){
-  const mode=document.getElementById('screenUniverse')?.value||'watchlist';
+async function populateScreenCategoryOptions(){
+  const type=document.getElementById('screenCategoryType');
+  const value=document.getElementById('screenCategoryValue');
+  if(!type||!value)return;
+  const current=value.value||'';
+  const mode=type.value||'none';
+  if(mode==='industry'){
+    await preloadStockNames();
+    const categories=[...new Set(Object.keys(stockMetaCache).map(function(code){return String(getStockMeta(code).industry_category||'').trim();}).filter(Boolean))].sort(function(a,b){return a.localeCompare(b,'zh-Hant');});
+    value.innerHTML='<option value="">全部產業</option>'+categories.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
+    value.disabled=false;
+  }else if(mode==='concept'){
+    const labels={apple:'蘋果概念股',ai:'AI 概念股',ev:'電動車概念股',server:'伺服器概念股',cooling:'散熱概念股',cowos:'CoWoS 概念股'};
+    value.innerHTML='<option value="">全部主題</option>'+Object.keys(labels).map(function(k){return '<option value="'+k+'">'+labels[k]+'</option>';}).join('');
+    value.disabled=false;
+  }else{
+    value.innerHTML='<option value="">全部類別</option>';
+    value.disabled=true;
+  }
+  if([...value.options].some(function(opt){return opt.value===current;}))value.value=current;
+}
+function filterByCategory(arr, criteria){
+  let out=[...arr];
+  if(criteria.categoryType==='industry' && criteria.categoryValue){
+    out=out.filter(function(symbol){
+      return String(getStockMeta(symbol).industry_category||'').trim()===criteria.categoryValue;
+    });
+  }else if(criteria.categoryType==='concept' && criteria.categoryValue){
+    const pool=new Set(SCREEN_CONCEPT_MAP[criteria.categoryValue]||[]);
+    out=out.filter(function(symbol){return pool.has(symbol);});
+  }
+  return out;
+}
+async function getScreenerUniverse(criteria){
+  const mode=criteria.universe||'watchlist';
   let arr=[];
   if(mode==='watchlist')arr=[...(state.watchlist||[])];
   else if(mode==='holdings')arr=Object.keys(state.holdings||{});
   else if(mode==='union')arr=[...(state.watchlist||[]),...Object.keys(state.holdings||{})];
-  else{
+  else if(mode==='custom'){
     const raw=document.getElementById('screenCustomList')?.value||state.screenCustomList||'';
     arr=raw.split(/[\s,，;；]+/).map(normalizeSymbol).filter(Boolean);
+  }else{
+    await preloadStockNames();
+    const all=getAllStockSymbols();
+    if(mode==='allStocks')arr=all;
+    else if(mode==='range'){
+      const s=parseInt(criteria.rangeStart||'0',10);
+      const e=parseInt(criteria.rangeEnd||'0',10);
+      if(!isFinite(s)||!isFinite(e)||s<=0||e<=0||s>e)return [];
+      arr=all.filter(function(code){
+        const n=parseInt(code,10);
+        return isFinite(n)&&n>=s&&n<=e;
+      });
+    }
   }
-  return [...new Set(arr.map(normalizeSymbol).filter(Boolean))];
+  arr=[...new Set(arr.map(normalizeSymbol).filter(Boolean))];
+  return filterByCategory(arr, criteria);
 }
 function getActiveScreenFilters(){
   return [...document.querySelectorAll('[data-screen-filter].active')].map(function(el){return el.dataset.screenFilter;});
@@ -2236,7 +2318,11 @@ function getScreenerCriteria(){
     minEPS:num(document.getElementById('screenMinEPS')?.value),
     sortBy:document.getElementById('screenSortBy')?.value||'totalDesc',
     limit:parseInt(document.getElementById('screenLimit')?.value||'20',10)||20,
-    universe:document.getElementById('screenUniverse')?.value||'watchlist'
+    universe:document.getElementById('screenUniverse')?.value||'watchlist',
+    rangeStart:padStockCode(document.getElementById('screenRangeStart')?.value||''),
+    rangeEnd:padStockCode(document.getElementById('screenRangeEnd')?.value||''),
+    categoryType:document.getElementById('screenCategoryType')?.value||'none',
+    categoryValue:document.getElementById('screenCategoryValue')?.value||''
   };
   state.screenCustomList=document.getElementById('screenCustomList')?.value||'';
   saveState(state);
@@ -2244,6 +2330,14 @@ function getScreenerCriteria(){
 }
 function formatScreenCriteria(criteria){
   const tags=[];
+  const universeMap={watchlist:'追蹤清單',holdings:'持股庫存',union:'追蹤+持股',custom:'自訂清單',allStocks:'全部股票',range:'代號範圍'};
+  tags.push('資料池：'+(universeMap[criteria.universe]||criteria.universe));
+  if(criteria.universe==='range' && criteria.rangeStart && criteria.rangeEnd)tags.push('代號 '+criteria.rangeStart+'~'+criteria.rangeEnd);
+  if(criteria.categoryType==='industry' && criteria.categoryValue)tags.push('產業：'+criteria.categoryValue);
+  if(criteria.categoryType==='concept' && criteria.categoryValue){
+    const labels={apple:'蘋果概念股',ai:'AI 概念股',ev:'電動車概念股',server:'伺服器概念股',cooling:'散熱概念股',cowos:'CoWoS 概念股'};
+    tags.push('主題：'+(labels[criteria.categoryValue]||criteria.categoryValue));
+  }
   (criteria.simple||[]).forEach(function(k){
     const map={buyFit:'適合買進',sellWatch:'考慮賣出',volumeSpike:'量能異動',oversold:'超跌反彈'};
     tags.push(map[k]||k);
@@ -2256,7 +2350,6 @@ function formatScreenCriteria(criteria){
   if(criteria.minEPS!=null)tags.push('EPS≥'+criteria.minEPS);
   return tags;
 }
-
 function getScoreTone(score){
   const n=num(score);
   if(n==null)return 'neutral';
@@ -2288,6 +2381,8 @@ function buildScreenReasonBadges(item, criteria){
   if(criteria.minFund!=null && item.fundScore>=criteria.minFund)tags.push({text:'基本面達標', tone:'positive'});
   if(criteria.minRevYoY!=null && item.revYoY!=null && item.revYoY>=criteria.minRevYoY)tags.push({text:'營收年增達標', tone:item.revYoY>=0?'positive':'negative'});
   if(criteria.minEPS!=null && item.ttmEPS!=null && item.ttmEPS>=criteria.minEPS)tags.push({text:'EPS 達標', tone:item.ttmEPS>=0?'positive':'negative'});
+  if(criteria.categoryType==='industry' && criteria.categoryValue)tags.push({text:'產業命中', tone:'neutral'});
+  if(criteria.categoryType==='concept' && criteria.categoryValue)tags.push({text:'主題命中', tone:'neutral'});
   if(!tags.length){
     if(item.totalScore>=65)tags.push({text:'綜合偏多', tone:'positive'});
     else if(item.totalScore<=35)tags.push({text:'綜合偏弱', tone:'negative'});
@@ -2298,6 +2393,14 @@ function buildScreenReasonBadges(item, criteria){
 function renderToneValue(value, formatted){
   const tone=getSignedTone(value);
   return '<span class="'+(tone==='positive'?'screen-price-positive':tone==='negative'?'screen-price-negative':'')+'">'+formatted+'</span>';
+}
+function setScreenerRunning(running){
+  const runBtn=document.getElementById('btnRunScreener');
+  const stopBtn=document.getElementById('btnStopScreener');
+  const clearBtn=document.getElementById('btnClearScreener');
+  if(runBtn)runBtn.disabled=!!running;
+  if(clearBtn)clearBtn.disabled=!!running;
+  if(stopBtn)stopBtn.style.display=running?'':'none';
 }
 function renderScreenerHistory(){
   const box=document.getElementById('screenHistoryList');
@@ -2318,11 +2421,17 @@ function clearScreenerInputs(){
   });
   const sort=document.getElementById('screenSortBy'); if(sort)sort.value='totalDesc';
   const limit=document.getElementById('screenLimit'); if(limit)limit.value='20';
+  const rs=document.getElementById('screenRangeStart'); if(rs)rs.value='';
+  const re=document.getElementById('screenRangeEnd'); if(re)re.value='';
+  const ct=document.getElementById('screenCategoryType'); if(ct)ct.value='none';
+  const cv=document.getElementById('screenCategoryValue'); if(cv){cv.innerHTML='<option value=>全部類別</option>';cv.value='';cv.disabled=true;}
   document.getElementById('screenResultBody').innerHTML='';
   document.getElementById('screenResultSummary').textContent='篩選條件已清除。';
   document.getElementById('screenResultEmpty').style.display='';
   document.getElementById('screenRunStatus').textContent='尚未開始篩選';
+  setScreenPoolHint();
 }
+
 function poolLabelByValue(v){
   return v==='holdings'?'持股庫存':v==='union'?'追蹤+持股':v==='custom'?'自訂清單':'追蹤清單';
 }
@@ -2355,7 +2464,8 @@ function bindScreenerResultEvents(){
     };
   });
 }
-function renderScreenResults(rows, criteria, scanned){
+
+function renderScreenResults(rows, criteria, stats){
   const tbody=document.getElementById('screenResultBody');
   const empty=document.getElementById('screenResultEmpty');
   const summary=document.getElementById('screenResultSummary');
@@ -2369,13 +2479,17 @@ function renderScreenResults(rows, criteria, scanned){
     return (b.totalScore??0)-(a.totalScore??0);
   });
   rows=rows.slice(0,Math.max(5,Math.min(100,criteria.limit||20)));
+  const scanned=stats&&stats.total!=null?stats.total:0;
+  const ok=stats&&stats.ok!=null?stats.ok:0;
+  const failed=stats&&stats.failed!=null?stats.failed:0;
+  const skipped=stats&&stats.skipped!=null?stats.skipped:0;
   if(!rows.length){
     empty.style.display='';
-    summary.innerHTML='共掃描 '+scanned+' 檔，沒有符合條件的股票。';
+    summary.innerHTML='<span class="screen-result-chip">掃描 '+scanned+' 檔</span><span class="screen-result-chip positive">成功 '+ok+' 檔</span><span class="screen-result-chip negative">失敗 '+failed+' 檔</span><span class="screen-result-chip">略過 '+skipped+' 檔</span>';
     return;
   }
   empty.style.display='none';
-  summary.innerHTML='<span class="screen-result-chip">掃描 '+scanned+' 檔</span><span class="screen-result-chip positive">命中 '+rows.length+' 檔</span>'+(formatScreenCriteria(criteria).map(function(t){return '<span class="screen-result-chip">'+t+'</span>';}).join(''));
+  summary.innerHTML='<span class="screen-result-chip">掃描 '+scanned+' 檔</span><span class="screen-result-chip positive">成功 '+ok+' 檔</span><span class="screen-result-chip negative">失敗 '+failed+' 檔</span><span class="screen-result-chip">略過 '+skipped+' 檔</span>'+(formatScreenCriteria(criteria).map(function(t){return '<span class="screen-result-chip">'+t+'</span>';}).join(''));
   rows.forEach(function(r){
     const totalTone=getScoreTone(r.totalScore);
     const techTone=getScoreTone(r.techScore);
@@ -2420,68 +2534,119 @@ function evaluateScreenResult(item, criteria){
   if(criteria.minEPS!=null && (item.ttmEPS==null || item.ttmEPS<criteria.minEPS))return false;
   return true;
 }
+
 async function runScreener(){
   const status=document.getElementById('screenRunStatus');
   const summary=document.getElementById('screenResultSummary');
-  const symbols=getScreenerUniverse();
-  const criteria=getScreenerCriteria();
-  if(!symbols.length){
-    if(status)status.textContent='沒有可篩選的股票';
-    if(summary)summary.textContent='請先建立追蹤清單、持股或輸入自訂代號。';
-    document.getElementById('screenResultBody').innerHTML='';
-    document.getElementById('screenResultEmpty').style.display='';
+  const empty=document.getElementById('screenResultEmpty');
+  if(_screenScanJob.running){
+    alert('目前尚有未完成的掃描工作，请先等待完成或按「停止掃描」後再重新開始。');
     return;
   }
-  if(status)status.textContent='開始分析 '+symbols.length+' 檔…';
-  const rows=[];
-  for(let i=0;i<symbols.length;i++){
-    const symbol=normalizeSymbol(symbols[i]);
-    if(status)status.textContent='分析中 '+(i+1)+' / '+symbols.length+'：'+symbol;
-    try{
-      const priceRows=await fetchAIReportData(symbol);
-      if(!priceRows||priceRows.length<30)continue;
-      const tech=analyzeAIData(symbol, priceRows);
-      const fund=await analyzeAIFundamental(symbol, tech.name||getStockName(symbol)||'');
-      const closes=priceRows.map(function(r){return r.close;});
-      const vols=priceRows.map(function(r){return num(r.volume)||0;});
-      const last=priceRows[priceRows.length-1]||{};
-      const avg5v=(vols.slice(-6,-1).reduce((a,b)=>a+b,0)/Math.max(1,Math.min(5,vols.length-1)))||0;
-      const volRatio=avg5v>0?((num(last.volume)||0)/avg5v):null;
-      const rsi=calcRSI(closes,14);
-      const totalScore=Math.round((tech.comprehensiveScore||0)*0.6 + (fund.score||0)*0.4);
-      const item={
-        symbol:symbol,
-        name:tech.name||getStockName(symbol)||'',
-        price:num(last.close),
-        ma20:num(tech.m20),
-        techScore:num(tech.comprehensiveScore)||0,
-        fundScore:num(fund.score)||0,
-        totalScore:totalScore,
-        rsi:rsi,
-        volRatio:volRatio,
-        revYoY:extractMetricValue(fund.metrics,'月營收年增'),
-        ttmEPS:extractMetricValue(fund.metrics,'近四季 EPS'),
-        tech:tech,
-        fund:fund
-      };
-      if(evaluateScreenResult(item, criteria))rows.push(item);
-    }catch(e){
-      console.warn('[Screener]',symbol,e&&e.message?e.message:e);
+  const criteria=getScreenerCriteria();
+  const symbols=await getScreenerUniverse(criteria);
+  if(!symbols.length){
+    if(status)status.textContent='沒有可篩選的股票';
+    if(summary)summary.textContent='請先建立追蹤清單、持股、自訂清單，或調整代號範圍 / 類別條件。';
+    document.getElementById('screenResultBody').innerHTML='';
+    if(empty)empty.style.display='';
+    return;
+  }
+  if(symbols.length>SCREEN_SCAN_HARD_LIMIT){
+    const msg='本次候選股票共 '+symbols.length+' 檔，已超過安全上限 '+SCREEN_SCAN_HARD_LIMIT+' 檔。\n為避免過多請求造成延遲、失敗或資料來源限流，本次不執行。\n請改用類別、代號範圍或縮小條件後再試。';
+    alert(msg);
+    if(status)status.textContent='超過安全上限，已取消掃描';
+    if(summary)summary.textContent='安全限制：超過 '+SCREEN_SCAN_HARD_LIMIT+' 檔不執行。';
+    return;
+  }
+  if(symbols.length>SCREEN_SCAN_SOFT_LIMIT){
+    const ok=confirm('本次候選股票共 '+symbols.length+' 檔，已超過建議上限 '+SCREEN_SCAN_SOFT_LIMIT+' 檔。\n系統將以批次節流模式執行。\n若你之後再次點擊開始篩選，系統會提示「尚有未完成的掃描工作」。\n\n是否仍要繼續？');
+    if(!ok){
+      if(status)status.textContent='已取消大量掃描';
+      if(summary)summary.textContent='你已取消超過建議上限的掃描。';
+      return;
     }
   }
-  renderScreenResults(rows, criteria, symbols.length);
-  if(status)status.textContent='篩選完成｜掃描 '+symbols.length+' 檔｜命中 '+rows.length+' 檔';
-  state.screenHistory=[{time:new Date().toLocaleString('zh-TW'),poolLabel:poolLabelByValue(criteria.universe),count:rows.length,filters:formatScreenCriteria(criteria)}].concat(state.screenHistory||[]).slice(0,20);
-  saveState(state);
-  renderScreenerHistory();
+  _screenScanJob.running=true;
+  _screenScanJob.cancelled=false;
+  setScreenerRunning(true);
+  if(status)status.textContent='開始分析 '+symbols.length+' 檔…';
+  if(summary)summary.innerHTML='<span class="screen-result-chip">準備掃描 '+symbols.length+' 檔</span><span class="screen-result-chip">批次 '+SCREEN_BATCH_SIZE+' 檔 / '+SCREEN_BATCH_DELAY+'ms 節流</span>';
+  document.getElementById('screenResultBody').innerHTML='';
+  if(empty)empty.style.display='';
+  const rows=[];
+  let okCount=0, failCount=0, skipCount=0;
+  try{
+    for(let i=0;i<symbols.length;i++){
+      if(_screenScanJob.cancelled)break;
+      const symbol=normalizeSymbol(symbols[i]);
+      if(status)status.textContent='分析中 '+(i+1)+' / '+symbols.length+'：'+symbol+'｜成功 '+okCount+'｜失敗 '+failCount+'｜略過 '+skipCount;
+      try{
+        const priceRows=await fetchAIReportData(symbol);
+        if(!priceRows||priceRows.length<30){skipCount++;continue;}
+        const tech=analyzeAIData(symbol, priceRows);
+        const fund=await analyzeAIFundamental(symbol, tech.name||getStockName(symbol)||'');
+        const closes=priceRows.map(function(r){return r.close;});
+        const vols=priceRows.map(function(r){return num(r.volume)||0;});
+        const last=priceRows[priceRows.length-1]||{};
+        const avg5v=(vols.slice(-6,-1).reduce((a,b)=>a+b,0)/Math.max(1,Math.min(5,vols.length-1)))||0;
+        const volRatio=avg5v>0?((num(last.volume)||0)/avg5v):null;
+        const rsi=calcRSI(closes,14);
+        const totalScore=Math.round((tech.comprehensiveScore||0)*0.6 + (fund.score||0)*0.4);
+        const item={
+          symbol:symbol,
+          name:tech.name||getStockName(symbol)||'',
+          price:num(last.close),
+          ma20:num(tech.m20),
+          techScore:num(tech.comprehensiveScore)||0,
+          fundScore:num(fund.score)||0,
+          totalScore:totalScore,
+          rsi:rsi,
+          volRatio:volRatio,
+          revYoY:extractMetricValue(fund.metrics,'月營收年增'),
+          ttmEPS:extractMetricValue(fund.metrics,'近四季 EPS'),
+          tech:tech,
+          fund:fund
+        };
+        okCount++;
+        if(evaluateScreenResult(item, criteria))rows.push(item);
+      }catch(e){
+        failCount++;
+        console.warn('[Screener]',symbol,e&&e.message?e.message:e);
+      }
+      if((i+1)%SCREEN_BATCH_SIZE===0 && i<symbols.length-1)await sleep(SCREEN_BATCH_DELAY);
+    }
+    const stats={total:symbols.length,ok:okCount,failed:failCount,skipped:skipCount};
+    renderScreenResults(rows, criteria, stats);
+    if(_screenScanJob.cancelled){
+      if(status)status.textContent='掃描已中止｜已完成 '+(okCount+failCount+skipCount)+' / '+symbols.length+' 檔';
+      alert('掃描已停止。系統保留目前已完成的結果，尚有未完成的掃描工作未繼續執行。');
+    }else{
+      if(status)status.textContent='篩選完成｜掃描 '+symbols.length+' 檔｜命中 '+rows.length+' 檔｜成功 '+okCount+'｜失敗 '+failCount+'｜略過 '+skipCount;
+    }
+    state.screenHistory=[{time:new Date().toLocaleString('zh-TW'),poolLabel:poolLabelByValue(criteria.universe),count:rows.length,filters:formatScreenCriteria(criteria)}].concat(state.screenHistory||[]).slice(0,20);
+    saveState(state);
+    renderScreenerHistory();
+  }finally{
+    _screenScanJob.running=false;
+    setScreenerRunning(false);
+  }
 }
+
 function bindScreenerUI(){
   document.querySelectorAll('[data-screen-filter]').forEach(function(card){
     card.addEventListener('click',function(){card.classList.toggle('active');});
   });
   document.getElementById('screenUniverse')?.addEventListener('change',setScreenPoolHint);
+  document.getElementById('screenCategoryType')?.addEventListener('change',populateScreenCategoryOptions);
   document.getElementById('screenCustomList')?.addEventListener('input',function(){state.screenCustomList=this.value; saveState(state);});
   document.getElementById('btnRunScreener')?.addEventListener('click',runScreener);
+  document.getElementById('btnStopScreener')?.addEventListener('click',function(){
+    if(!_screenScanJob.running)return;
+    _screenScanJob.cancelled=true;
+    const status=document.getElementById('screenRunStatus');
+    if(status)status.textContent='已收到停止指令，將在目前批次結束後停止。';
+  });
   document.getElementById('btnClearScreener')?.addEventListener('click',clearScreenerInputs);
   document.getElementById('btnClearScreenHistory')?.addEventListener('click',function(){state.screenHistory=[];saveState(state);renderScreenerHistory();});
   document.getElementById('btnToggleScreenAdv')?.addEventListener('click',function(){
@@ -2494,7 +2659,9 @@ function bindScreenerUI(){
   const ta=document.getElementById('screenCustomList');
   if(ta && state.screenCustomList && !ta.value)ta.value=state.screenCustomList;
   setScreenPoolHint();
+  populateScreenCategoryOptions();
   renderScreenerHistory();
+  setScreenerRunning(false);
 }
 function navigateToPage(page){
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
