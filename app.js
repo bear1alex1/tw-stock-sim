@@ -4632,3 +4632,69 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
     setTimeout(refreshScreenerWizard, 1200);
   });
 })();
+
+
+/* ===== v3.9.5 wizard DOM injection fix ===== */
+(function(){
+  function ensureWizardStyles(){
+    if(document.getElementById('screenWizardInjectedStyle')) return;
+    var style=document.createElement('style');
+    style.id='screenWizardInjectedStyle';
+    style.textContent=''
+      + '.screen-wizard-wrap{display:flex;flex-direction:column;gap:14px}'
+      + '.screen-wizard-step{display:flex;gap:12px;align-items:flex-start;padding:12px;border:1px solid var(--border2);border-radius:12px;background:linear-gradient(180deg,rgba(31,41,55,.55),rgba(17,24,39,.20))}'
+      + '.screen-wizard-num{width:30px;height:30px;border-radius:999px;background:#1f6feb;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;flex-shrink:0}'
+      + '.screen-wizard-title{font-size:.92rem;font-weight:800;color:#fff;margin-bottom:4px}'
+      + '.screen-wizard-desc{font-size:.77rem;color:#9fb4d2;margin-bottom:10px;line-height:1.6}'
+      + '.screen-wizard-note{padding:11px 12px;border:1px dashed rgba(96,165,250,.25);border-radius:10px;background:rgba(56,139,253,.06);color:#dbeafe;font-size:.82rem;line-height:1.7}'
+      + '.screen-wizard-step.done{border-color:rgba(34,197,94,.30);background:linear-gradient(180deg,rgba(22,101,52,.20),rgba(17,24,39,.20))}'
+      + '.screen-wizard-step.done .screen-wizard-num{background:#16a34a}'
+      + '.screen-wizard-step.active{border-color:rgba(96,165,250,.45);box-shadow:0 0 0 1px rgba(96,165,250,.18) inset}'
+      + '.screen-wizard-step.pending{opacity:.92}';
+    document.head.appendChild(style);
+  }
+
+  function ensureScreenerWizard(){
+    ensureWizardStyles();
+    if(document.getElementById('screenWizardCard')) return;
+    var box=document.createElement('div');
+    box.className='card';
+    box.id='screenWizardCard';
+    box.style.marginBottom='12px';
+    box.innerHTML=''
+      + '<div class="sec-title" style="margin-bottom:12px;">🪜 操作步驟</div>'
+      + '<div class="screen-wizard-wrap" id="screenWizardWrap">'
+      + '  <div class="screen-wizard-step" id="wizardStep1"><div class="screen-wizard-num">1</div><div style="flex:1;"><div class="screen-wizard-title">選擇掃描母體</div><div class="screen-wizard-desc">全台股是必備兩階段流程；指定清單、區間、自選或持股屬於彈性使用。</div><div class="screen-wizard-note" id="wizardStep1Note">尚未選擇母體。</div></div></div>'
+      + '  <div class="screen-wizard-step" id="wizardStep2"><div class="screen-wizard-num">2</div><div style="flex:1;"><div class="screen-wizard-title">勾選條件</div><div class="screen-wizard-desc">先選簡易條件，必要時再加上進階條件，讓輕篩先縮小範圍。</div><div class="screen-wizard-note" id="wizardStep2Note">目前尚未勾選任何條件。</div></div></div>'
+      + '  <div class="screen-wizard-step" id="wizardStep3"><div class="screen-wizard-num">3</div><div style="flex:1;"><div class="screen-wizard-title">先做輕篩</div><div class="screen-wizard-desc">先取得初步候選名單，再決定是否進入下一階段。</div><div class="screen-wizard-note" id="wizardStep3Note">尚未執行輕篩。</div></div></div>'
+      + '  <div class="screen-wizard-step" id="wizardStep4"><div class="screen-wizard-num">4</div><div style="flex:1;"><div class="screen-wizard-title">對結果做深篩</div><div class="screen-wizard-desc">全台股建議固定執行；指定範圍可視需求決定是否再排序聚焦。</div><div class="screen-wizard-note" id="wizardStep4Note">等待輕篩結果後啟用。</div></div></div>'
+      + '</div>';
+
+    var anchor=document.getElementById('screenStageHint') || document.getElementById('screenResultCard');
+    if(anchor && anchor.parentNode){
+      anchor.parentNode.insertBefore(box, anchor);
+      return;
+    }
+    var runBtn=document.getElementById('btnRunScreener');
+    var actionWrap=runBtn ? runBtn.closest('div[style*="margin-bottom:12px"]') : null;
+    if(actionWrap && actionWrap.parentNode){
+      actionWrap.parentNode.insertBefore(box, actionWrap);
+      return;
+    }
+    var page=document.getElementById('page-screener');
+    if(page) page.appendChild(box);
+  }
+
+  function hookWizardRefresh(){
+    if(typeof window.refreshScreenerWizard==='function') window.refreshScreenerWizard();
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    ensureScreenerWizard();
+    setTimeout(ensureScreenerWizard, 300);
+    setTimeout(ensureScreenerWizard, 1200);
+    setTimeout(hookWizardRefresh, 350);
+    setTimeout(hookWizardRefresh, 1300);
+  });
+})();
+
