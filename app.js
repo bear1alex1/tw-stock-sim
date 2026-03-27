@@ -1,7 +1,7 @@
-const APP_VERSION = '3.8.2';   // ← 只改這裡就能更版
+const APP_VERSION = '3.9.0';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v3.8.2  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.9.0  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -2198,20 +2198,64 @@ function calcRSI(values, period=14){
   return parseFloat((100-(100/(1+rs))).toFixed(2));
 }
 
+
 const SCREEN_SCAN_SOFT_LIMIT = 100;
 const SCREEN_SCAN_HARD_LIMIT = 150;
 const SCREEN_BATCH_SIZE = 5;
 const SCREEN_BATCH_DELAY = 220;
+const SCREEN_ADMIN_HASH = '0912d4684c7301ab4f8e436d0dab16d0979e5e96082e552ce1590f917ecf0f76';
+const SCREEN_ADMIN_PEPPER = 'twstock.screen.admin|S390';
 const SCREEN_CONCEPT_MAP = {
   apple:['2317','2330','2308','2382','2357','3008','2324','4938','2474','3711','3406','6414','6669','3037','6269','6271'],
   ai:['2330','2317','2382','3231','6669','2383','3017','2376','2356','3034','2329','3661','3653','3014'],
   ev:['2308','2351','1319','1536','2201','2204','3017','3665','4931','2231','6288'],
   server:['2317','2382','6669','3231','3017','2376','2329','3035','8210','3443','2356'],
   cooling:['3324','3017','6125','6230','3653','3014','4938'],
-  cowos:['2330','3711','6239','3131','3583','2360','2467','3583','6147']
+  cowos:['2330','3711','6239','3131','3583','2360','2467','6147']
+};
+const SCREEN_MESSAGES = {
+  pending:'目前尚有未完成的掃描工作，請先等待完成或按「停止掃描」後再重新開始。',
+  adminOnly:'此功能僅限管理員解鎖後使用。',
+  generalLimit:'本次候選股票超過一般使用者上限 100 檔。請縮小條件、改用類別掃描，或請管理員解鎖後再執行。',
+  hardLimit:'本次候選股票已超過安全硬上限 150 檔。為避免過多請求造成延遲、失敗或資料來源限流，系統已停止執行。',
+  adminLargeConfirm:'本次候選股票超過 100 檔，將以節流批次模式執行。仍要繼續嗎？',
+  noData:'目前沒有可匯出的篩選結果。',
+  pdfLibMissing:'PDF 匯出元件尚未就緒，請重新整理頁面後再試。',
+  pdfBusy:'正在產生 PDF，請稍候。',
+  partial:'本次掃描已完成，但部分股票資料取得失敗，請稍後重試。',
+  stopped:'掃描已停止，系統已保留目前已完成的結果。',
+  rateLimited:'資料來源暫時限制請求次數，系統已停止本次掃描並保留已完成結果。',
+  adminBadPwd:'密碼驗證失敗，請重新輸入。',
+  adminCooldown:'驗證失敗次數過多，請稍後再試。',
+  adminUnlocked:'管理員模式已解鎖。',
+  adminLocked:'已返回一般模式，管理員控制項已隱藏。'
 };
 let _screenScanJob={running:false,cancelled:false};
+let _screenLastResult={rows:[],criteria:null,stats:null,generatedAt:null};
+let _screenAdmin={unlocked:false,fullscan:false,widerange:false,failed:0,cooldownUntil:0,pdfBusy:false};
 function sleep(ms){return new Promise(function(resolve){setTimeout(resolve,ms);});}
+function getScreenMessage(key){return SCREEN_MESSAGES[key]||'系統忙碌中，請稍後再試。';}
+function notifyScreenIssue(key, statusText){
+  const msg=getScreenMessage(key);
+  const status=document.getElementById('screenRunStatus');
+  const summary=document.getElementById('screenResultSummary');
+  if(status && statusText)status.textContent=statusText;
+  if(summary && statusText)summary.textContent=statusText;
+  alert(msg);
+  return msg;
+}
+async function sha256Hex(input){
+  if(!window.crypto||!window.crypto.subtle)throw new Error('SubtleCrypto unavailable');
+  const data=new TextEncoder().encode(input);
+  const hash=await window.crypto.subtle.digest('SHA-256',data);
+  return Array.from(new Uint8Array(hash)).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
+}
+function getScreenAdminSaltedInput(pwd){
+  return SCREEN_ADMIN_PEPPER+'|'+String(pwd||'')+'|unlock';
+}
+function isScreenAdminUnlocked(){return !!_screenAdmin.unlocked;}
+function canUseAllStocks(){return isScreenAdminUnlocked() && !!_screenAdmin.fullscan;}
+function canUseWideRange(){return isScreenAdminUnlocked() && !!_screenAdmin.widerange;}
 function getAllStockSymbols(){
   return Object.keys(stockMetaCache).filter(function(code){
     return /^\d{4}$/.test(code) && !!(stockNameCache[code]||getStockMeta(code).stock_name||'');
@@ -2221,6 +2265,96 @@ function padStockCode(v){
   const n=parseInt(String(v||'').trim(),10);
   if(!isFinite(n) || n<0)return '';
   return String(n).padStart(4,'0');
+}
+function updateScreenAdminUI(){
+  const status=document.getElementById('screenAdminStatus');
+  const tools=document.getElementById('screenAdminTools');
+  const allOpt=document.querySelector('#screenUniverse option[value="allStocks"]');
+  if(status){
+    if(isScreenAdminUnlocked()){
+      status.textContent='管理模式｜'+(canUseAllStocks()?'全掃已開啟':'全掃未開啟')+'｜'+(canUseWideRange()?'大範圍已開啟':'大範圍未開啟');
+      status.classList.add('ok');
+    }else{
+      status.textContent='一般模式｜全掃已鎖定';
+      status.classList.remove('ok');
+    }
+  }
+  if(tools)tools.classList.toggle('show',isScreenAdminUnlocked());
+  if(allOpt){
+    const allow=canUseAllStocks();
+    allOpt.hidden=!allow;
+    allOpt.disabled=!allow;
+    if(!allow && document.getElementById('screenUniverse') && document.getElementById('screenUniverse').value==='allStocks'){
+      document.getElementById('screenUniverse').value='watchlist';
+    }
+  }
+  setScreenPoolHint();
+}
+function openScreenAdminModal(){
+  const now=Date.now();
+  if(_screenAdmin.cooldownUntil && now<_screenAdmin.cooldownUntil){
+    alert(getScreenMessage('adminCooldown'));
+    return;
+  }
+  const modal=document.getElementById('screenAdminModal');
+  const input=document.getElementById('screenAdminPassword');
+  const msg=document.getElementById('screenAdminModalMsg');
+  if(msg)msg.textContent='';
+  if(input)input.value='';
+  if(modal){modal.classList.add('show');modal.setAttribute('aria-hidden','false');}
+  setTimeout(function(){if(input)input.focus();},60);
+}
+function closeScreenAdminModal(){
+  const modal=document.getElementById('screenAdminModal');
+  if(modal){modal.classList.remove('show');modal.setAttribute('aria-hidden','true');}
+}
+async function submitScreenAdminUnlock(){
+  const input=document.getElementById('screenAdminPassword');
+  const msg=document.getElementById('screenAdminModalMsg');
+  const pwd=input?input.value:'';
+  if(!pwd){if(msg)msg.textContent='請先輸入密碼';return;}
+  try{
+    const digest=await sha256Hex(getScreenAdminSaltedInput(pwd));
+    if(digest===SCREEN_ADMIN_HASH){
+      _screenAdmin.unlocked=true;
+      _screenAdmin.failed=0;
+      if(msg)msg.textContent=getScreenMessage('adminUnlocked');
+      updateScreenAdminUI();
+      setTimeout(closeScreenAdminModal,220);
+      return;
+    }
+    _screenAdmin.failed+=1;
+    if(_screenAdmin.failed>=3){
+      _screenAdmin.cooldownUntil=Date.now()+30000;
+      _screenAdmin.failed=0;
+      if(msg)msg.textContent=getScreenMessage('adminCooldown');
+      return;
+    }
+    if(msg)msg.textContent=getScreenMessage('adminBadPwd');
+  }catch(e){
+    if(msg)msg.textContent='驗證失敗：'+(e&&e.message?e.message:e);
+  }
+}
+function lockScreenAdmin(){
+  _screenAdmin.unlocked=false;
+  _screenAdmin.fullscan=false;
+  _screenAdmin.widerange=false;
+  updateScreenAdminUI();
+  alert(getScreenMessage('adminLocked'));
+}
+function handleScreenAdminAction(action){
+  if(!isScreenAdminUnlocked()){alert(getScreenMessage('adminOnly'));return;}
+  if(action==='fullscan'){
+    _screenAdmin.fullscan=!_screenAdmin.fullscan;
+    if(_screenAdmin.fullscan)alert('管理員已開啟「全部股票」選項。');
+  }else if(action==='widerange'){
+    _screenAdmin.widerange=!_screenAdmin.widerange;
+    alert(_screenAdmin.widerange?'管理員已開啟大範圍掃描。':'已關閉大範圍掃描。');
+  }else if(action==='lockback'){
+    lockScreenAdmin();
+    return;
+  }
+  updateScreenAdminUI();
 }
 function setScreenPoolHint(){
   const sel=document.getElementById('screenUniverse');
@@ -2242,8 +2376,8 @@ function setScreenPoolHint(){
   else if(v==='holdings')hint.textContent='目前將使用持股庫存作為篩選資料池。';
   else if(v==='union')hint.textContent='目前將合併追蹤清單與持股庫存進行篩選。';
   else if(v==='custom')hint.textContent='目前將使用你手動輸入的自訂代號清單進行篩選。';
-  else if(v==='allStocks')hint.textContent='目前將以全部股票代號作為候選池，再套用類別與條件篩選。';
-  else hint.textContent='目前將依代號範圍建立候選池，再套用類別與條件篩選。';
+  else if(v==='allStocks')hint.textContent=canUseAllStocks()?'目前將以全部股票代號作為候選池，再套用類別與條件篩選。':'全部股票模式已被鎖定，僅限管理員開啟。';
+  else hint.textContent=canUseWideRange()?'目前將依代號範圍建立候選池，再套用類別與條件篩選。':'目前將依代號範圍建立候選池；一般模式建議控制在 100 檔內。';
 }
 async function populateScreenCategoryOptions(){
   const type=document.getElementById('screenCategoryType');
@@ -2372,12 +2506,8 @@ function buildScreenReasonBadges(item, criteria){
     tags.push({text:'跌破 MA20', tone:'negative'});
     tags.push({text:'綜合分數偏弱', tone:'negative'});
   }
-  if((criteria.simple||[]).includes('volumeSpike') && (item.volRatio||0)>=1.5){
-    tags.push({text:'量比放大', tone:'positive'});
-  }
-  if((criteria.simple||[]).includes('oversold') && (item.rsi||999)<30){
-    tags.push({text:'RSI < 30', tone:'negative'});
-  }
+  if((criteria.simple||[]).includes('volumeSpike') && (item.volRatio||0)>=1.5)tags.push({text:'量比放大', tone:'positive'});
+  if((criteria.simple||[]).includes('oversold') && (item.rsi||999)<30)tags.push({text:'RSI < 30', tone:'negative'});
   if(criteria.minFund!=null && item.fundScore>=criteria.minFund)tags.push({text:'基本面達標', tone:'positive'});
   if(criteria.minRevYoY!=null && item.revYoY!=null && item.revYoY>=criteria.minRevYoY)tags.push({text:'營收年增達標', tone:item.revYoY>=0?'positive':'negative'});
   if(criteria.minEPS!=null && item.ttmEPS!=null && item.ttmEPS>=criteria.minEPS)tags.push({text:'EPS 達標', tone:item.ttmEPS>=0?'positive':'negative'});
@@ -2398,9 +2528,262 @@ function setScreenerRunning(running){
   const runBtn=document.getElementById('btnRunScreener');
   const stopBtn=document.getElementById('btnStopScreener');
   const clearBtn=document.getElementById('btnClearScreener');
+  const pdfBtn=document.getElementById('btnExportScreenPdf');
   if(runBtn)runBtn.disabled=!!running;
   if(clearBtn)clearBtn.disabled=!!running;
+  if(pdfBtn)pdfBtn.disabled=!!running||!!_screenAdmin.pdfBusy;
   if(stopBtn)stopBtn.style.display=running?'':'none';
+}
+function renderScreenResults(rows, criteria, stats){
+  const tbody=document.getElementById('screenResultBody');
+  const empty=document.getElementById('screenResultEmpty');
+  const summary=document.getElementById('screenResultSummary');
+  if(!tbody||!empty||!summary)return;
+  tbody.innerHTML='';
+  const sortBy=criteria.sortBy||'totalDesc';
+  rows.sort(function(a,b){
+    if(sortBy==='rsiAsc')return (a.rsi??999)-(b.rsi??999);
+    if(sortBy==='volDesc')return (b.volRatio??-999)-(a.volRatio??-999);
+    if(sortBy==='revDesc')return (b.revYoY??-999)-(a.revYoY??-999);
+    return (b.totalScore??0)-(a.totalScore??0);
+  });
+  rows=rows.slice(0,Math.max(5,Math.min(100,criteria.limit||20)));
+  _screenLastResult={rows:[...rows],criteria:criteria,stats:stats,generatedAt:new Date().toISOString()};
+  const scanned=stats&&stats.total!=null?stats.total:0;
+  const ok=stats&&stats.ok!=null?stats.ok:0;
+  const failed=stats&&stats.failed!=null?stats.failed:0;
+  const skipped=stats&&stats.skipped!=null?stats.skipped:0;
+  if(!rows.length){
+    empty.style.display='';
+    summary.innerHTML='<span class="screen-result-chip">掃描 '+scanned+' 檔</span><span class="screen-result-chip positive">成功 '+ok+' 檔</span><span class="screen-result-chip negative">失敗 '+failed+' 檔</span><span class="screen-result-chip">略過 '+skipped+' 檔</span>';
+    return;
+  }
+  empty.style.display='none';
+  summary.innerHTML='<span class="screen-result-chip">掃描 '+scanned+' 檔</span><span class="screen-result-chip positive">成功 '+ok+' 檔</span><span class="screen-result-chip negative">失敗 '+failed+' 檔</span><span class="screen-result-chip">略過 '+skipped+' 檔</span>'+(formatScreenCriteria(criteria).map(function(t){return '<span class="screen-result-chip">'+t+'</span>';}).join(''));
+  rows.forEach(function(r){
+    const totalTone=getScoreTone(r.totalScore);
+    const techTone=getScoreTone(r.techScore);
+    const fundTone=getScoreTone(r.fundScore);
+    const priceAbove = r.price!=null && r.ma20!=null ? r.price>=r.ma20 : null;
+    const reasons=buildScreenReasonBadges(r, criteria);
+    const revText=r.revYoY==null?'—':((r.revYoY>=0?'+':'')+r.revYoY.toFixed(1)+'%');
+    const epsText=r.ttmEPS==null?'—':((r.ttmEPS>=0?'+':'')+r.ttmEPS.toFixed(2));
+    const tr=document.createElement('tr');
+    tr.innerHTML=''
+      +'<td><div class="font-mono font-bold">'+r.symbol+'</div>'
+      +(r.name?'<div style="font-size:.72rem;color:#8b949e;">'+r.name+'</div>':'')
+      +'<div class="screen-reasons">'+reasons.map(function(tag){return '<span class="screen-reason '+tag.tone+'">'+tag.text+'</span>';}).join('')+'</div></td>'
+      +'<td><div class="screen-score-wrap"><span class="screen-score-box '+totalTone+'">'+r.totalScore+'</span></div><div class="screen-score-sub">綜合分數</div></td>'
+      +'<td><div class="screen-score-wrap"><span class="screen-score-box '+techTone+'">'+r.techScore+'</span><span class="screen-score-box '+fundTone+'">'+r.fundScore+'</span></div><div class="screen-score-sub">技術 / 基本面</div></td>'
+      +'<td><div class="'+(priceAbove===true?'screen-price-positive':priceAbove===false?'screen-price-negative':'')+'">'+formatPrice(r.price)+'</div><div style="font-size:.72rem;color:#8b949e;">MA20 '+formatPrice(r.ma20)+'</div></td>'
+      +'<td><div>'+(r.rsi==null?'—':r.rsi.toFixed(2))+'</div><div style="font-size:.72rem;color:#8b949e;">量比 '+(r.volRatio==null?'—':r.volRatio.toFixed(2))+'</div></td>'
+      +'<td><div>'+renderToneValue(r.revYoY, revText)+'</div><div style="font-size:.72rem;color:#8b949e;">EPS '+renderToneValue(r.ttmEPS, epsText)+'</div></td>'
+      +'<td><button class="btn-xs" data-screen-ai="'+r.symbol+'">AI</button> <button class="btn-xs btn-xs-gray" data-screen-trade="'+r.symbol+'">交易</button></td>';
+    tbody.appendChild(tr);
+  });
+  bindScreenerResultEvents();
+}
+function buildScreenPdfFileName(){
+  const d=new Date();
+  const pad=function(v){return String(v).padStart(2,'0');};
+  return 'screener_'+d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'_'+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds())+'.pdf';
+}
+async function exportScreenerPdf(){
+  if(_screenAdmin.pdfBusy){alert(getScreenMessage('pdfBusy'));return;}
+  if(!_screenLastResult.rows||!_screenLastResult.rows.length){alert(getScreenMessage('noData'));return;}
+  if(!(window.html2canvas&&window.jspdf&&window.jspdf.jsPDF)){alert(getScreenMessage('pdfLibMissing'));return;}
+  _screenAdmin.pdfBusy=true;
+  setScreenerRunning(_screenScanJob.running);
+  try{
+    const source=document.getElementById('screenResultCard');
+    if(!source)throw new Error('screenResultCard missing');
+    const wrap=document.createElement('div');
+    wrap.className='screen-offscreen-pdf';
+    const head=document.createElement('div');
+    const now=new Date();
+    head.innerHTML=''
+      +'<div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:6px;">台股虛擬操盤系統｜篩選結果報表</div>'
+      +'<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：'+now.toLocaleDateString('zh-TW')+'｜匯出時間：'+now.toLocaleTimeString('zh-TW')+'｜版本：v3.9.0</div>'
+      +'<div style="font-size:12px;color:#dbeafe;line-height:1.8;margin-bottom:14px;">篩選條件：'+formatScreenCriteria(_screenLastResult.criteria||{}).join('、')+'</div>';
+    const clone=source.cloneNode(true);
+    clone.style.marginTop='0';
+    wrap.appendChild(head);
+    wrap.appendChild(clone);
+    document.body.appendChild(wrap);
+    const canvas=await window.html2canvas(wrap,{backgroundColor:'#0d1117',scale:2,useCORS:true});
+    const img=canvas.toDataURL('image/png');
+    const pdf=new window.jspdf.jsPDF({orientation:'landscape',unit:'pt',format:'a4'});
+    const pageW=pdf.internal.pageSize.getWidth();
+    const pageH=pdf.internal.pageSize.getHeight();
+    const imgW=pageW-24;
+    const imgH=canvas.height*imgW/canvas.width;
+    let hLeft=imgH;
+    let posY=12;
+    pdf.addImage(img,'PNG',12,posY,imgW,imgH);
+    hLeft-=pageH;
+    while(hLeft>0){
+      posY=hLeft-imgH+12;
+      pdf.addPage();
+      pdf.addImage(img,'PNG',12,posY,imgW,imgH);
+      hLeft-=pageH;
+    }
+    pdf.save(buildScreenPdfFileName());
+    wrap.remove();
+  }catch(e){
+    alert('PDF 匯出失敗：'+(e&&e.message?e.message:e));
+  }finally{
+    _screenAdmin.pdfBusy=false;
+    setScreenerRunning(_screenScanJob.running);
+  }
+}
+async function runScreener(){
+  const status=document.getElementById('screenRunStatus');
+  const summary=document.getElementById('screenResultSummary');
+  const empty=document.getElementById('screenResultEmpty');
+  if(_screenScanJob.running){
+    notifyScreenIssue('pending','仍有掃描工作執行中');
+    return;
+  }
+  const criteria=getScreenerCriteria();
+  if(criteria.universe==='allStocks' && !canUseAllStocks()){
+    notifyScreenIssue('adminOnly','全部股票模式已鎖定');
+    if(status)status.textContent='全部股票模式僅限管理員';
+    return;
+  }
+  const symbols=await getScreenerUniverse(criteria);
+  if(!symbols.length){
+    if(status)status.textContent='沒有可篩選的股票';
+    if(summary)summary.textContent='請先建立追蹤清單、持股、自訂清單，或調整代號範圍 / 類別條件。';
+    document.getElementById('screenResultBody').innerHTML='';
+    if(empty)empty.style.display='';
+    return;
+  }
+  if(symbols.length>SCREEN_SCAN_HARD_LIMIT){
+    notifyScreenIssue('hardLimit','超過安全硬上限，已取消');
+    return;
+  }
+  if(symbols.length>SCREEN_SCAN_SOFT_LIMIT && !canUseWideRange()){
+    notifyScreenIssue('generalLimit','超過一般使用者上限，已取消');
+    return;
+  }
+  if(symbols.length>SCREEN_SCAN_SOFT_LIMIT && canUseWideRange()){
+    if(!confirm(getScreenMessage('adminLargeConfirm'))){
+      if(status)status.textContent='已取消大量掃描';
+      if(summary)summary.textContent='你已取消大範圍掃描。';
+      return;
+    }
+  }
+  _screenScanJob.running=true;
+  _screenScanJob.cancelled=false;
+  setScreenerRunning(true);
+  if(status)status.textContent='開始分析 '+symbols.length+' 檔…';
+  if(summary)summary.innerHTML='<span class="screen-result-chip">準備掃描 '+symbols.length+' 檔</span><span class="screen-result-chip">批次 '+SCREEN_BATCH_SIZE+' 檔 / '+SCREEN_BATCH_DELAY+'ms 節流</span>';
+  document.getElementById('screenResultBody').innerHTML='';
+  if(empty)empty.style.display='';
+  const rows=[];
+  let okCount=0, failCount=0, skipCount=0;
+  try{
+    for(let i=0;i<symbols.length;i++){
+      if(_screenScanJob.cancelled)break;
+      const symbol=normalizeSymbol(symbols[i]);
+      if(status)status.textContent='分析中 '+(i+1)+' / '+symbols.length+'：'+symbol+'｜成功 '+okCount+'｜失敗 '+failCount+'｜略過 '+skipCount;
+      try{
+        const priceRows=await fetchAIReportData(symbol);
+        if(!priceRows||priceRows.length<30){skipCount++;continue;}
+        const tech=analyzeAIData(symbol, priceRows);
+        const fund=await analyzeAIFundamental(symbol, tech.name||getStockName(symbol)||'');
+        const closes=priceRows.map(function(r){return r.close;});
+        const vols=priceRows.map(function(r){return num(r.volume)||0;});
+        const last=priceRows[priceRows.length-1]||{};
+        const avg5v=(vols.slice(-6,-1).reduce((a,b)=>a+b,0)/Math.max(1,Math.min(5,vols.length-1)))||0;
+        const volRatio=avg5v>0?((num(last.volume)||0)/avg5v):null;
+        const rsi=calcRSI(closes,14);
+        const totalScore=Math.round((tech.comprehensiveScore||0)*0.6 + (fund.score||0)*0.4);
+        const item={
+          symbol:symbol,
+          name:tech.name||getStockName(symbol)||'',
+          price:num(last.close),
+          ma20:num(tech.m20),
+          techScore:num(tech.comprehensiveScore)||0,
+          fundScore:num(fund.score)||0,
+          totalScore:totalScore,
+          rsi:rsi,
+          volRatio:volRatio,
+          revYoY:extractMetricValue(fund.metrics,'月營收年增'),
+          ttmEPS:extractMetricValue(fund.metrics,'近四季 EPS'),
+          tech:tech,
+          fund:fund
+        };
+        okCount++;
+        if(evaluateScreenResult(item, criteria))rows.push(item);
+      }catch(e){
+        failCount++;
+        const msg=e&&e.message?String(e.message):String(e||'');
+        if(/limit|429|upper limit/i.test(msg)){
+          _screenScanJob.cancelled=true;
+          console.warn('[Screener-RateLimit]',symbol,msg);
+          break;
+        }
+        console.warn('[Screener]',symbol,msg);
+      }
+      if((i+1)%SCREEN_BATCH_SIZE===0 && i<symbols.length-1)await sleep(SCREEN_BATCH_DELAY);
+    }
+    const stats={total:symbols.length,ok:okCount,failed:failCount,skipped:skipCount};
+    renderScreenResults(rows, criteria, stats);
+    if(_screenScanJob.cancelled){
+      if(status)status.textContent='掃描已中止｜已完成 '+(okCount+failCount+skipCount)+' / '+symbols.length+' 檔';
+      alert(failCount>0&&okCount===0?getScreenMessage('rateLimited'):getScreenMessage('stopped'));
+    }else{
+      if(status)status.textContent='篩選完成｜掃描 '+symbols.length+' 檔｜命中 '+rows.length+' 檔｜成功 '+okCount+'｜失敗 '+failCount+'｜略過 '+skipCount;
+      if(failCount>0)alert(getScreenMessage('partial'));
+    }
+    state.screenHistory=[{time:new Date().toLocaleString('zh-TW'),poolLabel:poolLabelByValue(criteria.universe),count:rows.length,filters:formatScreenCriteria(criteria)}].concat(state.screenHistory||[]).slice(0,20);
+    saveState(state);
+    renderScreenerHistory();
+  }finally{
+    _screenScanJob.running=false;
+    setScreenerRunning(false);
+  }
+}
+function bindScreenerUI(){
+  document.querySelectorAll('[data-screen-filter]').forEach(function(card){
+    card.addEventListener('click',function(){card.classList.toggle('active');});
+  });
+  document.getElementById('screenUniverse')?.addEventListener('change',setScreenPoolHint);
+  document.getElementById('screenCategoryType')?.addEventListener('change',populateScreenCategoryOptions);
+  document.getElementById('screenCustomList')?.addEventListener('input',function(){state.screenCustomList=this.value; saveState(state);});
+  document.getElementById('btnRunScreener')?.addEventListener('click',runScreener);
+  document.getElementById('btnStopScreener')?.addEventListener('click',function(){
+    if(!_screenScanJob.running)return;
+    _screenScanJob.cancelled=true;
+    const status=document.getElementById('screenRunStatus');
+    if(status)status.textContent='已收到停止指令，將在目前批次結束後停止。';
+  });
+  document.getElementById('btnExportScreenPdf')?.addEventListener('click',exportScreenerPdf);
+  document.getElementById('btnClearScreener')?.addEventListener('click',clearScreenerInputs);
+  document.getElementById('btnClearScreenHistory')?.addEventListener('click',function(){state.screenHistory=[];saveState(state);renderScreenerHistory();});
+  document.getElementById('btnToggleScreenAdv')?.addEventListener('click',function(){
+    const p=document.getElementById('screenAdvPanel');
+    if(!p)return;
+    const show=!p.classList.contains('show');
+    p.classList.toggle('show',show);
+    this.textContent=show?'收合進階條件 ▲':'展開進階條件 ▼';
+  });
+  document.getElementById('screenAdminEntry')?.addEventListener('click',openScreenAdminModal);
+  document.getElementById('btnScreenAdminCancel')?.addEventListener('click',closeScreenAdminModal);
+  document.getElementById('btnScreenAdminSubmit')?.addEventListener('click',submitScreenAdminUnlock);
+  document.getElementById('screenAdminPassword')?.addEventListener('keydown',function(e){if(e.key==='Enter')submitScreenAdminUnlock();});
+  document.getElementById('screenAdminModal')?.addEventListener('click',function(e){if(e.target===this)closeScreenAdminModal();});
+  document.querySelectorAll('[data-admin-act]').forEach(function(btn){
+    btn.addEventListener('click',function(){handleScreenAdminAction(btn.dataset.adminAct);});
+  });
+  const ta=document.getElementById('screenCustomList');
+  if(ta && state.screenCustomList && !ta.value)ta.value=state.screenCustomList;
+  setScreenPoolHint();
+  populateScreenCategoryOptions();
+  renderScreenerHistory();
+  updateScreenAdminUI();
+  setScreenerRunning(false);
 }
 function renderScreenerHistory(){
   const box=document.getElementById('screenHistoryList');
@@ -2429,6 +2812,7 @@ function clearScreenerInputs(){
   document.getElementById('screenResultSummary').textContent='篩選條件已清除。';
   document.getElementById('screenResultEmpty').style.display='';
   document.getElementById('screenRunStatus').textContent='尚未開始篩選';
+  _screenLastResult={rows:[],criteria:null,stats:null,generatedAt:null};
   setScreenPoolHint();
 }
 
