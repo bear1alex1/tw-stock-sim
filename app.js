@@ -1,7 +1,7 @@
-const APP_VERSION = '3.6';   // ← 只改這裡就能更版
+const APP_VERSION = '3.7';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v3.6  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.7  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -2329,6 +2329,169 @@ function analyzeAIData(symbol, rows){
   return {symbol,name,rows:sample,ma5,ma20,ma60,score,comprehensiveScore,scoreLabel,scoreClass,regime,holderTag,entryTag,holderAdvice,entryAdvice,techSummary,candlePattern,volumePrice,indicatorHtml,lastClose,m20};
 }
 
+
+const aiFundamentalCache = {};
+
+async function fetchAIBWIBBU(symbol){
+  symbol=normalizeSymbol(symbol);
+  const date=getTWDateStr();
+  const target='https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU?response=json&date='+date+'&stockNo='+encodeURIComponent(symbol);
+  const urls=[target,'https://corsproxy.io/?'+encodeURIComponent(target),'https://api.allorigins.win/raw?url='+encodeURIComponent(target)];
+  for(const url of urls){
+    try{
+      const r=await timedFetch(url,8000);
+      if(!r.ok)continue;
+      const txt=await r.text();
+      if(!txt||txt.trim().startsWith('<'))continue;
+      const j=JSON.parse(txt);
+      if(j.stat!=='OK'||!Array.isArray(j.data)||!j.data.length)continue;
+      const row=j.data[j.data.length-1]||[];
+      return {dividendYield:num(row[1]), per:num(row[3]), pbr:num(row[4]), quarter:row[5]||''};
+    }catch(e){}
+  }
+  return null;
+}
+
+async function fetchAIMonthRevenue(symbol){
+  symbol=normalizeSymbol(symbol);
+  const key='rev:'+symbol;
+  if(aiFundamentalCache[key]&&Date.now()-aiFundamentalCache[key].ts<12*3600*1000)return aiFundamentalCache[key].data;
+  try{
+    const url='https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockMonthRevenue&data_id='+encodeURIComponent(symbol)+'&start_date='+encodeURIComponent(daysAgo(620));
+    const r=await timedFetch(url,12000);
+    if(!r.ok)throw new Error('month revenue');
+    const j=await r.json();
+    const data=(j&&j.data)||[];
+    aiFundamentalCache[key]={ts:Date.now(),data:data};
+    return data;
+  }catch(e){return [];}
+}
+
+async function fetchAIFinancialStatements(symbol){
+  symbol=normalizeSymbol(symbol);
+  const key='fs:'+symbol;
+  if(aiFundamentalCache[key]&&Date.now()-aiFundamentalCache[key].ts<12*3600*1000)return aiFundamentalCache[key].data;
+  try{
+    const url='https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockFinancialStatements&data_id='+encodeURIComponent(symbol)+'&start_date='+encodeURIComponent(daysAgo(1100));
+    const r=await timedFetch(url,12000);
+    if(!r.ok)throw new Error('fs');
+    const j=await r.json();
+    const data=(j&&j.data)||[];
+    aiFundamentalCache[key]={ts:Date.now(),data:data};
+    return data;
+  }catch(e){return [];}
+}
+
+async function fetchAINews(symbol, name){
+  symbol=normalizeSymbol(symbol);
+  const key='news:'+symbol;
+  if(aiFundamentalCache[key]&&Date.now()-aiFundamentalCache[key].ts<60*60*1000)return aiFundamentalCache[key].data;
+  const q=encodeURIComponent((symbol+' '+(name||'')+' 訂單 EPS 營收 法說 台股').trim());
+  const target='https://news.google.com/rss/search?q='+q+'&hl=zh-TW&gl=TW&ceid=TW:zh-Hant';
+  const urls=['https://corsproxy.io/?'+encodeURIComponent(target),'https://api.allorigins.win/raw?url='+encodeURIComponent(target),target];
+  for(const url of urls){
+    try{
+      const r=await timedFetch(url,9000);
+      if(!r.ok)continue;
+      const xml=await r.text();
+      if(!xml||xml.indexOf('<rss')===-1)continue;
+      const doc=(new DOMParser()).parseFromString(xml,'text/xml');
+      const items=[...doc.querySelectorAll('item')].slice(0,6).map(function(it){
+        const t=(it.querySelector('title')?.textContent||'').replace(/\s*-\s*[^-]+$/,'').trim();
+        const link=it.querySelector('link')?.textContent||'';
+        return {title:t,link:link};
+      }).filter(function(it){return it.title;});
+      aiFundamentalCache[key]={ts:Date.now(),data:items};
+      return items;
+    }catch(e){}
+  }
+  return [];
+}
+
+function _pickQuarterEPS(rows){
+  const map={};
+  (rows||[]).forEach(function(r){
+    const name=((r.origin_name||'')+' '+(r.type||'')).toLowerCase();
+    if(name.indexOf('每股盈餘')===-1&&name.indexOf('基本每股盈餘')===-1&&name.indexOf('eps')===-1)return;
+    const d=r.date||'';
+    const v=num(r.value);
+    if(!d||v===null)return;
+    if(map[d]==null)map[d]=v;
+  });
+  return Object.keys(map).sort().map(function(d){return {date:d,value:map[d]};});
+}
+
+function _calcFundLabel(score){
+  return score>=75?'體質穩健':score>=60?'基本面尚可':score>=45?'中性觀察':score>=30?'偏弱留意':'保守看待';
+}
+
+function _calcTotalLabel(score){
+  return score>=80?'強勢偏多':score>=65?'偏多觀察':score>=45?'中性整理':score>=30?'弱勢危險':'高風險';
+}
+
+async function analyzeAIFundamental(symbol, name){
+  const [bw, revRows, fsRows, newsRows] = await Promise.all([
+    fetchAIBWIBBU(symbol),
+    fetchAIMonthRevenue(symbol),
+    fetchAIFinancialStatements(symbol),
+    fetchAINews(symbol, name)
+  ]);
+  let score=50;
+  const revs=(revRows||[]).slice().sort(function(a,b){return String(a.date).localeCompare(String(b.date));});
+  const lastRev=revs[revs.length-1]||null;
+  const prevRev=revs[revs.length-2]||null;
+  let sameMonthPrevYear=null;
+  if(lastRev){
+    sameMonthPrevYear = revs.filter(function(r){return r.revenue_month===lastRev.revenue_month && r.revenue_year===lastRev.revenue_year-1;}).slice(-1)[0]||null;
+  }
+  const revYoY=(lastRev&&sameMonthPrevYear&&num(sameMonthPrevYear.revenue)>0)?((num(lastRev.revenue)-num(sameMonthPrevYear.revenue))/num(sameMonthPrevYear.revenue)*100):null;
+  const revMoM=(lastRev&&prevRev&&num(prevRev.revenue)>0)?((num(lastRev.revenue)-num(prevRev.revenue))/num(prevRev.revenue)*100):null;
+  if(revYoY!=null){ if(revYoY>=20)score+=12; else if(revYoY>=10)score+=8; else if(revYoY>=0)score+=4; else if(revYoY<=-20)score-=12; else if(revYoY<=-10)score-=8; else score-=4; }
+  if(revMoM!=null){ if(revMoM>=10)score+=6; else if(revMoM>=0)score+=3; else if(revMoM<=-10)score-=6; else if(revMoM<0)score-=3; }
+
+  const epsQs=_pickQuarterEPS(fsRows);
+  const ttmEPS=epsQs.slice(-4).reduce(function(a,b){return a+(num(b.value)||0);},0);
+  const prevTTMEPS=epsQs.length>=8?epsQs.slice(-8,-4).reduce(function(a,b){return a+(num(b.value)||0);},0):null;
+  const epsYoY=(prevTTMEPS!==null&&Math.abs(prevTTMEPS)>0)?((ttmEPS-prevTTMEPS)/Math.abs(prevTTMEPS)*100):null;
+  if(ttmEPS>20)score+=15; else if(ttmEPS>10)score+=10; else if(ttmEPS>0)score+=5; else score-=15;
+  if(epsYoY!=null){ if(epsYoY>=20)score+=12; else if(epsYoY>=0)score+=6; else if(epsYoY<=-20)score-=12; else if(epsYoY<0)score-=6; }
+
+  const per=bw&&bw.per!=null?bw.per:null;
+  const pbr=bw&&bw.pbr!=null?bw.pbr:null;
+  const dy=bw&&bw.dividendYield!=null?bw.dividendYield:null;
+  if(per!=null){ if(per>0&&per<=25)score+=8; else if(per<=35)score+=4; else score-=4; }
+  if(pbr!=null){ if(pbr>0&&pbr<=3)score+=5; else if(pbr<=6)score+=2; else score-=3; }
+  if(dy!=null){ if(dy>=4)score+=6; else if(dy>=2)score+=3; else if(dy>0)score+=1; }
+
+  const posWords=['訂單','接單','法說','擴產','增產','營收創高','創高','合作','上修','調升','AI','獲利','成長'];
+  const negWords=['砍單','下修','調降','虧損','衰退','下滑','疲弱','利空','裁員','停工'];
+  let newsBias=0;
+  (newsRows||[]).forEach(function(n){
+    const t=(n.title||'');
+    posWords.forEach(function(w){if(t.indexOf(w)!==-1)newsBias+=1;});
+    negWords.forEach(function(w){if(t.indexOf(w)!==-1)newsBias-=1;});
+  });
+  if(newsBias>=4)score+=10; else if(newsBias>=2)score+=6; else if(newsBias<=-4)score-=10; else if(newsBias<=-2)score-=6;
+
+  score=Math.max(0,Math.min(100,Math.round(score)));
+  const label=_calcFundLabel(score);
+  const scoreClass=score>=65?'risk':score>=45?'mid':'good';
+  const revPart=revYoY==null?'最新月營收資料不足。':'最新月營收年增 '+(revYoY>=0?'+':'')+revYoY.toFixed(1)+'%，月增 '+((revMoM||0)>=0?'+':'')+(revMoM==null?0:revMoM).toFixed(1)+'%。';
+  const epsPart=epsQs.length>=4?'近四季 EPS 合計 '+ttmEPS.toFixed(2)+(epsYoY!=null?'，相較前四季 '+(epsYoY>=0?'+':'')+epsYoY.toFixed(1)+'%。':'。'):'EPS 資料不足，暫以營收與估值判讀。';
+  const newsPart=(newsRows||[]).length?('近期消息面'+(newsBias>=2?'偏多':newsBias<=-2?'偏空':'中性')+'，以標題關鍵字做輔助判斷。'):'近期未取得足夠新聞，消息面權重降低。';
+  const metrics = [
+    {label:'月營收年增', value:revYoY==null?'—':(revYoY>=0?'+':'')+revYoY.toFixed(1)+'%'},
+    {label:'月營收月增', value:revMoM==null?'—':(revMoM>=0?'+':'')+revMoM.toFixed(1)+'%'},
+    {label:'近四季 EPS', value:epsQs.length>=4?ttmEPS.toFixed(2):'—'},
+    {label:'EPS 趨勢', value:epsYoY==null?'—':(epsYoY>=0?'+':'')+epsYoY.toFixed(1)+'%'},
+    {label:'本益比', value:per==null?'—':per},
+    {label:'殖利率', value:dy==null?'—':dy+'%'},
+    {label:'股價淨值比', value:pbr==null?'—':pbr},
+    {label:'消息面', value:newsBias>=2?'偏多':newsBias<=-2?'偏空':'中性'}
+  ];
+  return {score,label,scoreClass,summary:revPart+' '+epsPart+' '+newsPart,metrics,newsRows:(newsRows||[]).slice(0,3),newsBias,orderHint:newsBias>=2?'利多/接單關鍵字偏多':newsBias<=-2?'利空關鍵字偏多':'未見明顯訂單偏向'};
+}
+
 function renderAIChart(report){
   const cvs=document.getElementById('aiTrendCanvas');
   if(!cvs||!report||!report.rows||!report.rows.length)return;
@@ -2390,7 +2553,7 @@ function renderAIReport(report){
   if(focus){
     focus.innerHTML='<div class="ai-query-main">'
       +'<span class="ai-query-badge">'+report.symbol+'</span>'
-      +'<div><div class="ai-query-name">'+(report.name||'未命名股票')+'</div><div class="ai-query-sub">AI 診斷對象｜'+report.regime+'｜原始分數 '+report.score+'</div></div>'
+      +'<div><div class="ai-query-name">'+(report.name||'未命名股票')+'</div><div class="ai-query-sub">AI 診斷對象｜'+report.regime+'｜技術 '+report.technicalScore+'｜基本面 '+((report.fundamental&&report.fundamental.score)||0)+'</div></div>'
       +'</div>'
       +'<div class="ai-score-pill '+report.scoreClass+'">綜合評分：'+report.comprehensiveScore+'分（'+report.scoreLabel+'）</div>';
     focus.classList.add('show');
@@ -2406,6 +2569,24 @@ function renderAIReport(report){
   document.getElementById('aiCandlePattern').textContent=report.candlePattern;
   document.getElementById('aiVolumePrice').textContent=report.volumePrice;
   document.getElementById('aiIndicatorBar').innerHTML=report.indicatorHtml;
+  if(report.fundamental){
+    var fs=document.getElementById('aiFundScore');
+    var fsum=document.getElementById('aiFundSummary');
+    var fm=document.getElementById('aiFundMetrics');
+    var ns=document.getElementById('aiNewsSummary');
+    var nl=document.getElementById('aiNewsList');
+    if(fs)fs.innerHTML='<span class="ai-score-pill '+report.fundamental.scoreClass+'">'+report.fundamental.score+'分</span> <span style="font-size:.92rem;font-weight:800;margin-left:8px;">'+report.fundamental.label+'</span>';
+    if(fsum)fsum.textContent=report.fundamental.summary;
+    if(fm)fm.innerHTML=(report.fundamental.metrics||[]).map(function(m){
+      var cls='orange';
+      var v=String(m.value||'—');
+      if(v.indexOf('+')!==-1||v==='偏多')cls='red';
+      if(v.indexOf('-')!==-1||v==='偏空')cls='green';
+      return '<span class="ai-fund-chip '+cls+'">'+m.label+'：'+v+'</span>';
+    }).join('');
+    if(ns)ns.textContent='消息面判讀：'+report.fundamental.orderHint+'。';
+    if(nl)nl.innerHTML=(report.fundamental.newsRows||[]).length?(report.fundamental.newsRows||[]).map(function(it){return '<div class="ai-news-item">'+it.title+'</div>';}).join(''):'<div class="ai-news-item">暫未取得足夠新聞標題，消息面目前僅作輔助，不單獨主導評分。</div>';
+  }
   document.getElementById('aiReportOutput').style.display='block';
   renderAIChart(report);
 }
@@ -2426,6 +2607,12 @@ async function generateAIReport(symbolArg){
     const rows=await fetchAIReportData(symbol);
     if(!rows||rows.length<30)throw new Error('歷史資料不足');
     const report=analyzeAIData(symbol,rows);
+    report.technicalScore=report.comprehensiveScore;
+    report.technicalLabel=report.scoreLabel;
+    report.fundamental=await analyzeAIFundamental(symbol, report.name||getStockName(symbol)||'');
+    report.comprehensiveScore=Math.round((report.technicalScore||0)*0.6 + ((report.fundamental&&report.fundamental.score)||0)*0.4);
+    report.scoreLabel=_calcTotalLabel(report.comprehensiveScore);
+    report.scoreClass=report.comprehensiveScore>=65?'risk':report.comprehensiveScore>=45?'mid':'good';
     renderAIReport(report);
   }catch(e){
     showToast('❌ AI 診斷失敗：'+(e.message||'請稍後再試'));
