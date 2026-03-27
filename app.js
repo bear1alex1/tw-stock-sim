@@ -1,7 +1,12 @@
+window.__V3914_CLEAN = 'loaded';
+console.log('[v3.9.14] clean package js loaded');
+
+window.__V3913_MARKER = 'loaded';
+console.log('[v3.9.14] clean override js loaded');
 const APP_VERSION = '3.9.0';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v3.9.12  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.9.14  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -2604,7 +2609,7 @@ async function exportScreenerPdf(){
     const now=new Date();
     head.innerHTML=''
       +'<div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:6px;">台股虛擬操盤系統｜篩選結果報表</div>'
-      +'<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：'+now.toLocaleDateString('zh-TW')+'｜匯出時間：'+now.toLocaleTimeString('zh-TW')+'｜版本：v3.9.12</div>'
+      +'<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：'+now.toLocaleDateString('zh-TW')+'｜匯出時間：'+now.toLocaleTimeString('zh-TW')+'｜版本：v3.9.14</div>'
       +'<div style="font-size:12px;color:#dbeafe;line-height:1.8;margin-bottom:14px;">篩選條件：'+formatScreenCriteria(_screenLastResult.criteria||{}).join('、')+'</div>';
     const clone=source.cloneNode(true);
     clone.style.marginTop='0';
@@ -4099,9 +4104,9 @@ document.addEventListener('DOMContentLoaded',()=>{
 })();
 
 
-/* v3.9.12 wizard + screener start fix */
+/* v3.9.14 wizard + screener start fix */
 (function(){
-  var HOTFIX_VER = 'v3.9.12';
+  var HOTFIX_VER = 'v3.9.14';
   function byId(id){ return document.getElementById(id); }
   function setText(id, txt){ var el=byId(id); if(el) el.textContent = txt; }
   function cloneBind(id, evt, fn){
@@ -4237,7 +4242,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 
 
 
-/* ===== v3.9.12 screener wizard patch ===== */
+/* ===== v3.9.14 screener wizard patch ===== */
 (function(){
   function wizText(id, text){ var el=document.getElementById(id); if(el) el.textContent=text; }
   function wizStep(id, state){
@@ -4320,7 +4325,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 
 
 
-/* ===== v3.9.12 interactive screener wizard ===== */
+/* ===== v3.9.14 interactive screener wizard ===== */
 (function(){
   var WZ = {
     step: 1,
@@ -4638,7 +4643,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 
 
 
-/* ===== v3.9.12 screener UX + allStocks safety patch ===== */
+/* ===== v3.9.14 screener UX + allStocks safety patch ===== */
 (function(){
   var SAFE_ALLSTOCK_LIMIT = 120;
   var injected = false;
@@ -4859,7 +4864,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 })();
 
 
-/* ===== v3.9.12 allStocks universe fallback + wizard cleanup ===== */
+/* ===== v3.9.14 allStocks universe fallback + wizard cleanup ===== */
 (function(){
   if(document.getElementById('v399Style')) return;
   var style=document.createElement('style');
@@ -4988,7 +4993,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 })();
 
 
-/* ===== v3.9.12 screener fallback result policy ===== */
+/* ===== v3.9.14 screener fallback result policy ===== */
 (function(){
   if(window.__v3910PolicyPatched) return;
   window.__v3910PolicyPatched = true;
@@ -5064,7 +5069,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 })();
 
 
-/* ===== v3.9.12 robust screener runner + progress UX ===== */
+/* ===== v3.9.14 robust screener runner + progress UX ===== */
 (function(){
   if(window.__v3911Patched) return;
   window.__v3911Patched = true;
@@ -5431,7 +5436,7 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
 })();
 
 
-/* ===== v3.9.12 clean screener override ===== */
+/* ===== v3.9.14 clean screener override ===== */
 (function(){
   if(window.__v3912Loaded) return;
   window.__v3912Loaded = true;
@@ -5444,8 +5449,8 @@ window.TWO_STAGE = window.TWO_STAGE || undefined;
   function activeFilters(){ return Array.from(document.querySelectorAll('[data-screen-filter].active')).map(function(el){ return el.dataset.screenFilter; }); }
   function filterLabel(k){ return ({buyFit:'適合買進',sellWatch:'考慮賣出',volumeSpike:'量能異動',oversold:'超跌反彈'})[k] || k; }
   function setVersion(){
-    var el=$('appVersion'); if(el) el.textContent='v3.9.12';
-    document.title='v3.9.12';
+    var el=$('appVersion'); if(el) el.textContent='v3.9.14';
+    document.title='v3.9.14';
   }
   function getUniverse(){
     var mode = $('screenUniverse') ? $('screenUniverse').value : 'watchlist';
