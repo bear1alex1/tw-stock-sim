@@ -4228,9 +4228,11 @@ document.addEventListener('DOMContentLoaded',()=>{
 })();
 
 
+window.TWO_STAGE = window.TWO_STAGE || undefined;
 /* ===== v3.9.3 two-stage screener patch ===== */
 (function () {
-  const TWO_STAGE = {
+  window.TWO_STAGE = window.TWO_STAGE || {
+
     lightRows: [],
     deepRows: [],
     lightCriteria: null,
@@ -4239,6 +4241,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     originalRun: null,
     mounted: false
   };
+  const TWO_STAGE = window.TWO_STAGE;
 
   function tsClone(v) {
     try { return JSON.parse(JSON.stringify(v || null)); } catch (e) { return Array.isArray(v) ? v.slice() : v; }
@@ -4427,6 +4430,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     if (TWO_STAGE.lightRows.length) {
       tsDecorateSummary('light', TWO_STAGE.lightRows);
       tsSetText('screenRunStatus', '輕篩完成：' + TWO_STAGE.lightRows.length + ' 檔，接著可對結果做深篩。');
+      if (typeof window.refreshScreenerWizard === 'function') window.refreshScreenerWizard();
     }
   }
 
@@ -4456,6 +4460,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     tsSetText('screenRunStatus', '深篩完成：' + rows.length + ' 檔；' + meta.badge + '。');
     const btn = document.getElementById('btnRunDeepScreener');
     if (btn) btn.textContent = '🧠 已完成深篩（' + rows.length + '）';
+    if (typeof window.refreshScreenerWizard === 'function') window.refreshScreenerWizard();
   }
 
   async function tsLightWrapper() {
@@ -4517,6 +4522,7 @@ document.addEventListener('DOMContentLoaded',()=>{
         TWO_STAGE.mode = 'idle';
         tsSetDeepButtonState();
         tsSyncHint(tsGetCriteriaSafe());
+        if (typeof window.refreshScreenerWizard === 'function') window.refreshScreenerWizard();
       });
     }
     cards.forEach(function (card) {
@@ -4533,6 +4539,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     tsBindAssistiveEvents();
     tsSyncHint(tsGetCriteriaSafe());
     tsSetDeepButtonState();
+    if (typeof window.refreshScreenerWizard === 'function') window.refreshScreenerWizard();
     TWO_STAGE.mounted = true;
   }
 
@@ -4545,5 +4552,83 @@ document.addEventListener('DOMContentLoaded',()=>{
     tsMount();
     setTimeout(tsMount, 500);
     setTimeout(tsMount, 1500);
+  });
+})();
+
+
+/* ===== v3.9.4 screener wizard patch ===== */
+(function(){
+  function wizText(id, text){ var el=document.getElementById(id); if(el) el.textContent=text; }
+  function wizStep(id, state){
+    var el=document.getElementById(id); if(!el) return;
+    el.classList.remove('done','active','pending');
+    el.classList.add(state||'pending');
+  }
+  function wizUniverseLabel(v){
+    return ({watchlist:'自選清單',holdings:'持股範圍',union:'自選 + 持股',custom:'指定清單',allStocks:'全台股',range:'指定代號區間'})[v] || v || '未指定';
+  }
+  function wizActiveFilterCount(){
+    var cards=document.querySelectorAll('[data-screen-filter].active');
+    var count=cards?cards.length:0;
+    var adv=['screenMinTotal','screenMinFund','screenMaxRsi','screenMinVolRatio','screenMinRevYoY','screenMinEPS'].map(function(id){
+      var el=document.getElementById(id); return el && String(el.value||'').trim()!=='';
+    }).filter(Boolean).length;
+    return count + adv;
+  }
+  function wizGetStage(){
+    if(typeof TWO_STAGE!=='undefined' && TWO_STAGE && TWO_STAGE.mode) return TWO_STAGE.mode;
+    return 'idle';
+  }
+  function wizGetLightCount(){
+    if(typeof TWO_STAGE!=='undefined' && TWO_STAGE && Array.isArray(TWO_STAGE.lightRows)) return TWO_STAGE.lightRows.length;
+    return 0;
+  }
+  function wizGetDeepCount(){
+    if(typeof TWO_STAGE!=='undefined' && TWO_STAGE && Array.isArray(TWO_STAGE.deepRows)) return TWO_STAGE.deepRows.length;
+    return 0;
+  }
+  function refreshScreenerWizard(){
+    var universe=document.getElementById('screenUniverse');
+    var u=universe?universe.value:'watchlist';
+    var label=wizUniverseLabel(u);
+    var filterCount=wizActiveFilterCount();
+    var stage=wizGetStage();
+    var lightCount=wizGetLightCount();
+    var deepCount=wizGetDeepCount();
+
+    wizText('wizardStep1Note', '目前母體：' + label + '；' + (u==='allStocks' ? '此模式建議固定先輕篩再深篩。' : '此模式可依情境彈性決定是否深篩。'));
+    wizText('wizardStep2Note', filterCount ? ('已設定 ' + filterCount + ' 個條件，可開始輕篩。') : '目前尚未勾選任何條件，但仍可先做母體掃描。');
+    wizText('wizardStep3Note', lightCount ? ('輕篩已完成，共取得 ' + lightCount + ' 檔候選。') : '尚未執行輕篩。');
+    wizText('wizardStep4Note', deepCount ? ('深篩已完成，目前保留 ' + deepCount + ' 檔聚焦名單。') : (lightCount ? '已可執行深篩。' : '等待輕篩結果後啟用。'));
+
+    wizStep('wizardStep1', 'done');
+    wizStep('wizardStep2', filterCount ? 'done' : 'active');
+    wizStep('wizardStep3', lightCount ? 'done' : (filterCount ? 'active' : 'pending'));
+    wizStep('wizardStep4', deepCount ? 'done' : (lightCount ? 'active' : 'pending'));
+  }
+
+  window.refreshScreenerWizard = refreshScreenerWizard;
+  document.addEventListener('DOMContentLoaded', function(){
+    refreshScreenerWizard();
+    ['screenUniverse','screenCustomList','screenRangeStart','screenRangeEnd','screenMinTotal','screenMinFund','screenMaxRsi','screenMinVolRatio','screenMinRevYoY','screenMinEPS'].forEach(function(id){
+      var el=document.getElementById(id);
+      if(!el || el.dataset.wizardBound==='1') return;
+      el.dataset.wizardBound='1';
+      el.addEventListener('change', function(){ setTimeout(refreshScreenerWizard, 0); });
+      el.addEventListener('input', function(){ setTimeout(refreshScreenerWizard, 0); });
+    });
+    document.querySelectorAll('[data-screen-filter]').forEach(function(el){
+      if(el.dataset.wizardBound==='1') return;
+      el.dataset.wizardBound='1';
+      el.addEventListener('click', function(){ setTimeout(refreshScreenerWizard, 0); });
+    });
+    ['btnRunScreener','btnRunDeepScreener','btnClearScreener'].forEach(function(id){
+      var el=document.getElementById(id);
+      if(!el || el.dataset.wizardActionBound==='1') return;
+      el.dataset.wizardActionBound='1';
+      el.addEventListener('click', function(){ setTimeout(refreshScreenerWizard, 120); setTimeout(refreshScreenerWizard, 800); });
+    });
+    setTimeout(refreshScreenerWizard, 400);
+    setTimeout(refreshScreenerWizard, 1200);
   });
 })();
