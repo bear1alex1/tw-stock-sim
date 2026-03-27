@@ -218,6 +218,31 @@
     .ai-fund-chip.orange{background:rgba(245,158,11,.14);color:#fbbf24;}
     @media(max-width:1100px){.ai-fund-grid{grid-template-columns:1fr;}}
 
+    .screen-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
+    .screen-card{cursor:pointer;transition:all .18s;border:1px solid var(--border2);background:linear-gradient(180deg,#1c2739,#1a2433);}
+    .screen-card:hover{border-color:#3b82f6;transform:translateY(-1px);}
+    .screen-card.active{border-color:#60a5fa;box-shadow:0 0 0 1px rgba(96,165,250,.35) inset,0 10px 22px rgba(0,0,0,.18);background:linear-gradient(180deg,#213451,#1b273a);}
+    .screen-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
+    .screen-card-title{font-size:1.42rem;font-weight:900;color:#fff;}
+    .screen-card-desc{font-size:.8rem;color:#9fb4d2;line-height:1.6;}
+    .screen-tag{display:inline-flex;align-items:center;padding:5px 10px;border-radius:8px;font-size:.76rem;font-weight:800;white-space:nowrap;}
+    .screen-tag.buy{background:rgba(239,68,68,.14);color:#ff8a8a;}
+    .screen-tag.sell{background:rgba(34,197,94,.14);color:#52d68a;}
+    .screen-tag.filter{background:rgba(96,165,250,.16);color:#8cc5ff;}
+    .screen-adv-toggle{cursor:pointer;color:#60a5fa;font-weight:900;font-size:1.05rem;}
+    .screen-adv-panel{display:none;padding-top:14px;border-top:1px solid var(--border2);margin-top:14px;}
+    .screen-adv-panel.show{display:block;}
+    .screen-adv-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
+    .screen-field-label{display:block;font-size:.72rem;color:var(--muted);margin-bottom:5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;}
+    .screen-stat{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:.88rem;color:#dbeafe;}
+    .screen-result-chip{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-size:.73rem;font-weight:800;background:#1f2937;color:#fff;margin-right:6px;margin-bottom:6px;}
+    .screen-history-item{padding:10px 12px;border:1px solid var(--border2);border-radius:10px;background:#182233;margin-bottom:8px;}
+    .screen-history-title{font-size:.88rem;font-weight:800;color:#fff;}
+    .screen-history-sub{font-size:.76rem;color:#9fb4d2;line-height:1.6;margin-top:2px;}
+    .screen-empty{padding:22px 12px;text-align:center;color:var(--muted);}
+    @media(max-width:1100px){.screen-grid,.screen-adv-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+    @media(max-width:700px){.screen-grid,.screen-adv-grid{grid-template-columns:1fr;}}
+
   </style>
 </head>
 <body>
@@ -228,7 +253,7 @@
     <span style="font-size:1.2rem;">📈</span>
     <div>
       <div style="font-weight:800;color:var(--text);font-size:.92rem;line-height:1.2;">
-        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.7</span>
+        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.8</span>
       </div>
       <div id="lastSaved" style="font-size:.65rem;color:#555;line-height:1.2;">最後儲存：—</div>
     </div>
@@ -258,6 +283,7 @@
   <button class="side-item" data-page="market"><span class="icon">📡</span>行情追蹤</button>
   <button class="side-item" data-page="portfolio"><span class="icon">📦</span>持股帳務</button>
   <button class="side-item" data-page="trade"><span class="icon">💹</span>交易設定</button>
+  <button class="side-item" data-page="screener"><span class="icon">🧭</span>篩選器</button>
   <button class="side-item" data-page="aiReport"><span class="icon">🤖</span>AI 診斷</button>
   <button class="side-item" data-page="cloud"
     style="margin-top:auto;border:1px solid #1a4a1a;color:#2ecc71;background:#0a1a0a;">
@@ -576,7 +602,135 @@
   </div>
 
 
-  <!-- ════ PAGE 5: AI 診斷報告 (v3.3) ════ -->
+  
+  <!-- ════ PAGE 5: 篩選器 ════ -->
+  <div id="page-screener" class="page">
+    <div class="card" style="margin-bottom:12px;">
+      <div class="sec-title">🧭 條件篩選器</div>
+      <div style="display:grid;grid-template-columns:1.1fr 1.4fr;gap:12px;align-items:end;">
+        <div>
+          <label class="screen-field-label">篩選資料池</label>
+          <select id="screenUniverse" class="inp">
+            <option value="watchlist">追蹤清單</option>
+            <option value="holdings">持股庫存</option>
+            <option value="union">追蹤 + 持股</option>
+            <option value="custom">自訂清單</option>
+          </select>
+        </div>
+        <div>
+          <label class="screen-field-label">自訂代號清單</label>
+          <textarea id="screenCustomList" class="inp" rows="2" placeholder="輸入代號，以逗號、空白或換行分隔，例如：2330, 2317, 0050" style="width:100%;resize:vertical;"></textarea>
+        </div>
+      </div>
+      <div class="screen-stat" style="margin-top:10px;">
+        <span id="screenPoolHint">目前將使用追蹤清單作為篩選資料池。</span>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px;">
+      <div class="sec-title">🎯 簡易篩選條件</div>
+      <div class="screen-grid">
+        <div class="card screen-card" data-screen-filter="buyFit">
+          <div class="screen-card-top"><div class="screen-card-title">適合買進</div><span class="screen-tag buy">買入</span></div>
+          <div class="screen-card-desc">收盤站上 MA20，且綜合評分偏高。</div>
+        </div>
+        <div class="card screen-card" data-screen-filter="sellWatch">
+          <div class="screen-card-top"><div class="screen-card-title">考慮賣出</div><span class="screen-tag sell">賣出</span></div>
+          <div class="screen-card-desc">收盤跌破 MA20，且綜合評分偏弱。</div>
+        </div>
+        <div class="card screen-card" data-screen-filter="volumeSpike">
+          <div class="screen-card-top"><div class="screen-card-title">量能異動</div><span class="screen-tag filter">篩選</span></div>
+          <div class="screen-card-desc">今日成交量大於 5 日均量 1.5 倍。</div>
+        </div>
+        <div class="card screen-card" data-screen-filter="oversold">
+          <div class="screen-card-top"><div class="screen-card-title">超跌反彈</div><span class="screen-tag buy">買入</span></div>
+          <div class="screen-card-desc">RSI(14) 小於 30，觀察是否出現反彈。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div class="sec-title" style="margin:0;">⚙️ 進階篩選</div>
+        <div id="btnToggleScreenAdv" class="screen-adv-toggle">展開進階條件 ▼</div>
+      </div>
+      <div class="screen-adv-panel" id="screenAdvPanel">
+        <div class="screen-adv-grid">
+          <div>
+            <label class="screen-field-label">綜合分數最低</label>
+            <input id="screenMinTotal" class="inp" type="number" min="0" max="100" placeholder="例如 65" />
+          </div>
+          <div>
+            <label class="screen-field-label">基本面分數最低</label>
+            <input id="screenMinFund" class="inp" type="number" min="0" max="100" placeholder="例如 60" />
+          </div>
+          <div>
+            <label class="screen-field-label">RSI 上限</label>
+            <input id="screenMaxRsi" class="inp" type="number" min="0" max="100" placeholder="例如 30" />
+          </div>
+          <div>
+            <label class="screen-field-label">量比最低</label>
+            <input id="screenMinVolRatio" class="inp" type="number" step="0.1" min="0" placeholder="例如 1.5" />
+          </div>
+          <div>
+            <label class="screen-field-label">月營收年增最低%</label>
+            <input id="screenMinRevYoY" class="inp" type="number" step="0.1" placeholder="例如 10" />
+          </div>
+          <div>
+            <label class="screen-field-label">近四季 EPS 最低</label>
+            <input id="screenMinEPS" class="inp" type="number" step="0.01" placeholder="例如 8" />
+          </div>
+          <div>
+            <label class="screen-field-label">結果排序</label>
+            <select id="screenSortBy" class="inp">
+              <option value="totalDesc">綜合分數高到低</option>
+              <option value="rsiAsc">RSI 低到高</option>
+              <option value="volDesc">量比高到低</option>
+              <option value="revDesc">營收年增高到低</option>
+            </select>
+          </div>
+          <div>
+            <label class="screen-field-label">最多顯示筆數</label>
+            <input id="screenLimit" class="inp" type="number" min="5" max="100" step="1" value="20" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+      <button class="btn btn-blue" id="btnRunScreener" style="padding:12px 24px;font-size:.96rem;">🔍 開始篩選</button>
+      <button class="btn" id="btnClearScreener" style="padding:12px 22px;">🗑️ 一鍵清除</button>
+    </div>
+
+    <div class="card" style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div class="sec-title" style="margin:0;">📋 篩選結果</div>
+        <div id="screenRunStatus" class="muted" style="font-size:.78rem;">尚未開始篩選</div>
+      </div>
+      <div id="screenResultSummary" class="screen-stat" style="margin:10px 0 12px;">尚未開始篩選。</div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>代號 / 名稱</th><th>綜合分數</th><th>技術 / 基本面</th><th>現價 / MA20</th><th>RSI / 量比</th><th>月營收年增 / EPS</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="screenResultBody"></tbody>
+        </table>
+      </div>
+      <div id="screenResultEmpty" class="screen-empty">尚無篩選結果</div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div class="sec-title" style="margin:0;">🕘 篩選紀錄</div>
+        <button class="btn-xs btn-xs-gray" id="btnClearScreenHistory">清除紀錄</button>
+      </div>
+      <div id="screenHistoryList" style="margin-top:12px;"></div>
+    </div>
+  </div>
+
+  <!-- ════ PAGE 6: AI 診斷報告 (v3.3) ════ -->
   <div id="page-aiReport" class="page">
     <div class="card" style="margin-bottom:12px;">
       <div class="sec-title" id="aiReportTitle">🤖 AI 診斷報告</div>
@@ -661,6 +815,7 @@
   <button class="nav-item" data-page="market"><span class="icon">📡</span>行情</button>
   <button class="nav-item" data-page="portfolio"><span class="icon">📦</span>帳務</button>
   <button class="nav-item" data-page="trade"><span class="icon">💹</span>交易</button>
+  <button class="nav-item" data-page="screener"><span class="icon">🧭</span><span>篩選器</span></button>
   <button class="nav-item" data-page="aiReport"><span class="icon">🤖</span>AI</button>
   <button class="nav-item" data-page="cloud"><span class="icon">☁️</span>雲端</button>
 </nav>
@@ -673,7 +828,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
 <!-- App -->
-<script src="app.js?v=3.7"></script>
+<script src="app.js?v=3.8"></script>
 
 <!-- SPA 導覽 -->
 <script>
