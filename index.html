@@ -216,7 +216,7 @@
     <span style="font-size:1.2rem;">📈</span>
     <div>
       <div style="font-weight:800;color:var(--text);font-size:.92rem;line-height:1.2;">
-        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.5.1</span>
+        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.6</span>
       </div>
       <div id="lastSaved" style="font-size:.65rem;color:#555;line-height:1.2;">最後儲存：—</div>
     </div>
@@ -446,8 +446,9 @@
             <label class="sec-title" style="display:block;margin-bottom:4px;">成交價（留空自動取得）</label>
             <input id="tradePrice" class="inp" type="number" step="0.01" placeholder="自動取得現價"/>
           </div>
-          <div style="margin-bottom:4px;">
-            <button class="btn-open-scenario" id="btnOpenScenario">📊 投資模擬試算</button>
+          <div style="margin-bottom:4px;display:flex;gap:8px;">
+            <button class="btn-open-scenario" id="btnOpenScenario" style="flex:1;">📊 投資模擬試算</button>
+            <button class="btn-open-scenario" id="btnHoldingScenario" style="flex:1;background:linear-gradient(135deg,#2563eb,#1d4ed8);">📦 持股試算</button>
           </div>
           <div style="display:flex;gap:8px;">
             <button class="btn btn-red" id="btnBuy" style="flex:1;">買入 ▲</button>
@@ -644,7 +645,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
 <!-- App -->
-<script src="app.js?v=3.5.1"></script>
+<script src="app.js?v=3.6"></script>
 
 <!-- SPA 導覽 -->
 <script>
@@ -685,6 +686,13 @@
         <div class="scenario-label">股票代號</div>
         <div class="symbol-field"><input list="scenarioSymbols" id="scenarioSymbol" class="scenario-inp" placeholder="e.g. 2330" autocomplete="off"/><div id="scenarioSymbolName" class="symbol-inline-name strong">請輸入股票代號</div><div id="scenarioSymbolSuggest" class="symbol-suggest"></div></div>
         <datalist id="scenarioSymbols"></datalist>
+        <div style="margin-top:8px;">
+          <div class="scenario-label">持股庫存快速帶入</div>
+          <select id="scenarioHoldingSelect" class="scenario-inp">
+            <option value="">請選擇持股庫存（可自動帶入買入價與股數）</option>
+          </select>
+          <div id="scenarioHoldingHint" class="symbol-inline-name" style="margin-top:6px;">若選擇已持有股票，系統會自動帶入均價與股數，你只需輸入賣出價即可試算。</div>
+        </div>
       </div>
       <div class="scenario-row">
         <div>
