@@ -1,1013 +1,2761 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
+
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>台股虛擬操盤 v3.9.14</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <style>
-    :root{
-      --bg:#0d1117;--surface:#161b22;--border:#30363d;--border2:#21262d;
-      --text:#e6edf3;--muted:#8b949e;--up:#ff4d4d;--down:#2ecc71;
-      --blue:#388bfd;--amber:#d29922;--nav-h:64px;
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --border2: #21262d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --up: #ff4d4d;
+      --down: #2ecc71;
+      --blue: #388bfd;
+      --amber: #d29922;
+      --nav-h: 64px;
     }
-    *{box-sizing:border-box;margin:0;padding:0;}
-    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;}
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+    }
 
     /* ── 底部導覽（手機）── */
-    #bottomNav{position:fixed;bottom:0;left:0;right:0;height:var(--nav-h);
-      background:#161b22;border-top:1px solid var(--border);display:flex;z-index:100;}
-    .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-      gap:3px;cursor:pointer;color:var(--muted);font-size:.6rem;font-weight:600;
-      border:none;background:transparent;transition:color .15s;}
-    .nav-item .icon{font-size:1.25rem;}
-    .nav-item.active{color:var(--blue);}
+    #bottomNav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: var(--nav-h);
+      background: #161b22;
+      border-top: 1px solid var(--border);
+      display: flex;
+      z-index: 100;
+    }
+
+    .nav-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: .6rem;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      transition: color .15s;
+    }
+
+    .nav-item .icon {
+      font-size: 1.25rem;
+    }
+
+    .nav-item.active {
+      color: var(--blue);
+    }
 
     /* ── 頁面 ── */
-    #appMain{padding:12px 12px calc(var(--nav-h)+12px);max-width:1200px;margin:0 auto;}
-    .page{display:none;} .page.active{display:block;}
+    #appMain {
+      padding: 12px 12px calc(var(--nav-h)+12px);
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .page {
+      display: none;
+    }
+
+    .page.active {
+      display: block;
+    }
 
     /* ── 卡片 ── */
-    .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;}
-    .card-sm{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;}
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .card-sm {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
 
     /* ── Stat ── */
-    .stat-big{text-align:center;padding:20px 12px 16px;}
-    .stat-big .label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
-    .stat-big .value{font-size:1.9rem;font-weight:800;margin-top:4px;line-height:1.1;}
-    .stat-big .sub{font-size:.78rem;color:var(--muted);margin-top:4px;}
+    .stat-big {
+      text-align: center;
+      padding: 20px 12px 16px;
+    }
+
+    .stat-big .label {
+      font-size: .72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .stat-big .value {
+      font-size: 1.9rem;
+      font-weight: 800;
+      margin-top: 4px;
+      line-height: 1.1;
+    }
+
+    .stat-big .sub {
+      font-size: .78rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
 
     /* ── Section title ── */
-    .sec-title{font-size:.72rem;color:var(--muted);text-transform:uppercase;
-      letter-spacing:.08em;font-weight:700;margin-bottom:10px;}
+    .sec-title {
+      font-size: .72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
 
     /* ── Table ── */
-    table{width:100%;border-collapse:collapse;}
-    th{color:var(--muted);font-size:.67rem;text-transform:uppercase;padding:7px 10px;
-      text-align:left;border-bottom:1px solid var(--border2);white-space:nowrap;}
-    td{padding:9px 10px;border-bottom:1px solid var(--border2);font-size:.84rem;vertical-align:middle;}
-    tr:last-child td{border-bottom:none;} tr:hover td{background:#1c2128;}
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: .67rem;
+      text-transform: uppercase;
+      padding: 7px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--border2);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--border2);
+      font-size: .84rem;
+      vertical-align: middle;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: #1c2128;
+    }
 
     /* ── Inputs ── */
-    .inp{background:var(--bg);border:1px solid var(--border);color:var(--text);
-      border-radius:8px;padding:9px 12px;outline:none;width:100%;font-size:.9rem;}
-    .inp:focus{border-color:var(--blue);} .inp::placeholder{color:var(--muted);}
+    .inp {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 9px 12px;
+      outline: none;
+      width: 100%;
+      font-size: .9rem;
+    }
+
+    .inp:focus {
+      border-color: var(--blue);
+    }
+
+    .inp::placeholder {
+      color: var(--muted);
+    }
 
     /* ── Buttons ── */
-    .btn{border:none;border-radius:8px;padding:10px 18px;font-weight:700;
-      cursor:pointer;font-size:.88rem;transition:all .15s;white-space:nowrap;}
-    .btn-red{background:#8b1a1a;color:#fff;} .btn-red:hover{background:#c0392b;}
-    .btn-green{background:#0a4a2a;color:#fff;} .btn-green:hover{background:#1a7a3a;}
-    .btn-blue{background:#1f6feb;color:#fff;} .btn-blue:hover{background:#388bfd;}
-    .btn-amber{background:#9e6a03;color:#fff;} .btn-amber:hover{background:#d29922;}
-    .btn-danger{background:#da3633;color:#fff;} .btn-danger:hover{background:#f85149;}
-    .btn-ghost{background:var(--border2);color:var(--text);border:1px solid var(--border);}
-    .btn-ghost:hover{background:var(--border);}
-    .btn-xs{padding:3px 10px;font-size:.72rem;border-radius:5px;border:none;cursor:pointer;font-weight:700;transition:all .15s;}
-    .btn-xs-blue{background:#1a2d4a;color:var(--blue);} .btn-xs-blue:hover{background:#1f6feb;color:#fff;}
-    .btn-xs-gray{background:#21262d;color:var(--muted);border:1px solid var(--border);} .btn-xs-gray:hover{background:var(--border);color:var(--text);}
-    .btn-xs-red{background:#1a0d0d;color:var(--up);border:1px solid #8b1a1a;} .btn-xs-red:hover{background:#8b1a1a;color:#fff;}
-    .btn:disabled,.btn-xs:disabled{opacity:.45;cursor:not-allowed;}
+    .btn {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 18px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: .88rem;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+
+    .btn-red {
+      background: #8b1a1a;
+      color: #fff;
+    }
+
+    .btn-red:hover {
+      background: #c0392b;
+    }
+
+    .btn-green {
+      background: #0a4a2a;
+      color: #fff;
+    }
+
+    .btn-green:hover {
+      background: #1a7a3a;
+    }
+
+    .btn-blue {
+      background: #1f6feb;
+      color: #fff;
+    }
+
+    .btn-blue:hover {
+      background: #388bfd;
+    }
+
+    .btn-amber {
+      background: #9e6a03;
+      color: #fff;
+    }
+
+    .btn-amber:hover {
+      background: #d29922;
+    }
+
+    .btn-danger {
+      background: #da3633;
+      color: #fff;
+    }
+
+    .btn-danger:hover {
+      background: #f85149;
+    }
+
+    .btn-ghost {
+      background: var(--border2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-ghost:hover {
+      background: var(--border);
+    }
+
+    .btn-xs {
+      padding: 3px 10px;
+      font-size: .72rem;
+      border-radius: 5px;
+      border: none;
+      cursor: pointer;
+      font-weight: 700;
+      transition: all .15s;
+    }
+
+    .btn-xs-blue {
+      background: #1a2d4a;
+      color: var(--blue);
+    }
+
+    .btn-xs-blue:hover {
+      background: #1f6feb;
+      color: #fff;
+    }
+
+    .btn-xs-gray {
+      background: #21262d;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    .btn-xs-gray:hover {
+      background: var(--border);
+      color: var(--text);
+    }
+
+    .btn-xs-red {
+      background: #1a0d0d;
+      color: var(--up);
+      border: 1px solid #8b1a1a;
+    }
+
+    .btn-xs-red:hover {
+      background: #8b1a1a;
+      color: #fff;
+    }
+
+    .btn:disabled,
+    .btn-xs:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+    }
 
     /* ── Badge ── */
-    .badge{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:.68rem;font-weight:700;}
-    .badge-market-open{background:#0a1a2d;color:var(--blue);}
-    .badge-market-post{background:#2d2200;color:var(--amber);}
-    .badge-wait{background:#1c2128;color:var(--muted);}
-    .badge-rise{background:rgba(239,68,68,.16);color:var(--up);border:1px solid rgba(239,68,68,.22);}
-    .badge-fall{background:rgba(46,204,113,.14);color:var(--down);border:1px solid rgba(46,204,113,.2);}
-    .price-limit-up{background:rgba(239,68,68,.10);padding:2px 6px;border-radius:8px;}
-    .price-limit-down{background:rgba(46,204,113,.10);padding:2px 6px;border-radius:8px;}
-    .text-up{color:var(--up);font-weight:700;} .text-down{color:var(--down);font-weight:700;}
-    .muted{color:var(--muted);}
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: .68rem;
+      font-weight: 700;
+    }
+
+    .badge-market-open {
+      background: #0a1a2d;
+      color: var(--blue);
+    }
+
+    .badge-market-post {
+      background: #2d2200;
+      color: var(--amber);
+    }
+
+    .badge-wait {
+      background: #1c2128;
+      color: var(--muted);
+    }
+
+    .badge-rise {
+      background: rgba(239, 68, 68, .16);
+      color: var(--up);
+      border: 1px solid rgba(239, 68, 68, .22);
+    }
+
+    .badge-fall {
+      background: rgba(46, 204, 113, .14);
+      color: var(--down);
+      border: 1px solid rgba(46, 204, 113, .2);
+    }
+
+    .price-limit-up {
+      background: rgba(239, 68, 68, .10);
+      padding: 2px 6px;
+      border-radius: 8px;
+    }
+
+    .price-limit-down {
+      background: rgba(46, 204, 113, .10);
+      padding: 2px 6px;
+      border-radius: 8px;
+    }
+
+    .text-up {
+      color: var(--up);
+      font-weight: 700;
+    }
+
+    .text-down {
+      color: var(--down);
+      font-weight: 700;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
 
     /* ── Source btn ── */
-    .source-btn,.src-btn{background:#21262d;border:1px solid var(--border);color:var(--muted);
-      padding:7px 10px;border-radius:8px;cursor:pointer;font-size:.78rem;font-weight:600;
-      text-align:center;transition:all .15s;width:100%;}
-    .source-btn:hover,.src-btn:hover{border-color:var(--blue);color:var(--text);}
-    .source-btn.active,.src-btn.active{background:#1a2d4a;border-color:var(--blue);color:var(--blue);}
+    .source-btn,
+    .src-btn {
+      background: #21262d;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 7px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: .78rem;
+      font-weight: 600;
+      text-align: center;
+      transition: all .15s;
+      width: 100%;
+    }
+
+    .source-btn:hover,
+    .src-btn:hover {
+      border-color: var(--blue);
+      color: var(--text);
+    }
+
+    .source-btn.active,
+    .src-btn.active {
+      background: #1a2d4a;
+      border-color: var(--blue);
+      color: var(--blue);
+    }
 
     /* ── Tab (帳務頁內部) ── */
-    .tab-btn{padding:6px 16px;border-radius:6px 6px 0 0;cursor:pointer;font-size:.82rem;font-weight:600;
-      background:var(--bg);color:var(--muted);border:1px solid var(--border);border-bottom:none;}
-    .tab-btn.active{background:#161b22;color:#e6edf3;border-color:#388bfd;border-bottom:1px solid #161b22;}
-    .tab-panel{display:none;} .tab-panel.active{display:block;}
+    .tab-btn {
+      padding: 6px 16px;
+      border-radius: 6px 6px 0 0;
+      cursor: pointer;
+      font-size: .82rem;
+      font-weight: 600;
+      background: var(--bg);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-bottom: none;
+    }
+
+    .tab-btn.active {
+      background: #161b22;
+      color: #e6edf3;
+      border-color: #388bfd;
+      border-bottom: 1px solid #161b22;
+    }
+
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
 
     /* ── Toast ── */
-    #toast{position:fixed;bottom:calc(var(--nav-h)+12px);right:12px;background:#21262d;
-      border:1px solid var(--border);padding:10px 16px;border-radius:8px;font-size:.85rem;
-      z-index:9999;display:none;max-width:320px;box-shadow:0 4px 24px #0009;}
+    #toast {
+      position: fixed;
+      bottom: calc(var(--nav-h)+12px);
+      right: 12px;
+      background: #21262d;
+      border: 1px solid var(--border);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: .85rem;
+      z-index: 9999;
+      display: none;
+      max-width: 320px;
+      box-shadow: 0 4px 24px #0009;
+    }
 
     /* ── Top bar ── */
-    #clockBar{background:#161b22;border-bottom:1px solid var(--border2);padding:8px 16px;
-      display:flex;align-items:center;justify-content:space-between;
-      position:sticky;top:0;z-index:90;font-size:.75rem;color:var(--muted);}
-    #klinePanel{background:var(--surface);border:1px solid var(--border);border-radius:12px;
-      padding:14px;margin-top:12px;display:none;}
-    .vtag{background:#1f6feb22;color:var(--blue);border:1px solid #1f6feb55;
-      font-size:.65rem;font-weight:700;padding:1px 7px;border-radius:9999px;}
+    #clockBar {
+      background: #161b22;
+      border-bottom: 1px solid var(--border2);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 90;
+      font-size: .75rem;
+      color: var(--muted);
+    }
+
+    #klinePanel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-top: 12px;
+      display: none;
+    }
+
+    .vtag {
+      background: #1f6feb22;
+      color: var(--blue);
+      border: 1px solid #1f6feb55;
+      font-size: .65rem;
+      font-weight: 700;
+      padding: 1px 7px;
+      border-radius: 9999px;
+    }
 
     /* ── 價格閃爍動畫 ── */
-    @keyframes flash-up   { 0%{background:rgba(255,77,77,.22)} 100%{background:transparent} }
-    @keyframes flash-down { 0%{background:rgba(46,204,113,.22)} 100%{background:transparent} }
-    .price-flash-up   { animation: flash-up   .5s ease-out; }
-    .price-flash-down  { animation: flash-down  .5s ease-out; }
-    .tbl-wrap{overflow-x:auto;overflow-y:auto;max-height:360px;}
-    .setting-row{display:flex;align-items:center;justify-content:space-between;
-      padding:12px 0;border-bottom:1px solid var(--border2);}
-    .setting-row:last-child{border-bottom:none;}
-    .setting-label{font-size:.88rem;font-weight:600;}
-    .setting-desc{font-size:.72rem;color:var(--muted);margin-top:2px;}
+    @keyframes flash-up {
+      0% {
+        background: rgba(255, 77, 77, .22)
+      }
+
+      100% {
+        background: transparent
+      }
+    }
+
+    @keyframes flash-down {
+      0% {
+        background: rgba(46, 204, 113, .22)
+      }
+
+      100% {
+        background: transparent
+      }
+    }
+
+    .price-flash-up {
+      animation: flash-up .5s ease-out;
+    }
+
+    .price-flash-down {
+      animation: flash-down .5s ease-out;
+    }
+
+    .tbl-wrap {
+      overflow-x: auto;
+      overflow-y: auto;
+      max-height: 360px;
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border2);
+    }
+
+    .setting-row:last-child {
+      border-bottom: none;
+    }
+
+    .setting-label {
+      font-size: .88rem;
+      font-weight: 600;
+    }
+
+    .setting-desc {
+      font-size: .72rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
 
     /* ══ Desktop ≥768px ══ */
-    @media(min-width:768px){
-      #bottomNav{display:none;}
-      #sideNav{display:flex;flex-direction:column;gap:4px;
-        position:fixed;left:0;top:0;bottom:0;width:200px;
-        background:#161b22;border-right:1px solid var(--border);
-        padding:20px 12px;z-index:100;}
-      .side-item{display:flex;align-items:center;gap:10px;padding:10px 14px;
-        border-radius:8px;cursor:pointer;color:var(--muted);font-size:.88rem;font-weight:600;
-        border:none;background:transparent;transition:all .15s;text-align:left;width:100%;}
-      .side-item .icon{font-size:1.1rem;}
-      .side-item:hover{background:var(--border2);color:var(--text);}
-      .side-item.active{background:#1a2d4a;color:var(--blue);}
-      .side-logo{padding:12px 14px 20px;font-weight:800;font-size:.95rem;color:var(--text);}
-      .side-logo span{color:var(--blue);}
-      #clockBar{left:200px;position:fixed;right:0;top:0;}
-      #appMain{margin-left:200px;padding:68px 20px 20px;}
-      :root{--nav-h:0px;}
-      #toast{bottom:20px;}
-      #btnExportTop,#btnImportTop{display:inline-flex!important;}
-      .desk-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-      .desk-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+    @media(min-width:768px) {
+      #bottomNav {
+        display: none;
+      }
+
+      #sideNav {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 200px;
+        background: #161b22;
+        border-right: 1px solid var(--border);
+        padding: 20px 12px;
+        z-index: 100;
+      }
+
+      .side-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        cursor: pointer;
+        color: var(--muted);
+        font-size: .88rem;
+        font-weight: 600;
+        border: none;
+        background: transparent;
+        transition: all .15s;
+        text-align: left;
+        width: 100%;
+      }
+
+      .side-item .icon {
+        font-size: 1.1rem;
+      }
+
+      .side-item:hover {
+        background: var(--border2);
+        color: var(--text);
+      }
+
+      .side-item.active {
+        background: #1a2d4a;
+        color: var(--blue);
+      }
+
+      .side-logo {
+        padding: 12px 14px 20px;
+        font-weight: 800;
+        font-size: .95rem;
+        color: var(--text);
+      }
+
+      .side-logo span {
+        color: var(--blue);
+      }
+
+      #clockBar {
+        left: 200px;
+        position: fixed;
+        right: 0;
+        top: 0;
+      }
+
+      #appMain {
+        margin-left: 200px;
+        padding: 68px 20px 20px;
+      }
+
+      :root {
+        --nav-h: 0px;
+      }
+
+      #toast {
+        bottom: 20px;
+      }
+
+      #btnExportTop,
+      #btnImportTop {
+        display: inline-flex !important;
+      }
+
+      .desk-grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      .desk-grid-3 {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 12px;
+      }
     }
-    @media(max-width:767px){#sideNav{display:none;}}
+
+    @media(max-width:767px) {
+      #sideNav {
+        display: none;
+      }
+    }
+
     /* ── Scenario Modal (v3.2) ── */
-    .mini-loader{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.22);border-top-color:#60a5fa;border-radius:999px;animation:miniSpin .75s linear infinite;vertical-align:middle;}
-    @keyframes miniSpin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
-    #scenarioModal{display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);align-items:center;justify-content:center;}
-    #scenarioModal.show{display:flex;}
-    .scenario-box{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:24px 20px 20px;width:min(96vw,520px);max-height:92vh;overflow-y:auto;position:relative;}
-    .scenario-box h2{font-size:1.05rem;font-weight:700;color:#f0f6fc;margin-bottom:16px;}
-    .scenario-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
-    .scenario-label{font-size:.7rem;color:#8b949e;margin-bottom:3px;}
-    .scenario-inp{width:100%;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:7px 10px;color:#f0f6fc;font-size:.92rem;outline:none;}
-    .scenario-inp:focus{border-color:#388bfd;}
-    .scenario-result-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:#0d1117;border:1px solid #21262d;border-radius:10px;padding:14px;margin:14px 0;}
-    .s-stat-label{font-size:.65rem;color:#8b949e;margin-bottom:2px;}
-    .s-stat-val{font-size:1rem;font-weight:700;color:#f0f6fc;}
-    .s-profit-block{grid-column:span 2;text-align:center;padding:8px 0 4px;}
-    .s-profit-big{font-size:1.55rem;font-weight:800;}
-    .s-roi{font-size:1.1rem;font-weight:700;margin-top:2px;}
-    .scenario-fee-note{font-size:.68rem;color:#6b7280;text-align:center;margin-bottom:12px;}
-    .scenario-bar-wrap{height:6px;background:#21262d;border-radius:3px;margin-bottom:16px;overflow:hidden;}
-    .scenario-bar{height:100%;background:linear-gradient(90deg,#ff4d4d,#ff7676);width:var(--bar-pct,0%);border-radius:3px;transition:width .4s;}
-    .btn-scenario-apply{width:100%;padding:11px;border-radius:8px;background:linear-gradient(135deg,#388bfd,#1d4ed8);color:#fff;font-weight:700;font-size:.95rem;border:none;cursor:pointer;}
-    .btn-scenario-apply:disabled{background:#21262d;color:#555;cursor:not-allowed;}
-    .btn-scenario-close{position:absolute;top:12px;right:14px;background:none;border:none;color:#8b949e;font-size:1.3rem;cursor:pointer;line-height:1;}
-    .btn-open-scenario{display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:8px;background:linear-gradient(135deg,#1d6eef,#1352c4);color:#fff;border:none;cursor:pointer;font-size:.95rem;font-weight:700;width:100%;}
-    .btn-open-scenario:hover{background:linear-gradient(135deg,#2d7ef8,#1a5ed4);}
+    .mini-loader {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, .22);
+      border-top-color: #60a5fa;
+      border-radius: 999px;
+      animation: miniSpin .75s linear infinite;
+      vertical-align: middle;
+    }
+
+    @keyframes miniSpin {
+      from {
+        transform: rotate(0deg);
+      }
+
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    #scenarioModal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0, 0, 0, .65);
+      align-items: center;
+      justify-content: center;
+    }
+
+    #scenarioModal.show {
+      display: flex;
+    }
+
+    .scenario-box {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 14px;
+      padding: 24px 20px 20px;
+      width: min(96vw, 520px);
+      max-height: 92vh;
+      overflow-y: auto;
+      position: relative;
+    }
+
+    .scenario-box h2 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #f0f6fc;
+      margin-bottom: 16px;
+    }
+
+    .scenario-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .scenario-label {
+      font-size: .7rem;
+      color: #8b949e;
+      margin-bottom: 3px;
+    }
+
+    .scenario-inp {
+      width: 100%;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 7px 10px;
+      color: #f0f6fc;
+      font-size: .92rem;
+      outline: none;
+    }
+
+    .scenario-inp:focus {
+      border-color: #388bfd;
+    }
+
+    .scenario-result-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 10px;
+      padding: 14px;
+      margin: 14px 0;
+    }
+
+    .s-stat-label {
+      font-size: .65rem;
+      color: #8b949e;
+      margin-bottom: 2px;
+    }
+
+    .s-stat-val {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #f0f6fc;
+    }
+
+    .s-profit-block {
+      grid-column: span 2;
+      text-align: center;
+      padding: 8px 0 4px;
+    }
+
+    .s-profit-big {
+      font-size: 1.55rem;
+      font-weight: 800;
+    }
+
+    .s-roi {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+
+    .scenario-fee-note {
+      font-size: .68rem;
+      color: #6b7280;
+      text-align: center;
+      margin-bottom: 12px;
+    }
+
+    .scenario-bar-wrap {
+      height: 6px;
+      background: #21262d;
+      border-radius: 3px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+
+    .scenario-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #ff4d4d, #ff7676);
+      width: var(--bar-pct, 0%);
+      border-radius: 3px;
+      transition: width .4s;
+    }
+
+    .btn-scenario-apply {
+      width: 100%;
+      padding: 11px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #388bfd, #1d4ed8);
+      color: #fff;
+      font-weight: 700;
+      font-size: .95rem;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-scenario-apply:disabled {
+      background: #21262d;
+      color: #555;
+      cursor: not-allowed;
+    }
+
+    .btn-scenario-close {
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      background: none;
+      border: none;
+      color: #8b949e;
+      font-size: 1.3rem;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .btn-open-scenario {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #1d6eef, #1352c4);
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      font-size: .95rem;
+      font-weight: 700;
+      width: 100%;
+    }
+
+    .btn-open-scenario:hover {
+      background: linear-gradient(135deg, #2d7ef8, #1a5ed4);
+    }
 
     /* ── AI 診斷報告 (v3.3) ── */
-    .ai-rec-card{padding:12px 14px;border-radius:12px;}
-    .ai-rec-title{font-size:.82rem;margin-bottom:6px;font-weight:800;letter-spacing:.2px;}
-    .ai-rec-tag{display:inline-block;font-size:.8rem;font-weight:800;border-radius:6px;padding:4px 10px;margin-bottom:8px;background:#21262d;}
-    .ai-rec-body{font-size:.88rem;line-height:1.7;color:#e5e7eb;}
-    #aiHolderCard{background:linear-gradient(180deg,rgba(12,74,52,.34),rgba(17,24,39,.95));border:1px solid rgba(46,204,113,.28);}
-    #aiHolderTitle{color:#2ecc71;}
-    #aiHolderTag{background:rgba(46,204,113,.12);color:#43d17e!important;}
-    #aiEntryCard{background:linear-gradient(180deg,rgba(127,29,29,.28),rgba(17,24,39,.95));border:1px solid rgba(248,113,113,.25);}
-    #aiEntryTitle{color:#ff6b6b;}
-    #aiEntryTag{background:rgba(248,113,113,.12);color:#ff7b7b!important;}
-    .ai-section-body{font-size:.84rem;color:#c9d1d9;line-height:1.6;padding:8px 0 2px;border-radius:6px;}
-    .ai-indicator-row{font-size:.78rem;color:#8b949e;display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
-    .ai-indi-chip{display:inline-flex;align-items:center;gap:4px;background:#0d1117;border:1px solid #21262d;border-radius:5px;padding:3px 8px;}
+    .ai-rec-card {
+      padding: 12px 14px;
+      border-radius: 12px;
+    }
+
+    .ai-rec-title {
+      font-size: .82rem;
+      margin-bottom: 6px;
+      font-weight: 800;
+      letter-spacing: .2px;
+    }
+
+    .ai-rec-tag {
+      display: inline-block;
+      font-size: .8rem;
+      font-weight: 800;
+      border-radius: 6px;
+      padding: 4px 10px;
+      margin-bottom: 8px;
+      background: #21262d;
+    }
+
+    .ai-rec-body {
+      font-size: .88rem;
+      line-height: 1.7;
+      color: #e5e7eb;
+    }
+
+    #aiHolderCard {
+      background: linear-gradient(180deg, rgba(12, 74, 52, .34), rgba(17, 24, 39, .95));
+      border: 1px solid rgba(46, 204, 113, .28);
+    }
+
+    #aiHolderTitle {
+      color: #2ecc71;
+    }
+
+    #aiHolderTag {
+      background: rgba(46, 204, 113, .12);
+      color: #43d17e !important;
+    }
+
+    #aiEntryCard {
+      background: linear-gradient(180deg, rgba(127, 29, 29, .28), rgba(17, 24, 39, .95));
+      border: 1px solid rgba(248, 113, 113, .25);
+    }
+
+    #aiEntryTitle {
+      color: #ff6b6b;
+    }
+
+    #aiEntryTag {
+      background: rgba(248, 113, 113, .12);
+      color: #ff7b7b !important;
+    }
+
+    .ai-section-body {
+      font-size: .84rem;
+      color: #c9d1d9;
+      line-height: 1.6;
+      padding: 8px 0 2px;
+      border-radius: 6px;
+    }
+
+    .ai-indicator-row {
+      font-size: .78rem;
+      color: #8b949e;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .ai-indi-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 5px;
+      padding: 3px 8px;
+    }
 
     /* ── Symbol Suggest (v3.4) ── */
-    .symbol-field{position:relative;}
-    .symbol-suggest{display:none;position:relative;margin-top:6px;background:#1b2638;border:1px solid #2f81f7;border-radius:10px;overflow:hidden;box-shadow:0 10px 24px rgba(0,0,0,.28);}
-    .symbol-suggest.show{display:block;}
-    .symbol-suggest-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;cursor:pointer;border-top:1px solid rgba(255,255,255,.05);}
-    .symbol-suggest-item:first-child{border-top:none;}
-    .symbol-suggest-item:hover{background:#22324a;}
-    .symbol-suggest-code{font-size:1.05rem;font-weight:800;color:#8aa4ff;min-width:58px;}
-    .symbol-suggest-name{flex:1;font-size:.98rem;font-weight:700;color:#fff;}
-    .symbol-suggest-meta{font-size:.72rem;color:#9ca3af;background:rgba(255,255,255,.06);padding:4px 8px;border-radius:6px;white-space:nowrap;}
-    .symbol-inline-name{margin-top:6px;font-size:.78rem;color:#8b949e;min-height:1.1rem;}
-    .symbol-inline-name.strong{font-size:.86rem;color:#e6edf3;font-weight:700;}
-    .ai-query-focus{display:none;align-items:center;justify-content:space-between;gap:14px;background:linear-gradient(135deg,#1d4f91,#1f2937);border:1px solid #3b82f6;border-radius:12px;padding:14px 16px;margin-top:12px;box-shadow:0 10px 24px rgba(0,0,0,.2);}
-    .ai-query-focus.show{display:flex;}
-    .ai-query-main{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
-    .ai-query-badge{font-size:1.25rem;font-weight:900;color:#fff;background:rgba(0,0,0,.18);padding:6px 12px;border-radius:10px;letter-spacing:.5px;}
-    .ai-query-name{font-size:1.18rem;font-weight:800;color:#fff;}
-    
-    .ai-score-pill{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;font-size:1.02rem;font-weight:900;white-space:nowrap;color:#fff;box-shadow:0 8px 18px rgba(0,0,0,.18);}
-    .ai-score-pill.good{background:linear-gradient(135deg,#dc2626,#ef4444);}
-    .ai-score-pill.mid{background:linear-gradient(135deg,#d97706,#f59e0b);}
-    .ai-score-pill.risk{background:linear-gradient(135deg,#15803d,#22c55e);}
+    .symbol-field {
+      position: relative;
+    }
 
-    .ai-fund-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;}
-    .ai-fund-score{font-size:1.32rem;font-weight:900;margin-bottom:6px;}
-    .ai-fund-sub{font-size:.78rem;color:#9fb4d2;line-height:1.6;}
-    .ai-fund-list{font-size:.84rem;color:#d7dee9;line-height:1.65;}
-    .ai-news-list{display:flex;flex-direction:column;gap:8px;}
-    .ai-news-item{padding:8px 10px;border:1px solid rgba(255,255,255,.06);border-radius:8px;background:rgba(255,255,255,.02);font-size:.8rem;line-height:1.5;color:#d7dee9;}
-    .ai-fund-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:.76rem;font-weight:800;margin-right:6px;margin-bottom:6px;background:#1f2937;color:#fff;}
-    .ai-fund-chip.red{background:rgba(239,68,68,.14);color:#ff8a8a;}
-    .ai-fund-chip.green{background:rgba(34,197,94,.14);color:#52d68a;}
-    .ai-fund-chip.orange{background:rgba(245,158,11,.14);color:#fbbf24;}
-    @media(max-width:1100px){.ai-fund-grid{grid-template-columns:1fr;}}
+    .symbol-suggest {
+      display: none;
+      position: relative;
+      margin-top: 6px;
+      background: #1b2638;
+      border: 1px solid #2f81f7;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, .28);
+    }
 
-    .screen-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;}
-    .screen-card{cursor:pointer;transition:all .2s ease;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,#202b3d 0%,#1a2332 100%);box-shadow:0 10px 22px rgba(0,0,0,.12);min-height:122px;position:relative;overflow:hidden;}
-    .screen-card::before{content:'';position:absolute;inset:0 auto 0 0;width:4px;background:linear-gradient(180deg,rgba(96,165,250,.0),rgba(96,165,250,.65),rgba(96,165,250,0));opacity:.6;}
-    .screen-card:hover{border-color:#4f78c2;transform:translateY(-2px);box-shadow:0 16px 28px rgba(0,0,0,.18);}
-    .screen-card.active{border-color:#7fb5ff;box-shadow:0 0 0 2px rgba(96,165,250,.45) inset,0 0 0 1px rgba(255,255,255,.05),0 16px 34px rgba(56,139,253,.22);background:linear-gradient(180deg,#28405f,#1d2c42);transform:translateY(-2px) scale(1.015);}
-    .screen-card.active::after{content:"✓ 已選取";position:absolute;right:12px;bottom:10px;padding:4px 8px;border-radius:999px;font-size:.68rem;font-weight:900;background:rgba(96,165,250,.18);color:#cfe4ff;border:1px solid rgba(96,165,250,.35);letter-spacing:.04em;}
-    .screen-card.active .screen-card-title{color:#ffffff;text-shadow:0 0 18px rgba(96,165,250,.12);}
-    .screen-card.active .screen-card-desc{color:#dbeafe;}
-    .screen-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px;}
-    .screen-card-title{font-size:1.36rem;font-weight:900;color:#fff;letter-spacing:.3px;}
-    .screen-card-desc{font-size:.8rem;color:#aebed8;line-height:1.7;}
-    .screen-tag{display:inline-flex;align-items:center;padding:6px 10px;border-radius:10px;font-size:.76rem;font-weight:900;white-space:nowrap;box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);}
-    .screen-tag.buy{background:rgba(239,68,68,.14);color:#ff8a8a;}
-    .screen-tag.sell{background:rgba(34,197,94,.14);color:#52d68a;}
-    .screen-tag.filter{background:rgba(96,165,250,.16);color:#8cc5ff;}
-    .screen-adv-toggle{cursor:pointer;color:#60a5fa;font-weight:900;font-size:1.05rem;}
-    .screen-adv-panel{display:none;padding-top:14px;border-top:1px solid var(--border2);margin-top:14px;}
-    .screen-adv-panel.show{display:block;}
-    .screen-adv-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
-    .screen-field-label{display:block;font-size:.72rem;color:var(--muted);margin-bottom:5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;}
-    .screen-stat{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:.88rem;color:#dbeafe;}
-    .screen-result-chip{display:inline-flex;align-items:center;padding:5px 10px;border-radius:999px;font-size:.73rem;font-weight:800;background:#1f2937;color:#fff;margin-right:6px;margin-bottom:6px;border:1px solid rgba(255,255,255,.06);}
-    .screen-result-chip.positive{background:rgba(239,68,68,.12);color:#ff8a8a;border-color:rgba(239,68,68,.22);}
-    .screen-result-chip.negative{background:rgba(34,197,94,.12);color:#52d68a;border-color:rgba(34,197,94,.22);}
-    .screen-score-wrap{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-    .screen-score-box{display:inline-flex;align-items:center;justify-content:center;min-width:50px;padding:7px 10px;border-radius:10px;font-weight:900;color:#fff;box-shadow:0 8px 18px rgba(0,0,0,.14);}
-    .screen-score-box.positive{background:linear-gradient(135deg,#dc2626,#ef4444);}
-    .screen-score-box.negative{background:linear-gradient(135deg,#15803d,#22c55e);}
-    .screen-score-box.neutral{background:linear-gradient(135deg,#92400e,#f59e0b);}
-    .screen-score-sub{font-size:.72rem;color:#9fb4d2;line-height:1.35;}
-    .screen-price-positive{color:var(--up);font-weight:800;}
-    .screen-price-negative{color:var(--down);font-weight:800;}
-    .screen-reasons{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
-    .screen-reason{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:.7rem;font-weight:800;background:#1f2937;color:#dbeafe;border:1px solid rgba(255,255,255,.05);}
-    .screen-reason.positive{background:rgba(239,68,68,.12);color:#ff8a8a;border-color:rgba(239,68,68,.2);}
-    .screen-reason.negative{background:rgba(34,197,94,.12);color:#52d68a;border-color:rgba(34,197,94,.2);}
-    .screen-reason.neutral{background:rgba(96,165,250,.12);color:#8cc5ff;border-color:rgba(96,165,250,.18);}
-    .screen-history-item{padding:10px 12px;border:1px solid var(--border2);border-radius:10px;background:#182233;margin-bottom:8px;}
-    .screen-history-title{font-size:.88rem;font-weight:800;color:#fff;}
-    .screen-history-sub{font-size:.76rem;color:#9fb4d2;line-height:1.6;margin-top:2px;}
-    .screen-empty{padding:22px 12px;text-align:center;color:var(--muted);}
-    @media(max-width:1100px){.screen-grid,.screen-adv-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
-    @media(max-width:700px){.screen-grid,.screen-adv-grid{grid-template-columns:1fr;}}
+    .symbol-suggest.show {
+      display: block;
+    }
 
-    .screen-mode-grid{display:grid;grid-template-columns:1.1fr 1.4fr;gap:12px;align-items:end;}
-    .screen-extra-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:12px;}
-    .screen-safe-note{padding:11px 12px;border:1px dashed rgba(96,165,250,.28);border-radius:10px;background:rgba(56,139,253,.06);color:#bfd8ff;font-size:.78rem;line-height:1.65;}
-    .screen-inline-note{font-size:.74rem;color:#8fb3e8;line-height:1.5;margin-top:6px;}
-    .screen-input-soft-disabled{opacity:.5;pointer-events:none;}
-    @media(max-width:1100px){.screen-mode-grid,.screen-extra-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
-    @media(max-width:700px){.screen-mode-grid,.screen-extra-grid{grid-template-columns:1fr;}}
+    .symbol-suggest-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      border-top: 1px solid rgba(255, 255, 255, .05);
+    }
+
+    .symbol-suggest-item:first-child {
+      border-top: none;
+    }
+
+    .symbol-suggest-item:hover {
+      background: #22324a;
+    }
+
+    .symbol-suggest-code {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: #8aa4ff;
+      min-width: 58px;
+    }
+
+    .symbol-suggest-name {
+      flex: 1;
+      font-size: .98rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .symbol-suggest-meta {
+      font-size: .72rem;
+      color: #9ca3af;
+      background: rgba(255, 255, 255, .06);
+      padding: 4px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+
+    .symbol-inline-name {
+      margin-top: 6px;
+      font-size: .78rem;
+      color: #8b949e;
+      min-height: 1.1rem;
+    }
+
+    .symbol-inline-name.strong {
+      font-size: .86rem;
+      color: #e6edf3;
+      font-weight: 700;
+    }
+
+    .ai-query-focus {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      background: linear-gradient(135deg, #1d4f91, #1f2937);
+      border: 1px solid #3b82f6;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-top: 12px;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, .2);
+    }
+
+    .ai-query-focus.show {
+      display: flex;
+    }
+
+    .ai-query-main {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .ai-query-badge {
+      font-size: 1.25rem;
+      font-weight: 900;
+      color: #fff;
+      background: rgba(0, 0, 0, .18);
+      padding: 6px 12px;
+      border-radius: 10px;
+      letter-spacing: .5px;
+    }
+
+    .ai-query-name {
+      font-size: 1.18rem;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .ai-score-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 1.02rem;
+      font-weight: 900;
+      white-space: nowrap;
+      color: #fff;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, .18);
+    }
+
+    .ai-score-pill.good {
+      background: linear-gradient(135deg, #dc2626, #ef4444);
+    }
+
+    .ai-score-pill.mid {
+      background: linear-gradient(135deg, #d97706, #f59e0b);
+    }
+
+    .ai-score-pill.risk {
+      background: linear-gradient(135deg, #15803d, #22c55e);
+    }
+
+    .ai-fund-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .ai-fund-score {
+      font-size: 1.32rem;
+      font-weight: 900;
+      margin-bottom: 6px;
+    }
+
+    .ai-fund-sub {
+      font-size: .78rem;
+      color: #9fb4d2;
+      line-height: 1.6;
+    }
+
+    .ai-fund-list {
+      font-size: .84rem;
+      color: #d7dee9;
+      line-height: 1.65;
+    }
+
+    .ai-news-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .ai-news-item {
+      padding: 8px 10px;
+      border: 1px solid rgba(255, 255, 255, .06);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .02);
+      font-size: .8rem;
+      line-height: 1.5;
+      color: #d7dee9;
+    }
+
+    .ai-fund-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: .76rem;
+      font-weight: 800;
+      margin-right: 6px;
+      margin-bottom: 6px;
+      background: #1f2937;
+      color: #fff;
+    }
+
+    .ai-fund-chip.red {
+      background: rgba(239, 68, 68, .14);
+      color: #ff8a8a;
+    }
+
+    .ai-fund-chip.green {
+      background: rgba(34, 197, 94, .14);
+      color: #52d68a;
+    }
+
+    .ai-fund-chip.orange {
+      background: rgba(245, 158, 11, .14);
+      color: #fbbf24;
+    }
+
+    @media(max-width:1100px) {
+      .ai-fund-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .screen-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .screen-card {
+      cursor: pointer;
+      transition: all .2s ease;
+      border: 1px solid rgba(255, 255, 255, .08);
+      background: linear-gradient(180deg, #202b3d 0%, #1a2332 100%);
+      box-shadow: 0 10px 22px rgba(0, 0, 0, .12);
+      min-height: 122px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .screen-card::before {
+      content: '';
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      background: linear-gradient(180deg, rgba(96, 165, 250, .0), rgba(96, 165, 250, .65), rgba(96, 165, 250, 0));
+      opacity: .6;
+    }
+
+    .screen-card:hover {
+      border-color: #4f78c2;
+      transform: translateY(-2px);
+      box-shadow: 0 16px 28px rgba(0, 0, 0, .18);
+    }
+
+    .screen-card.active {
+      border-color: #7fb5ff;
+      box-shadow: 0 0 0 2px rgba(96, 165, 250, .45) inset, 0 0 0 1px rgba(255, 255, 255, .05), 0 16px 34px rgba(56, 139, 253, .22);
+      background: linear-gradient(180deg, #28405f, #1d2c42);
+      transform: translateY(-2px) scale(1.015);
+    }
+
+    .screen-card.active::after {
+      content: "✓ 已選取";
+      position: absolute;
+      right: 12px;
+      bottom: 10px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: .68rem;
+      font-weight: 900;
+      background: rgba(96, 165, 250, .18);
+      color: #cfe4ff;
+      border: 1px solid rgba(96, 165, 250, .35);
+      letter-spacing: .04em;
+    }
+
+    .screen-card.active .screen-card-title {
+      color: #ffffff;
+      text-shadow: 0 0 18px rgba(96, 165, 250, .12);
+    }
+
+    .screen-card.active .screen-card-desc {
+      color: #dbeafe;
+    }
+
+    .screen-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .screen-card-title {
+      font-size: 1.36rem;
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: .3px;
+    }
+
+    .screen-card-desc {
+      font-size: .8rem;
+      color: #aebed8;
+      line-height: 1.7;
+    }
+
+    .screen-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 10px;
+      font-size: .76rem;
+      font-weight: 900;
+      white-space: nowrap;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
+    }
+
+    .screen-tag.buy {
+      background: rgba(239, 68, 68, .14);
+      color: #ff8a8a;
+    }
+
+    .screen-tag.sell {
+      background: rgba(34, 197, 94, .14);
+      color: #52d68a;
+    }
+
+    .screen-tag.filter {
+      background: rgba(96, 165, 250, .16);
+      color: #8cc5ff;
+    }
+
+    .screen-adv-toggle {
+      cursor: pointer;
+      color: #60a5fa;
+      font-weight: 900;
+      font-size: 1.05rem;
+    }
+
+    .screen-adv-panel {
+      display: none;
+      padding-top: 14px;
+      border-top: 1px solid var(--border2);
+      margin-top: 14px;
+    }
+
+    .screen-adv-panel.show {
+      display: block;
+    }
+
+    .screen-adv-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .screen-field-label {
+      display: block;
+      font-size: .72rem;
+      color: var(--muted);
+      margin-bottom: 5px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .screen-stat {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      font-size: .88rem;
+      color: #dbeafe;
+    }
+
+    .screen-result-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: .73rem;
+      font-weight: 800;
+      background: #1f2937;
+      color: #fff;
+      margin-right: 6px;
+      margin-bottom: 6px;
+      border: 1px solid rgba(255, 255, 255, .06);
+    }
+
+    .screen-result-chip.positive {
+      background: rgba(239, 68, 68, .12);
+      color: #ff8a8a;
+      border-color: rgba(239, 68, 68, .22);
+    }
+
+    .screen-result-chip.negative {
+      background: rgba(34, 197, 94, .12);
+      color: #52d68a;
+      border-color: rgba(34, 197, 94, .22);
+    }
+
+    .screen-score-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .screen-score-box {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 50px;
+      padding: 7px 10px;
+      border-radius: 10px;
+      font-weight: 900;
+      color: #fff;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, .14);
+    }
+
+    .screen-score-box.positive {
+      background: linear-gradient(135deg, #dc2626, #ef4444);
+    }
+
+    .screen-score-box.negative {
+      background: linear-gradient(135deg, #15803d, #22c55e);
+    }
+
+    .screen-score-box.neutral {
+      background: linear-gradient(135deg, #92400e, #f59e0b);
+    }
+
+    .screen-score-sub {
+      font-size: .72rem;
+      color: #9fb4d2;
+      line-height: 1.35;
+    }
+
+    .screen-price-positive {
+      color: var(--up);
+      font-weight: 800;
+    }
+
+    .screen-price-negative {
+      color: var(--down);
+      font-weight: 800;
+    }
+
+    .screen-reasons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .screen-reason {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: .7rem;
+      font-weight: 800;
+      background: #1f2937;
+      color: #dbeafe;
+      border: 1px solid rgba(255, 255, 255, .05);
+    }
+
+    .screen-reason.positive {
+      background: rgba(239, 68, 68, .12);
+      color: #ff8a8a;
+      border-color: rgba(239, 68, 68, .2);
+    }
+
+    .screen-reason.negative {
+      background: rgba(34, 197, 94, .12);
+      color: #52d68a;
+      border-color: rgba(34, 197, 94, .2);
+    }
+
+    .screen-reason.neutral {
+      background: rgba(96, 165, 250, .12);
+      color: #8cc5ff;
+      border-color: rgba(96, 165, 250, .18);
+    }
+
+    .screen-history-item {
+      padding: 10px 12px;
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      background: #182233;
+      margin-bottom: 8px;
+    }
+
+    .screen-history-title {
+      font-size: .88rem;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .screen-history-sub {
+      font-size: .76rem;
+      color: #9fb4d2;
+      line-height: 1.6;
+      margin-top: 2px;
+    }
+
+    .screen-empty {
+      padding: 22px 12px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    @media(max-width:1100px) {
+
+      .screen-grid,
+      .screen-adv-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media(max-width:700px) {
+
+      .screen-grid,
+      .screen-adv-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .screen-mode-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 1.4fr;
+      gap: 12px;
+      align-items: end;
+    }
+
+    .screen-extra-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .screen-safe-note {
+      padding: 11px 12px;
+      border: 1px dashed rgba(96, 165, 250, .28);
+      border-radius: 10px;
+      background: rgba(56, 139, 253, .06);
+      color: #bfd8ff;
+      font-size: .78rem;
+      line-height: 1.65;
+    }
+
+    .screen-inline-note {
+      font-size: .74rem;
+      color: #8fb3e8;
+      line-height: 1.5;
+      margin-top: 6px;
+    }
+
+    .screen-input-soft-disabled {
+      opacity: .5;
+      pointer-events: none;
+    }
+
+    @media(max-width:1100px) {
+
+      .screen-mode-grid,
+      .screen-extra-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media(max-width:700px) {
+
+      .screen-mode-grid,
+      .screen-extra-grid {
+        grid-template-columns: 1fr;
+      }
+    }
 
 
-  
-    .screen-admin-btn{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:999px;border:1px solid rgba(96,165,250,.26);background:linear-gradient(180deg,#172334,#111a27);color:#b9d7ff;cursor:pointer;transition:all .18s;box-shadow:0 8px 18px rgba(0,0,0,.14);}
-    .screen-admin-btn:hover{transform:translateY(-1px);border-color:#60a5fa;color:#fff;box-shadow:0 12px 22px rgba(56,139,253,.18);}
-    .screen-admin-status{font-size:.75rem;color:#8fb3e8;}
-    .screen-admin-status.ok{color:#ffb3b3;}
-    .screen-admin-tools{display:none;margin-top:12px;padding:12px;border:1px dashed rgba(239,68,68,.24);border-radius:12px;background:linear-gradient(180deg,rgba(74,14,14,.18),rgba(31,14,14,.08));}
-    .screen-admin-tools.show{display:block;}
-    .screen-admin-chip{display:inline-flex;align-items:center;padding:5px 10px;border-radius:999px;font-size:.72rem;font-weight:900;background:rgba(239,68,68,.14);color:#ffb1b1;border:1px solid rgba(239,68,68,.24);margin-right:6px;margin-bottom:6px;}
-    .screen-option-lock{color:#8b949e;}
-    .screen-pdf-note{font-size:.74rem;color:#9fb4d2;margin-top:6px;line-height:1.55;}
-    .screen-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.54);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:9999;padding:16px;}
-    .screen-modal-backdrop.show{display:flex;}
-    .screen-modal{width:min(460px,100%);background:#121a26;border:1px solid rgba(96,165,250,.18);border-radius:16px;padding:18px;box-shadow:0 26px 60px rgba(0,0,0,.35);}
-    .screen-modal-title{font-size:1rem;font-weight:900;color:#fff;margin-bottom:10px;}
-    .screen-modal-sub{font-size:.8rem;color:#9fb4d2;line-height:1.65;margin-bottom:12px;}
-    .screen-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;}
-    .screen-modal-msg{font-size:.76rem;color:#8fb3e8;margin-top:8px;min-height:18px;}
-    .screen-offscreen-pdf{position:fixed;left:-20000px;top:0;width:1180px;z-index:-1;background:#0d1117;padding:24px;}
+
+    .screen-admin-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 999px;
+      border: 1px solid rgba(96, 165, 250, .26);
+      background: linear-gradient(180deg, #172334, #111a27);
+      color: #b9d7ff;
+      cursor: pointer;
+      transition: all .18s;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, .14);
+    }
+
+    .screen-admin-btn:hover {
+      transform: translateY(-1px);
+      border-color: #60a5fa;
+      color: #fff;
+      box-shadow: 0 12px 22px rgba(56, 139, 253, .18);
+    }
+
+    .screen-admin-status {
+      font-size: .75rem;
+      color: #8fb3e8;
+    }
+
+    .screen-admin-status.ok {
+      color: #ffb3b3;
+    }
+
+    .screen-admin-tools {
+      display: none;
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px dashed rgba(239, 68, 68, .24);
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(74, 14, 14, .18), rgba(31, 14, 14, .08));
+    }
+
+    .screen-admin-tools.show {
+      display: block;
+    }
+
+    .screen-admin-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: .72rem;
+      font-weight: 900;
+      background: rgba(239, 68, 68, .14);
+      color: #ffb1b1;
+      border: 1px solid rgba(239, 68, 68, .24);
+      margin-right: 6px;
+      margin-bottom: 6px;
+    }
+
+    .screen-option-lock {
+      color: #8b949e;
+    }
+
+    .screen-pdf-note {
+      font-size: .74rem;
+      color: #9fb4d2;
+      margin-top: 6px;
+      line-height: 1.55;
+    }
+
+    .screen-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .54);
+      backdrop-filter: blur(3px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 16px;
+    }
+
+    .screen-modal-backdrop.show {
+      display: flex;
+    }
+
+    .screen-modal {
+      width: min(460px, 100%);
+      background: #121a26;
+      border: 1px solid rgba(96, 165, 250, .18);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 26px 60px rgba(0, 0, 0, .35);
+    }
+
+    .screen-modal-title {
+      font-size: 1rem;
+      font-weight: 900;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+
+    .screen-modal-sub {
+      font-size: .8rem;
+      color: #9fb4d2;
+      line-height: 1.65;
+      margin-bottom: 12px;
+    }
+
+    .screen-modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+
+    .screen-modal-msg {
+      font-size: .76rem;
+      color: #8fb3e8;
+      margin-top: 8px;
+      min-height: 18px;
+    }
+
+    .screen-offscreen-pdf {
+      position: fixed;
+      left: -20000px;
+      top: 0;
+      width: 1180px;
+      z-index: -1;
+      background: #0d1117;
+      padding: 24px;
+    }
 
 
-  
-.screen-wizard-wrap{display:flex;flex-direction:column;gap:14px}.screen-wizard-step{display:flex;gap:12px;align-items:flex-start;padding:12px;border:1px solid var(--border2);border-radius:12px;background:linear-gradient(180deg,rgba(31,41,55,.55),rgba(17,24,39,.2))}.screen-wizard-num{width:30px;height:30px;border-radius:999px;background:#1f6feb;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;flex-shrink:0}.screen-wizard-title{font-size:.92rem;font-weight:800;color:#fff;margin-bottom:4px}.screen-wizard-desc{font-size:.77rem;color:#9fb4d2;margin-bottom:10px;line-height:1.6}.screen-wizard-grid{display:grid;gap:10px}.screen-wizard-grid.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.screen-wizard-grid.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.screen-wizard-btn{border:1px solid rgba(96,165,250,.22)!important;background:#182233!important}.screen-wizard-btn.active{background:linear-gradient(180deg,#28405f,#1d2c42)!important;border-color:#7fb5ff!important;color:#fff!important;box-shadow:0 0 0 1px rgba(96,165,250,.2) inset}.screen-wizard-note{padding:11px 12px;border:1px dashed rgba(96,165,250,.25);border-radius:10px;background:rgba(56,139,253,.06);color:#dbeafe;font-size:.82rem;line-height:1.7}.screen-quick-hidden{display:none!important}@media (max-width:1100px){.screen-wizard-grid.cols-4{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:700px){.screen-wizard-grid.cols-4,.screen-wizard-grid.cols-3{grid-template-columns:1fr}}
 
-  /* v3.9.14 simple filter cards passive style */
-  .screen-card { transition: border-color .15s, box-shadow .15s; }
-</style>
+    .screen-wizard-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 14px
+    }
+
+    .screen-wizard-step {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 12px;
+      border: 1px solid var(--border2);
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(31, 41, 55, .55), rgba(17, 24, 39, .2))
+    }
+
+    .screen-wizard-num {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      background: #1f6feb;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      flex-shrink: 0
+    }
+
+    .screen-wizard-title {
+      font-size: .92rem;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 4px
+    }
+
+    .screen-wizard-desc {
+      font-size: .77rem;
+      color: #9fb4d2;
+      margin-bottom: 10px;
+      line-height: 1.6
+    }
+
+    .screen-wizard-grid {
+      display: grid;
+      gap: 10px
+    }
+
+    .screen-wizard-grid.cols-4 {
+      grid-template-columns: repeat(4, minmax(0, 1fr))
+    }
+
+    .screen-wizard-grid.cols-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr))
+    }
+
+    .screen-wizard-btn {
+      border: 1px solid rgba(96, 165, 250, .22) !important;
+      background: #182233 !important
+    }
+
+    .screen-wizard-btn.active {
+      background: linear-gradient(180deg, #28405f, #1d2c42) !important;
+      border-color: #7fb5ff !important;
+      color: #fff !important;
+      box-shadow: 0 0 0 1px rgba(96, 165, 250, .2) inset
+    }
+
+    .screen-wizard-note {
+      padding: 11px 12px;
+      border: 1px dashed rgba(96, 165, 250, .25);
+      border-radius: 10px;
+      background: rgba(56, 139, 253, .06);
+      color: #dbeafe;
+      font-size: .82rem;
+      line-height: 1.7
+    }
+
+    .screen-quick-hidden {
+      display: none !important
+    }
+
+    @media (max-width:1100px) {
+      .screen-wizard-grid.cols-4 {
+        grid-template-columns: repeat(2, minmax(0, 1fr))
+      }
+    }
+
+    @media (max-width:700px) {
+
+      .screen-wizard-grid.cols-4,
+      .screen-wizard-grid.cols-3 {
+        grid-template-columns: 1fr
+      }
+    }
+
+    /* ── Scan Progress Card ── */
+    .screen-progress-card {
+      display: none;
+      background: linear-gradient(180deg, #1a2636, #141e2d);
+      border: 1px solid rgba(96, 165, 250, .22);
+      border-radius: 14px;
+      padding: 18px 16px;
+      margin-bottom: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+    .screen-progress-card.show {
+      display: block;
+    }
+    .screen-progress-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(96,165,250,.04), transparent);
+      animation: progressShimmer 2s ease-in-out infinite;
+    }
+    @keyframes progressShimmer {
+      0%,100% { transform: translateX(-100%); }
+      50% { transform: translateX(100%); }
+    }
+    .screen-progress-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      position: relative;
+    }
+    .screen-progress-text {
+      font-size: .9rem;
+      font-weight: 800;
+      color: #dbeafe;
+    }
+    .screen-progress-meta {
+      font-size: .78rem;
+      color: #8fb3e8;
+    }
+    .screen-progress-bar-wrap {
+      height: 8px;
+      background: #21262d;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+    .screen-progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #1f6feb, #60a5fa, #93c5fd);
+      border-radius: 4px;
+      transition: width .3s ease;
+      position: relative;
+    }
+    .screen-progress-bar::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
+      animation: barPulse 1.5s ease-in-out infinite;
+    }
+    @keyframes barPulse {
+      0%,100% { opacity: 0; }
+      50% { opacity: 1; }
+    }
+    .screen-progress-spinner {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(96,165,250,.2);
+      border-top-color: #60a5fa;
+      border-radius: 50%;
+      animation: miniSpin .75s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    /* ── Indicator light mode for filter cards ── */
+    .screen-card.indicator-mode {
+      cursor: default;
+      opacity: .55;
+      transform: none !important;
+      pointer-events: none;
+    }
+    .screen-card.indicator-mode:hover {
+      transform: none;
+      border-color: rgba(255,255,255,.08);
+    }
+    .screen-card.indicator-mode.active {
+      opacity: 1;
+      pointer-events: none;
+      border-color: #7fb5ff;
+      box-shadow: 0 0 0 2px rgba(96, 165, 250, .45) inset, 0 0 0 1px rgba(255, 255, 255, .05), 0 16px 34px rgba(56, 139, 253, .22);
+      background: linear-gradient(180deg, #28405f, #1d2c42);
+    }
+
+    /* ── Stop scan button ── */
+    .btn-stop-scan {
+      background: linear-gradient(135deg, #dc2626, #b91c1c) !important;
+      color: #fff !important;
+      border: 1px solid rgba(239,68,68,.35) !important;
+      animation: stopPulse 1.5s ease-in-out infinite;
+    }
+    @keyframes stopPulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,.4); }
+      50% { box-shadow: 0 0 0 8px rgba(220,38,38,0); }
+    }
+
+    .screen-action-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+  </style>
 </head>
+
 <body>
 
-<!-- ── Top Bar ── -->
-<div id="clockBar">
-  <div style="display:flex;align-items:center;gap:10px;">
-    <span style="font-size:1.2rem;">📈</span>
-    <div>
-      <div style="font-weight:800;color:var(--text);font-size:.92rem;line-height:1.2;">
-        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.9.14</span>
+  <!-- ── Top Bar ── -->
+  <div id="clockBar">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span style="font-size:1.2rem;">📈</span>
+      <div>
+        <div style="font-weight:800;color:var(--text);font-size:.92rem;line-height:1.2;">
+          台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.9.14</span>
+        </div>
+        <div id="lastSaved" style="font-size:.65rem;color:#555;line-height:1.2;">最後儲存：—</div>
       </div>
-      <div id="lastSaved" style="font-size:.65rem;color:#555;line-height:1.2;">最後儲存：—</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      <span id="twClock" style="font-size:.78rem;">—</span>
+      <span id="marketBadge" class="badge badge-wait">—</span>
+      <!-- 原始匯出/匯入/重置（桌面顯示） -->
+      <button id="btnExport" class="btn-xs btn-xs-blue" style="display:none;">💾 匯出</button>
+      <label id="btnImportTop" class="btn-xs btn-xs-gray" style="display:none;cursor:pointer;">
+        📂 匯入<input type="file" accept=".json" id="importFile" style="display:none;" />
+      </label>
+      <button id="btnReset" class="btn-xs"
+        style="background:#2d0a0a;color:var(--up);border:1px solid #8b1a1a;display:none;">🗑 重置</button>
+      <button id="btnCloudLogin" class="btn-xs" style="background:#0a1a0a;color:#2ecc71;border:1px solid #1a4a1a;">☁️
+        雲端</button>
     </div>
   </div>
-  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-    <span id="twClock" style="font-size:.78rem;">—</span>
-    <span id="marketBadge" class="badge badge-wait">—</span>
-    <!-- 原始匯出/匯入/重置（桌面顯示） -->
-    <button id="btnExport" class="btn-xs btn-xs-blue" style="display:none;">💾 匯出</button>
-    <label id="btnImportTop" class="btn-xs btn-xs-gray" style="display:none;cursor:pointer;">
-      📂 匯入<input type="file" accept=".json" id="importFile" style="display:none;"/>
-    </label>
-    <button id="btnReset" class="btn-xs" style="background:#2d0a0a;color:var(--up);border:1px solid #8b1a1a;display:none;">🗑 重置</button>
-    <button id="btnCloudLogin" class="btn-xs" style="background:#0a1a0a;color:#2ecc71;border:1px solid #1a4a1a;">☁️ 雲端</button>
-  </div>
-</div>
-<style>
-  @media(min-width:768px){
-    #btnExport,#btnImportTop,#btnReset{display:inline-flex!important;}
-  }
+  <style>
+    @media(min-width:768px) {
 
-    .screen-admin-btn{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:999px;border:1px solid rgba(96,165,250,.26);background:linear-gradient(180deg,#172334,#111a27);color:#b9d7ff;cursor:pointer;transition:all .18s;box-shadow:0 8px 18px rgba(0,0,0,.14);}
-    .screen-admin-btn:hover{transform:translateY(-1px);border-color:#60a5fa;color:#fff;box-shadow:0 12px 22px rgba(56,139,253,.18);}
-    .screen-admin-status{font-size:.75rem;color:#8fb3e8;}
-    .screen-admin-status.ok{color:#ffb3b3;}
-    .screen-admin-tools{display:none;margin-top:12px;padding:12px;border:1px dashed rgba(239,68,68,.24);border-radius:12px;background:linear-gradient(180deg,rgba(74,14,14,.18),rgba(31,14,14,.08));}
-    .screen-admin-tools.show{display:block;}
-    .screen-admin-chip{display:inline-flex;align-items:center;padding:5px 10px;border-radius:999px;font-size:.72rem;font-weight:900;background:rgba(239,68,68,.14);color:#ffb1b1;border:1px solid rgba(239,68,68,.24);margin-right:6px;margin-bottom:6px;}
-    .screen-option-lock{color:#8b949e;}
-    .screen-pdf-note{font-size:.74rem;color:#9fb4d2;margin-top:6px;line-height:1.55;}
-    .screen-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.54);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:9999;padding:16px;}
-    .screen-modal-backdrop.show{display:flex;}
-    .screen-modal{width:min(460px,100%);background:#121a26;border:1px solid rgba(96,165,250,.18);border-radius:16px;padding:18px;box-shadow:0 26px 60px rgba(0,0,0,.35);}
-    .screen-modal-title{font-size:1rem;font-weight:900;color:#fff;margin-bottom:10px;}
-    .screen-modal-sub{font-size:.8rem;color:#9fb4d2;line-height:1.65;margin-bottom:12px;}
-    .screen-modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;}
-    .screen-modal-msg{font-size:.76rem;color:#8fb3e8;margin-top:8px;min-height:18px;}
-    .screen-offscreen-pdf{position:fixed;left:-20000px;top:0;width:1180px;z-index:-1;background:#0d1117;padding:24px;}
+      #btnExport,
+      #btnImportTop,
+      #btnReset {
+        display: inline-flex !important;
+      }
+    }
 
+    .screen-admin-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 999px;
+      border: 1px solid rgba(96, 165, 250, .26);
+      background: linear-gradient(180deg, #172334, #111a27);
+      color: #b9d7ff;
+      cursor: pointer;
+      transition: all .18s;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, .14);
+    }
 
+    .screen-admin-btn:hover {
+      transform: translateY(-1px);
+      border-color: #60a5fa;
+      color: #fff;
+      box-shadow: 0 12px 22px rgba(56, 139, 253, .18);
+    }
+
+    .screen-admin-status {
+      font-size: .75rem;
+      color: #8fb3e8;
+    }
+
+    .screen-admin-status.ok {
+      color: #ffb3b3;
+    }
+
+    .screen-admin-tools {
+      display: none;
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px dashed rgba(239, 68, 68, .24);
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(74, 14, 14, .18), rgba(31, 14, 14, .08));
+    }
+
+    .screen-admin-tools.show {
+      display: block;
+    }
+
+    .screen-admin-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: .72rem;
+      font-weight: 900;
+      background: rgba(239, 68, 68, .14);
+      color: #ffb1b1;
+      border: 1px solid rgba(239, 68, 68, .24);
+      margin-right: 6px;
+      margin-bottom: 6px;
+    }
+
+    .screen-option-lock {
+      color: #8b949e;
+    }
+
+    .screen-pdf-note {
+      font-size: .74rem;
+      color: #9fb4d2;
+      margin-top: 6px;
+      line-height: 1.55;
+    }
+
+    .screen-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .54);
+      backdrop-filter: blur(3px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 16px;
+    }
+
+    .screen-modal-backdrop.show {
+      display: flex;
+    }
+
+    .screen-modal {
+      width: min(460px, 100%);
+      background: #121a26;
+      border: 1px solid rgba(96, 165, 250, .18);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 26px 60px rgba(0, 0, 0, .35);
+    }
+
+    .screen-modal-title {
+      font-size: 1rem;
+      font-weight: 900;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+
+    .screen-modal-sub {
+      font-size: .8rem;
+      color: #9fb4d2;
+      line-height: 1.65;
+      margin-bottom: 12px;
+    }
+
+    .screen-modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+
+    .screen-modal-msg {
+      font-size: .76rem;
+      color: #8fb3e8;
+      margin-top: 8px;
+      min-height: 18px;
+    }
+
+    .screen-offscreen-pdf {
+      position: fixed;
+      left: -20000px;
+      top: 0;
+      width: 1180px;
+      z-index: -1;
+      background: #0d1117;
+      padding: 24px;
+    }
   </style>
 
-<!-- ── Desktop Side Nav ── -->
-<nav id="sideNav">
-  <div class="side-logo">📈 台股<span>操盤</span></div>
-  <button class="side-item active" data-page="overview"><span class="icon">🏠</span>資產總覽</button>
-  <button class="side-item" data-page="market"><span class="icon">📡</span>行情追蹤</button>
-  <button class="side-item" data-page="portfolio"><span class="icon">📦</span>持股帳務</button>
-  <button class="side-item" data-page="trade"><span class="icon">💹</span>交易設定</button>
-  <button class="side-item" data-page="screener"><span class="icon">🧭</span>篩選器</button>
-  <button class="side-item" data-page="aiReport"><span class="icon">🤖</span>AI 診斷</button>
-  <button class="side-item" data-page="cloud"
-    style="margin-top:auto;border:1px solid #1a4a1a;color:#2ecc71;background:#0a1a0a;">
-    <span class="icon">☁️</span>雲端備份
-  </button>
-</nav>
+  <!-- ── Desktop Side Nav ── -->
+  <nav id="sideNav">
+    <div class="side-logo">📈 台股<span>操盤</span></div>
+    <button class="side-item active" data-page="overview"><span class="icon">🏠</span>資產總覽</button>
+    <button class="side-item" data-page="market"><span class="icon">📡</span>行情追蹤</button>
+    <button class="side-item" data-page="portfolio"><span class="icon">📦</span>持股帳務</button>
+    <button class="side-item" data-page="trade"><span class="icon">💹</span>交易設定</button>
+    <button class="side-item" data-page="screener"><span class="icon">🧭</span>篩選器</button>
+    <button class="side-item" data-page="aiReport"><span class="icon">🤖</span>AI 診斷</button>
+    <button class="side-item" data-page="cloud"
+      style="margin-top:auto;border:1px solid #1a4a1a;color:#2ecc71;background:#0a1a0a;">
+      <span class="icon">☁️</span>雲端備份
+    </button>
+  </nav>
 
-<main id="appMain">
+  <main id="appMain">
 
-  <!-- ════ PAGE 1: 資產總覽 ════ -->
-  <div id="page-overview" class="page active">
-    <div class="desk-grid-3" style="margin-bottom:14px;">
-      <div class="card stat-big">
-        <div class="label">總資產</div>
-        <div class="value" id="totalAsset" style="color:var(--blue);">—</div>
-        <div class="sub">現金 + 持股</div>
-      </div>
-      <div class="card stat-big">
-        <div class="label">虛擬現金</div>
-        <div class="value text-up" id="cashDisplay">—</div>
-        <div class="sub" style="display:flex;gap:6px;justify-content:center;margin-top:8px;flex-wrap:wrap;">
-          <button class="btn-xs btn-xs-red" id="btnAddCash">＋充值</button>
-          <button class="btn-xs btn-xs-gray" id="btnSetCash">✏️ 設定</button>
-          <button class="btn-xs" id="btnFee" style="background:#0a1a0a;color:#2ecc71;border:1px solid #1a4a1a;">⚙️ 手續費</button>
+    <!-- ════ PAGE 1: 資產總覽 ════ -->
+    <div id="page-overview" class="page active">
+      <div class="desk-grid-3" style="margin-bottom:14px;">
+        <div class="card stat-big">
+          <div class="label">總資產</div>
+          <div class="value" id="totalAsset" style="color:var(--blue);">—</div>
+          <div class="sub">現金 + 持股</div>
         </div>
-        <div id="feeLabel" style="font-size:.7rem;color:var(--muted);margin-top:6px;"></div>
-      </div>
-      <div class="card stat-big">
-        <div class="label">累計已實現損益</div>
-        <div class="value" id="totalPnL">—</div>
-        <div class="sub">歷史買賣結算</div>
-      </div>
-    </div>
-    <!-- ── 績效分析列 ── -->
-    <div class="desk-grid-3" style="margin-bottom:14px;gap:10px;">
-      <div class="card" style="padding:14px;text-align:center;">
-        <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px;">📉 最大回撤</div>
-        <div style="font-size:1.3rem;font-weight:800;color:#ff4d4d;" id="maxDrawdown">—</div>
-        <div style="font-size:.66rem;color:var(--muted);margin-top:4px;">資產歷史最大跌幅</div>
-      </div>
-      <div class="card" style="padding:14px;text-align:center;">
-        <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px;">🏆 歷史勝率</div>
-        <div style="font-size:1.3rem;font-weight:800;color:#2ecc71;" id="dashWinRate">—</div>
-        <div style="font-size:.66rem;color:var(--muted);margin-top:4px;">獲利筆數 / 總結案筆數</div>
-      </div>
-      <div class="card" style="padding:14px;text-align:center;">
-        <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px;">📊 持股種類</div>
-        <div style="font-size:1.3rem;font-weight:800;color:var(--blue);" id="holdingsCount">—</div>
-        <div style="font-size:.66rem;color:var(--muted);margin-top:4px;">目前持有股票種類數</div>
-      </div>
-    </div>
-    <div class="desk-grid-2" style="gap:14px;margin-bottom:14px;">
-      <div class="card">
-        <div class="sec-title">🥧 資產配置</div>
-        <div style="position:relative;height:220px;"><canvas id="chartPie"></canvas></div>
-      </div>
-      <div class="card">
-        <div class="sec-title">📈 資產走勢</div>
-        <div style="position:relative;height:220px;"><canvas id="chartLine"></canvas></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="sec-title" style="cursor:pointer;"
-        onclick="window.__navigate&&window.__navigate('portfolio')">
-        📦 持股概況（點此查看詳情）
-      </div>
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr>
-            <th>代號 / 名稱</th><th>股數</th><th>均價</th><th>現價</th><th>損益</th><th>報酬率</th>
-          </tr></thead>
-          <tbody id="holdingsBodyOverview"></tbody>
-        </table>
-      </div>
-      <div id="holdingsEmptyOverview" style="text-align:center;padding:24px;display:none;">
-        <div style="font-size:2rem;margin-bottom:8px;">📭</div>
-        <p class="muted" style="font-size:.85rem;margin-bottom:12px;">目前尚無持股</p>
-        <button class="btn btn-blue" id="btnGoMarket" style="font-size:.82rem;padding:8px 18px;">
-          📡 前往行情追蹤下單 →
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ════ PAGE 2: 行情追蹤 ════ -->
-  <div id="page-market" class="page">
-    <div class="card" style="margin-bottom:12px;">
-      <div class="sec-title">🔍 股票搜尋</div>
-      <div style="display:flex;gap:8px;">
-        <div class="symbol-field" style="flex:1;"><input id="searchInput" class="inp" placeholder="輸入代號 (e.g. 2330) 後 Enter" style="flex:1;" autocomplete="off"/><div id="searchInputHint" class="symbol-inline-name">輸入代號會即時顯示股票名稱</div><div id="searchInputSuggest" class="symbol-suggest"></div></div>
-        <button class="btn btn-blue" id="btnAddWatch" style="padding:9px 14px;">＋</button>
-      </div>
-    </div>
-    <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-        <div class="sec-title" style="margin-bottom:0;">📋 追蹤清單</div>
-        <span id="mktRefreshHint" class="muted" style="font-size:.7rem;">—</span>
-      </div>
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr><th>代號 / 名稱</th><th>現價</th><th>漲跌</th><th>來源</th><th></th></tr></thead>
-          <tbody id="watchlistBody"></tbody>
-        </table>
-      </div>
-      <p id="watchlistEmpty" class="muted" style="text-align:center;padding:16px;font-size:.85rem;">
-        尚未追蹤任何股票
-      </p>
-    </div>
-    <!-- K線 -->
-    <div id="klinePanel">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <span class="sec-title" id="klineTitle" style="margin-bottom:0;">K 線圖</span>
-        <button id="btnCloseKLine" class="btn-xs btn-xs-gray">✕ 關閉</button>
-      </div>
-      <div id="klineContainer" style="height:260px;width:100%;"></div>
-    </div>
-  </div>
-
-  <!-- ════ PAGE 3: 持股帳務 ════ -->
-  <div id="page-portfolio" class="page">
-    <div class="card" style="margin-bottom:12px;">
-      <div class="sec-title">📦 持股庫存</div>
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr>
-            <th>代號 / 名稱</th><th>股數</th><th>均價</th><th>現價</th><th>損益</th><th>報酬率</th><th>操作</th>
-          </tr></thead>
-          <tbody id="holdingsBody"></tbody>
-        </table>
-      </div>
-      <p id="holdingsEmpty" class="muted" style="text-align:center;padding:16px;font-size:.85rem;">目前無持股</p>
-      <!-- 持股市值（app.js 寫入此 ID） -->
-      <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;">
-        <span class="muted" style="font-size:.8rem;">持股市值合計</span>
-        <span id="holdingsValue" style="font-size:1rem;font-weight:700;color:var(--blue);">$ 0</span>
-      </div>
-    </div>
-    <div class="card">
-      <div class="sec-title">💰 損益紀錄</div>
-      <div style="display:flex;gap:6px;margin-bottom:10px;">
-        <button class="tab-btn active" data-tab="history">📋 交易紀錄</button>
-        <button class="tab-btn"        data-tab="realized">💰 已實現損益</button>
-      </div>
-      <div id="tab-history" class="tab-panel active" style="padding-top:8px;">
-        <div class="tbl-wrap">
-          <table>
-            <thead><tr>
-              <th>時間</th><th>代號 / 名稱</th><th>方向</th><th>股數</th><th>成交價</th><th>金額</th><th>稅費</th>
-            </tr></thead>
-            <tbody id="tradeHistoryBody"></tbody>
-          </table>
+        <div class="card stat-big">
+          <div class="label">虛擬現金</div>
+          <div class="value text-up" id="cashDisplay">—</div>
+          <div class="sub" style="display:flex;gap:6px;justify-content:center;margin-top:8px;flex-wrap:wrap;">
+            <button class="btn-xs btn-xs-red" id="btnAddCash">＋充值</button>
+            <button class="btn-xs btn-xs-gray" id="btnSetCash">✏️ 設定</button>
+            <button class="btn-xs" id="btnFee" style="background:#0a1a0a;color:#2ecc71;border:1px solid #1a4a1a;">⚙️
+              手續費</button>
+          </div>
+          <div id="feeLabel" style="font-size:.7rem;color:var(--muted);margin-top:6px;"></div>
         </div>
-        <p id="historyEmpty" class="muted" style="text-align:center;padding:12px;font-size:.85rem;">尚無交易紀錄</p>
+        <div class="card stat-big">
+          <div class="label">累計已實現損益</div>
+          <div class="value" id="totalPnL">—</div>
+          <div class="sub">歷史買賣結算</div>
+        </div>
       </div>
-      <div id="tab-realized" class="tab-panel" style="padding-top:8px;">
-        <div class="desk-grid-3" style="margin-bottom:10px;gap:8px;">
-          <div class="card-sm" style="text-align:center;">
-            <div style="font-size:.7rem;color:var(--muted);">已實現損益</div>
-            <div style="font-size:1.1rem;font-weight:800;margin-top:4px;" id="rTotalPnl">—</div>
-          </div>
-          <div class="card-sm" style="text-align:center;">
-            <div style="font-size:.7rem;color:var(--muted);">筆數 / 勝率</div>
-            <div style="font-size:.95rem;font-weight:700;margin-top:4px;" id="rWinRate">—</div>
-          </div>
-          <div class="card-sm" style="text-align:center;">
-            <div style="font-size:.7rem;color:var(--muted);">平均損益/筆</div>
-            <div style="font-size:.95rem;font-weight:700;margin-top:4px;" id="rAvgPnl">—</div>
-          </div>
+      <!-- ── 績效分析列 ── -->
+      <div class="desk-grid-3" style="margin-bottom:14px;gap:10px;">
+        <div class="card" style="padding:14px;text-align:center;">
+          <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px;">📉 最大回撤</div>
+          <div style="font-size:1.3rem;font-weight:800;color:#ff4d4d;" id="maxDrawdown">—</div>
+          <div style="font-size:.66rem;color:var(--muted);margin-top:4px;">資產歷史最大跌幅</div>
+        </div>
+        <div class="card" style="padding:14px;text-align:center;">
+          <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px;">🏆 歷史勝率</div>
+          <div style="font-size:1.3rem;font-weight:800;color:#2ecc71;" id="dashWinRate">—</div>
+          <div style="font-size:.66rem;color:var(--muted);margin-top:4px;">獲利筆數 / 總結案筆數</div>
+        </div>
+        <div class="card" style="padding:14px;text-align:center;">
+          <div style="font-size:.72rem;color:var(--muted);margin-bottom:6px;">📊 持股種類</div>
+          <div style="font-size:1.3rem;font-weight:800;color:var(--blue);" id="holdingsCount">—</div>
+          <div style="font-size:.66rem;color:var(--muted);margin-top:4px;">目前持有股票種類數</div>
+        </div>
+      </div>
+      <div class="desk-grid-2" style="gap:14px;margin-bottom:14px;">
+        <div class="card">
+          <div class="sec-title">🥧 資產配置</div>
+          <div style="position:relative;height:220px;"><canvas id="chartPie"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="sec-title">📈 資產走勢</div>
+          <div style="position:relative;height:220px;"><canvas id="chartLine"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec-title" style="cursor:pointer;" onclick="window.__navigate&&window.__navigate('portfolio')">
+          📦 持股概況（點此查看詳情）
         </div>
         <div class="tbl-wrap">
           <table>
-            <thead><tr>
-              <th>時間</th><th>代號 / 名稱</th><th>股數</th><th>買均價</th><th>賣價</th><th>淨損益</th><th>報酬率</th>
-            </tr></thead>
-            <tbody id="realizedBody"></tbody>
+            <thead>
+              <tr>
+                <th>代號 / 名稱</th>
+                <th>股數</th>
+                <th>均價</th>
+                <th>現價</th>
+                <th>損益</th>
+                <th>報酬率</th>
+              </tr>
+            </thead>
+            <tbody id="holdingsBodyOverview"></tbody>
           </table>
         </div>
-        <p id="realizedEmpty" class="muted" style="text-align:center;padding:12px;font-size:.85rem;">尚無已結案部位</p>
+        <div id="holdingsEmptyOverview" style="text-align:center;padding:24px;display:none;">
+          <div style="font-size:2rem;margin-bottom:8px;">📭</div>
+          <p class="muted" style="font-size:.85rem;margin-bottom:12px;">目前尚無持股</p>
+          <button class="btn btn-blue" id="btnGoMarket" style="font-size:.82rem;padding:8px 18px;">
+            📡 前往行情追蹤下單 →
+          </button>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- ════ PAGE 4: 交易設定 ════ -->
-  <div id="page-trade" class="page">
-    <div class="desk-grid-2">
+    <!-- ════ PAGE 2: 行情追蹤 ════ -->
+    <div id="page-market" class="page">
       <div class="card" style="margin-bottom:12px;">
-        <div class="sec-title">💹 虛擬交易（零股）</div>
-        <div style="display:flex;flex-direction:column;gap:10px;">
-          <div>
-            <label class="sec-title" style="display:block;margin-bottom:4px;">股票代號</label>
-            <div class="symbol-field"><input id="tradeSymbol" class="inp" placeholder="e.g. 2330" autocomplete="off"/><div id="tradeSymbolHint" class="symbol-inline-name">請輸入股票代號</div><div id="tradeSymbolSuggest" class="symbol-suggest"></div></div>
+        <div class="sec-title">🔍 股票搜尋</div>
+        <div style="display:flex;gap:8px;">
+          <div class="symbol-field" style="flex:1;"><input id="searchInput" class="inp"
+              placeholder="輸入代號 (e.g. 2330) 後 Enter" style="flex:1;" autocomplete="off" />
+            <div id="searchInputHint" class="symbol-inline-name">輸入代號會即時顯示股票名稱</div>
+            <div id="searchInputSuggest" class="symbol-suggest"></div>
           </div>
-          <div>
-            <label class="sec-title" style="display:block;margin-bottom:4px;">股數（零股）</label>
-            <input id="tradeQty" class="inp" type="number" min="1" placeholder="e.g. 100"/>
-          </div>
-          <div>
-            <label class="sec-title" style="display:block;margin-bottom:4px;">成交價（留空自動取得）</label>
-            <input id="tradePrice" class="inp" type="number" step="0.01" placeholder="自動取得現價"/>
-          </div>
-          <div style="margin-bottom:4px;display:flex;gap:8px;">
-            <button class="btn-open-scenario" id="btnOpenScenario" style="flex:1;">📊 投資模擬試算</button>
-            <button class="btn-open-scenario" id="btnHoldingScenario" style="flex:1;background:linear-gradient(135deg,#2563eb,#1d4ed8);">📦 持股試算</button>
-          </div>
-          <div style="display:flex;gap:8px;">
-            <button class="btn btn-red" id="btnBuy" style="flex:1;">買入 ▲</button>
-            <button class="btn btn-green" id="btnSell" style="flex:1;">賣出 ▼</button>
-          </div>
-          <p id="tradeMsg" class="muted" style="font-size:.82rem;min-height:1.2em;"></p>
-          <div id="feePreview" style="font-size:.75rem;color:var(--muted);background:var(--bg);
-            border:1px solid var(--border2);border-radius:6px;padding:8px;display:none;"></div>
+          <button class="btn btn-blue" id="btnAddWatch" style="padding:9px 14px;">＋</button>
         </div>
       </div>
       <div class="card">
-        <div class="sec-title">⚙️ 系統設定</div>
-        <div class="setting-row">
-          <div>
-            <div class="setting-label">手續費折數</div>
-            <div class="setting-desc" id="feeLabel2">預設 6 折（0.0855%）</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div class="sec-title" style="margin-bottom:0;">📋 追蹤清單</div>
+          <span id="mktRefreshHint" class="muted" style="font-size:.7rem;">—</span>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>代號 / 名稱</th>
+                <th>現價</th>
+                <th>漲跌</th>
+                <th>來源</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="watchlistBody"></tbody>
+          </table>
+        </div>
+        <p id="watchlistEmpty" class="muted" style="text-align:center;padding:16px;font-size:.85rem;">
+          尚未追蹤任何股票
+        </p>
+      </div>
+      <!-- K線 -->
+      <div id="klinePanel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span class="sec-title" id="klineTitle" style="margin-bottom:0;">K 線圖</span>
+          <button id="btnCloseKLine" class="btn-xs btn-xs-gray">✕ 關閉</button>
+        </div>
+        <div id="klineContainer" style="height:260px;width:100%;"></div>
+      </div>
+    </div>
+
+    <!-- ════ PAGE 3: 持股帳務 ════ -->
+    <div id="page-portfolio" class="page">
+      <div class="card" style="margin-bottom:12px;">
+        <div class="sec-title">📦 持股庫存</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>代號 / 名稱</th>
+                <th>股數</th>
+                <th>均價</th>
+                <th>現價</th>
+                <th>損益</th>
+                <th>報酬率</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="holdingsBody"></tbody>
+          </table>
+        </div>
+        <p id="holdingsEmpty" class="muted" style="text-align:center;padding:16px;font-size:.85rem;">目前無持股</p>
+        <!-- 持股市值（app.js 寫入此 ID） -->
+        <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;">
+          <span class="muted" style="font-size:.8rem;">持股市值合計</span>
+          <span id="holdingsValue" style="font-size:1rem;font-weight:700;color:var(--blue);">$ 0</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sec-title">💰 損益紀錄</div>
+        <div style="display:flex;gap:6px;margin-bottom:10px;">
+          <button class="tab-btn active" data-tab="history">📋 交易紀錄</button>
+          <button class="tab-btn" data-tab="realized">💰 已實現損益</button>
+        </div>
+        <div id="tab-history" class="tab-panel active" style="padding-top:8px;">
+          <div class="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>時間</th>
+                  <th>代號 / 名稱</th>
+                  <th>方向</th>
+                  <th>股數</th>
+                  <th>成交價</th>
+                  <th>金額</th>
+                  <th>稅費</th>
+                </tr>
+              </thead>
+              <tbody id="tradeHistoryBody"></tbody>
+            </table>
           </div>
-          <button class="btn-xs btn-xs-gray" id="btnFee2">設定</button>
+          <p id="historyEmpty" class="muted" style="text-align:center;padding:12px;font-size:.85rem;">尚無交易紀錄</p>
         </div>
-        <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
-          <div class="setting-label">📡 報價來源</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%;">
-            <button class="source-btn" data-source="auto">🤖 自動</button>
-            <button class="source-btn" data-source="twse">🏛️ 證交所</button>
-            <button class="source-btn" data-source="yahoo">📊 Yahoo</button>
-            <button class="source-btn" data-source="google">🔍 Google</button>
+        <div id="tab-realized" class="tab-panel" style="padding-top:8px;">
+          <div class="desk-grid-3" style="margin-bottom:10px;gap:8px;">
+            <div class="card-sm" style="text-align:center;">
+              <div style="font-size:.7rem;color:var(--muted);">已實現損益</div>
+              <div style="font-size:1.1rem;font-weight:800;margin-top:4px;" id="rTotalPnl">—</div>
+            </div>
+            <div class="card-sm" style="text-align:center;">
+              <div style="font-size:.7rem;color:var(--muted);">筆數 / 勝率</div>
+              <div style="font-size:.95rem;font-weight:700;margin-top:4px;" id="rWinRate">—</div>
+            </div>
+            <div class="card-sm" style="text-align:center;">
+              <div style="font-size:.7rem;color:var(--muted);">平均損益/筆</div>
+              <div style="font-size:.95rem;font-weight:700;margin-top:4px;" id="rAvgPnl">—</div>
+            </div>
           </div>
-          <p id="sourceNote" class="muted" style="font-size:.72rem;"></p>
-        </div>
-        <div class="setting-row">
-          <div><div class="setting-label">📋 資料操作</div></div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;padding-top:4px;">
-          <button class="btn btn-blue" id="btnExportCloud">💾 匯出 JSON</button>
-          <label class="btn btn-amber" style="cursor:pointer;">
-            📂 匯入 JSON<input type="file" accept=".json" id="importFileCloud" style="display:none;"/>
-          </label>
-          <!-- 重置按鈕（此處為交易設定頁） -->
-          <button class="btn btn-danger" id="btnResetCloud">🗑 重置資料</button>
+          <div class="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>時間</th>
+                  <th>代號 / 名稱</th>
+                  <th>股數</th>
+                  <th>買均價</th>
+                  <th>賣價</th>
+                  <th>淨損益</th>
+                  <th>報酬率</th>
+                </tr>
+              </thead>
+              <tbody id="realizedBody"></tbody>
+            </table>
+          </div>
+          <p id="realizedEmpty" class="muted" style="text-align:center;padding:12px;font-size:.85rem;">尚無已結案部位</p>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- ════ PAGE 5: 雲端備份 ════ -->
-  <div id="page-cloud" class="page">
-    <div class="card" style="margin-bottom:14px;">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-        <span style="font-size:2.2rem;">☁️</span>
-        <div>
-          <div style="font-weight:800;font-size:1rem;">Firebase 雲端同步</div>
-          <div class="muted" style="font-size:.78rem;margin-top:3px;">
-            Google 帳號登入後，買賣操作即時同步至 Firestore
+    <!-- ════ PAGE 4: 交易設定 ════ -->
+    <div id="page-trade" class="page">
+      <div class="desk-grid-2">
+        <div class="card" style="margin-bottom:12px;">
+          <div class="sec-title">💹 虛擬交易（零股）</div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div>
+              <label class="sec-title" style="display:block;margin-bottom:4px;">股票代號</label>
+              <div class="symbol-field"><input id="tradeSymbol" class="inp" placeholder="e.g. 2330"
+                  autocomplete="off" />
+                <div id="tradeSymbolHint" class="symbol-inline-name">請輸入股票代號</div>
+                <div id="tradeSymbolSuggest" class="symbol-suggest"></div>
+              </div>
+            </div>
+            <div>
+              <label class="sec-title" style="display:block;margin-bottom:4px;">股數（零股）</label>
+              <input id="tradeQty" class="inp" type="number" min="1" placeholder="e.g. 100" />
+            </div>
+            <div>
+              <label class="sec-title" style="display:block;margin-bottom:4px;">成交價（留空自動取得）</label>
+              <input id="tradePrice" class="inp" type="number" step="0.01" placeholder="自動取得現價" />
+            </div>
+            <div style="margin-bottom:4px;display:flex;gap:8px;">
+              <button class="btn-open-scenario" id="btnOpenScenario" style="flex:1;">📊 投資模擬試算</button>
+              <button class="btn-open-scenario" id="btnHoldingScenario"
+                style="flex:1;background:linear-gradient(135deg,#2563eb,#1d4ed8);">📦 持股試算</button>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-red" id="btnBuy" style="flex:1;">買入 ▲</button>
+              <button class="btn btn-green" id="btnSell" style="flex:1;">賣出 ▼</button>
+            </div>
+            <p id="tradeMsg" class="muted" style="font-size:.82rem;min-height:1.2em;"></p>
+            <div id="feePreview" style="font-size:.75rem;color:var(--muted);background:var(--bg);
+            border:1px solid var(--border2);border-radius:6px;padding:8px;display:none;"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="sec-title">⚙️ 系統設定</div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">手續費折數</div>
+              <div class="setting-desc" id="feeLabel2">預設 6 折（0.0855%）</div>
+            </div>
+            <button class="btn-xs btn-xs-gray" id="btnFee2">設定</button>
+          </div>
+          <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
+            <div class="setting-label">📡 報價來源</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%;">
+              <button class="source-btn" data-source="auto">🤖 自動</button>
+              <button class="source-btn" data-source="twse">🏛️ 證交所</button>
+              <button class="source-btn" data-source="yahoo">📊 Yahoo</button>
+              <button class="source-btn" data-source="google">🔍 Google</button>
+            </div>
+            <p id="sourceNote" class="muted" style="font-size:.72rem;"></p>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">📋 資料操作</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;padding-top:4px;">
+            <button class="btn btn-blue" id="btnExportCloud">💾 匯出 JSON</button>
+            <label class="btn btn-amber" style="cursor:pointer;">
+              📂 匯入 JSON<input type="file" accept=".json" id="importFileCloud" style="display:none;" />
+            </label>
+            <!-- 重置按鈕（此處為交易設定頁） -->
+            <button class="btn btn-danger" id="btnResetCloud">🗑 重置資料</button>
           </div>
         </div>
       </div>
-      <div style="background:var(--bg);border:1px solid var(--border2);border-radius:8px;
-        padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;">
-        <div style="display:flex;align-items:center;gap:8px;font-size:.85rem;">
-          <span id="cloudStatusDot" style="width:10px;height:10px;border-radius:50%;
-            background:#555;flex-shrink:0;display:inline-block;"></span>
-          <span id="cloudStatusText">尚未登入</span>
+    </div>
+
+    <!-- ════ PAGE 5: 雲端備份 ════ -->
+    <div id="page-cloud" class="page">
+      <div class="card" style="margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+          <span style="font-size:2.2rem;">☁️</span>
+          <div>
+            <div style="font-weight:800;font-size:1rem;">Firebase 雲端同步</div>
+            <div class="muted" style="font-size:.78rem;margin-top:3px;">
+              Google 帳號登入後，買賣操作即時同步至 Firestore
+            </div>
+          </div>
         </div>
-        <div id="cloudUserInfo" style="font-size:.82rem;color:var(--muted);"></div>
-      </div>
-      <div id="cloudLoginForm" style="display:flex;flex-direction:column;gap:10px;">
-        <button id="btnCloudSignIn" style="display:flex;align-items:center;justify-content:center;
+        <div style="background:var(--bg);border:1px solid var(--border2);border-radius:8px;
+        padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;font-size:.85rem;">
+            <span id="cloudStatusDot" style="width:10px;height:10px;border-radius:50%;
+            background:#555;flex-shrink:0;display:inline-block;"></span>
+            <span id="cloudStatusText">尚未登入</span>
+          </div>
+          <div id="cloudUserInfo" style="font-size:.82rem;color:var(--muted);"></div>
+        </div>
+        <div id="cloudLoginForm" style="display:flex;flex-direction:column;gap:10px;">
+          <button id="btnCloudSignIn" style="display:flex;align-items:center;justify-content:center;
           gap:10px;background:#fff;color:#3c4043;border:1px solid #dadce0;border-radius:8px;
           padding:12px 16px;font-size:.92rem;font-weight:600;cursor:pointer;width:100%;">
-          <svg width="18" height="18" viewBox="0 0 48 48">
-            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.02 17.74 9.5 24 9.5z"/>
-            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-3.52-13.47-8.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-          </svg>
-          使用 Google 帳號登入
-        </button>
-        <p id="cloudMsg" class="muted" style="font-size:.78rem;text-align:center;min-height:1em;"></p>
+            <svg width="18" height="18" viewBox="0 0 48 48">
+              <path fill="#EA4335"
+                d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.02 17.74 9.5 24 9.5z" />
+              <path fill="#4285F4"
+                d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+              <path fill="#FBBC05"
+                d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+              <path fill="#34A853"
+                d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-3.52-13.47-8.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+            </svg>
+            使用 Google 帳號登入
+          </button>
+          <p id="cloudMsg" class="muted" style="font-size:.78rem;text-align:center;min-height:1em;"></p>
+        </div>
+        <div id="cloudLoggedIn" style="display:none;flex-direction:column;gap:10px;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-blue" id="btnCloudSync" style="flex:1;">☁️ 立即同步</button>
+            <button class="btn btn-ghost" id="btnCloudFetch" style="flex:1;">📥 從雲端還原</button>
+            <button class="btn btn-danger" id="btnCloudLogout" style="padding:10px 14px;">登出</button>
+          </div>
+          <p id="cloudSyncMsg" class="muted" style="font-size:.78rem;text-align:center;min-height:1em;"></p>
+        </div>
       </div>
-      <div id="cloudLoggedIn" style="display:none;flex-direction:column;gap:10px;">
+
+      <!-- 本地備份 + 重置（雲端備份頁） -->
+      <div class="card" style="margin-bottom:14px;">
+        <div class="sec-title">💾 本地備份 / 還原</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-blue" id="btnCloudSync" style="flex:1;">☁️ 立即同步</button>
-          <button class="btn btn-ghost" id="btnCloudFetch" style="flex:1;">📥 從雲端還原</button>
-          <button class="btn btn-danger" id="btnCloudLogout" style="padding:10px 14px;">登出</button>
+          <button class="btn btn-blue" id="btnExportTop">💾 匯出 JSON</button>
+          <label class="btn btn-amber" style="cursor:pointer;">
+            📂 匯入 JSON<input type="file" accept=".json" id="importFileTop" style="display:none;" />
+          </label>
+          <!-- ★ 重置按鈕（雲端備份頁） -->
+          <button class="btn btn-danger" id="btnReset2">🗑 重置所有資料</button>
         </div>
-        <p id="cloudSyncMsg" class="muted" style="font-size:.78rem;text-align:center;min-height:1em;"></p>
+      </div>
+
+      <div class="card">
+        <div class="sec-title">📋 Firebase 設定說明</div>
+        <ol style="font-size:.82rem;color:var(--muted);line-height:2.2;padding-left:1.2em;">
+          <li>前往 <a href="https://console.firebase.google.com/" target="_blank" style="color:var(--blue);">Firebase
+              Console</a> 建立專案</li>
+          <li>Authentication → Sign-in method → 啟用 Google</li>
+          <li>Firestore Database → 建立資料庫</li>
+          <li>專案設定 → 新增 Web 應用程式 → 複製 Config</li>
+          <li>將 Config 填入 app.js 頂部的 FIREBASE_CONFIG</li>
+        </ol>
       </div>
     </div>
 
-    <!-- 本地備份 + 重置（雲端備份頁） -->
-    <div class="card" style="margin-bottom:14px;">
-      <div class="sec-title">💾 本地備份 / 還原</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-blue" id="btnExportTop">💾 匯出 JSON</button>
-        <label class="btn btn-amber" style="cursor:pointer;">
-          📂 匯入 JSON<input type="file" accept=".json" id="importFileTop" style="display:none;"/>
-        </label>
-        <!-- ★ 重置按鈕（雲端備份頁） -->
-        <button class="btn btn-danger" id="btnReset2">🗑 重置所有資料</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="sec-title">📋 Firebase 設定說明</div>
-      <ol style="font-size:.82rem;color:var(--muted);line-height:2.2;padding-left:1.2em;">
-        <li>前往 <a href="https://console.firebase.google.com/" target="_blank" style="color:var(--blue);">Firebase Console</a> 建立專案</li>
-        <li>Authentication → Sign-in method → 啟用 Google</li>
-        <li>Firestore Database → 建立資料庫</li>
-        <li>專案設定 → 新增 Web 應用程式 → 複製 Config</li>
-        <li>將 Config 填入 app.js 頂部的 FIREBASE_CONFIG</li>
-      </ol>
-    </div>
-  </div>
 
 
-  
-  <!-- ════ PAGE 5: 篩選器 ════ -->
-  <div id="page-screener" class="page">
-    <div class="card" style="margin-bottom:12px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;">
-        <div class="sec-title" style="margin:0;">🧭 條件篩選器</div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <div id="screenAdminStatus" class="screen-admin-status">一般模式｜全掃已鎖定</div>
-          <button class="screen-admin-btn" id="screenAdminEntry" type="button" aria-label="管理員">🛡️</button>
-        </div>
-      </div>
-      <div id="screenAdminTools" class="screen-admin-tools">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-          <div>
-            <div style="font-size:.88rem;font-weight:900;color:#fff;">管理員工具</div>
-            <div class="screen-pdf-note">解鎖後才可顯示與啟用管理員模式，前端仍會在執行流程再次驗證權限。</div>
-          </div>
-          <div>
-            <span class="screen-admin-chip">管理模式</span>
+    <!-- ════ PAGE 5: 篩選器 ════ -->
+    <div id="page-screener" class="page">
+      <div class="card" style="margin-bottom:12px;">
+        <div
+          style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;">
+          <div class="sec-title" style="margin:0;">🧭 條件篩選器</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div id="screenAdminStatus" class="screen-admin-status">一般模式｜全掃已鎖定</div>
+            <button class="screen-admin-btn" id="screenAdminEntry" type="button" aria-label="管理員">🛡️</button>
           </div>
         </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-          <button class="btn btn-blue" type="button" data-admin-act="fullscan">🔓 開啟全掃選項</button>
-          <button class="btn" type="button" data-admin-act="widerange">📈 允許大範圍掃描</button>
-          <button class="btn" type="button" data-admin-act="lockback">🔒 鎖回一般模式</button>
-        </div>
-      </div>
-      <div class="screen-mode-grid">
-        <div>
-          <label class="screen-field-label">篩選資料池</label>
-          <select id="screenUniverse" class="inp">
-            <option value="watchlist">追蹤清單</option>
-            <option value="holdings">持股庫存</option>
-            <option value="union">追蹤 + 持股</option>
-            <option value="custom">自訂清單</option>
-            <option value="allStocks" hidden disabled>全部股票（管理員）</option>
-            <option value="range">代號範圍</option>
-          </select>
-        </div>
-        <div>
-          <label class="screen-field-label">自訂代號清單</label>
-          <textarea id="screenCustomList" class="inp" rows="2" placeholder="輸入代號，以逗號、空白或換行分隔，例如：2330, 2317, 0050" style="width:100%;resize:vertical;"></textarea>
-          <div class="screen-inline-note">只有在「自訂清單」模式下會使用這個欄位。</div>
-        </div>
-      </div>
-      <div class="screen-extra-grid">
-        <div>
-          <label class="screen-field-label">代號起始</label>
-          <input id="screenRangeStart" class="inp" type="number" min="1" max="9999" placeholder="例如 1 或 1101" />
-        </div>
-        <div>
-          <label class="screen-field-label">代號結束</label>
-          <input id="screenRangeEnd" class="inp" type="number" min="1" max="9999" placeholder="例如 3000 或 9999" />
-        </div>
-        <div>
-          <label class="screen-field-label">類別模式</label>
-          <select id="screenCategoryType" class="inp">
-            <option value="none">不指定</option>
-            <option value="industry">官方產業</option>
-            <option value="concept">主流概念</option>
-          </select>
-        </div>
-        <div>
-          <label class="screen-field-label">類別選項</label>
-          <select id="screenCategoryValue" class="inp">
-            <option value="">全部類別</option>
-          </select>
-        </div>
-      </div>
-      <div class="screen-safe-note" style="margin-top:12px;">
-        安全掃描建議：單次 100 檔內最佳，超過 100 檔會先跳出警告並要求確認；超過 150 檔則不執行，以避免請求過多造成延遲、失敗或資料來源限流。
-      </div>
-      <div class="screen-stat" style="margin-top:10px;">
-        <span id="screenPoolHint">目前將使用追蹤清單作為篩選資料池。</span>
-      </div>
-    </div>
-
-    <div class="card" style="margin-bottom:12px;">
-      <div class="sec-title">🎯 簡易篩選條件</div>
-      <div class="screen-grid">
-        <div class="card screen-card" data-screen-filter="buyFit">
-          <div class="screen-card-top"><div class="screen-card-title">適合買進</div><span class="screen-tag buy">買入</span></div>
-          <div class="screen-card-desc">收盤站上 MA20，且綜合評分偏高。</div>
-        </div>
-        <div class="card screen-card" data-screen-filter="sellWatch">
-          <div class="screen-card-top"><div class="screen-card-title">考慮賣出</div><span class="screen-tag sell">賣出</span></div>
-          <div class="screen-card-desc">收盤跌破 MA20，且綜合評分偏弱。</div>
-        </div>
-        <div class="card screen-card" data-screen-filter="volumeSpike">
-          <div class="screen-card-top"><div class="screen-card-title">量能異動</div><span class="screen-tag filter">篩選</span></div>
-          <div class="screen-card-desc">今日成交量大於 5 日均量 1.5 倍。</div>
-        </div>
-        <div class="card screen-card" data-screen-filter="oversold">
-          <div class="screen-card-top"><div class="screen-card-title">超跌反彈</div><span class="screen-tag buy">買入</span></div>
-          <div class="screen-card-desc">RSI(14) 小於 30，觀察是否出現反彈。</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card" style="margin-bottom:12px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-        <div class="sec-title" style="margin:0;">⚙️ 進階篩選</div>
-        <div id="btnToggleScreenAdv" class="screen-adv-toggle">展開進階條件 ▼</div>
-      </div>
-      <div class="screen-adv-panel" id="screenAdvPanel">
-        <div class="screen-adv-grid">
-          <div>
-            <label class="screen-field-label">綜合分數最低</label>
-            <input id="screenMinTotal" class="inp" type="number" min="0" max="100" placeholder="例如 65" />
+        <div id="screenAdminTools" class="screen-admin-tools">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <div>
+              <div style="font-size:.88rem;font-weight:900;color:#fff;">管理員工具</div>
+              <div class="screen-pdf-note">解鎖後才可顯示與啟用管理員模式，前端仍會在執行流程再次驗證權限。</div>
+            </div>
+            <div>
+              <span class="screen-admin-chip">管理模式</span>
+            </div>
           </div>
-          <div>
-            <label class="screen-field-label">基本面分數最低</label>
-            <input id="screenMinFund" class="inp" type="number" min="0" max="100" placeholder="例如 60" />
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+            <button class="btn btn-blue" type="button" data-admin-act="fullscan">🔓 開啟全掃選項</button>
+            <button class="btn" type="button" data-admin-act="widerange">📈 允許大範圍掃描</button>
+            <button class="btn" type="button" data-admin-act="lockback">🔒 鎖回一般模式</button>
           </div>
+        </div>
+        <div class="screen-mode-grid">
           <div>
-            <label class="screen-field-label">RSI 上限</label>
-            <input id="screenMaxRsi" class="inp" type="number" min="0" max="100" placeholder="例如 30" />
-          </div>
-          <div>
-            <label class="screen-field-label">量比最低</label>
-            <input id="screenMinVolRatio" class="inp" type="number" step="0.1" min="0" placeholder="例如 1.5" />
-          </div>
-          <div>
-            <label class="screen-field-label">月營收年增最低%</label>
-            <input id="screenMinRevYoY" class="inp" type="number" step="0.1" placeholder="例如 10" />
-          </div>
-          <div>
-            <label class="screen-field-label">近四季 EPS 最低</label>
-            <input id="screenMinEPS" class="inp" type="number" step="0.01" placeholder="例如 8" />
-          </div>
-          <div>
-            <label class="screen-field-label">結果排序</label>
-            <select id="screenSortBy" class="inp">
-              <option value="totalDesc">綜合分數高到低</option>
-              <option value="rsiAsc">RSI 低到高</option>
-              <option value="volDesc">量比高到低</option>
-              <option value="revDesc">營收年增高到低</option>
+            <label class="screen-field-label">篩選資料池</label>
+            <select id="screenUniverse" class="inp">
+              <option value="watchlist">追蹤清單</option>
+              <option value="holdings">持股庫存</option>
+              <option value="union">追蹤 + 持股</option>
+              <option value="custom">自訂清單</option>
+              <option value="allStocks" hidden disabled>全部股票（管理員）</option>
+              <option value="range">代號範圍</option>
             </select>
           </div>
           <div>
-            <label class="screen-field-label">最多顯示筆數</label>
-            <input id="screenLimit" class="inp" type="number" min="5" max="100" step="1" value="20" />
+            <label class="screen-field-label">自訂代號清單</label>
+            <textarea id="screenCustomList" class="inp" rows="2" placeholder="輸入代號，以逗號、空白或換行分隔，例如：2330, 2317, 0050"
+              style="width:100%;resize:vertical;"></textarea>
+            <div class="screen-inline-note">只有在「自訂清單」模式下會使用這個欄位。</div>
+          </div>
+        </div>
+        <div class="screen-extra-grid">
+          <div>
+            <label class="screen-field-label">代號起始</label>
+            <input id="screenRangeStart" class="inp" type="number" min="1" max="9999" placeholder="例如 1 或 1101" />
+          </div>
+          <div>
+            <label class="screen-field-label">代號結束</label>
+            <input id="screenRangeEnd" class="inp" type="number" min="1" max="9999" placeholder="例如 3000 或 9999" />
+          </div>
+          <div>
+            <label class="screen-field-label">類別模式</label>
+            <select id="screenCategoryType" class="inp">
+              <option value="none">不指定</option>
+              <option value="industry">官方產業</option>
+              <option value="concept">主流概念</option>
+            </select>
+          </div>
+          <div>
+            <label class="screen-field-label">類別選項</label>
+            <select id="screenCategoryValue" class="inp">
+              <option value="">全部類別</option>
+            </select>
+          </div>
+        </div>
+        <div class="screen-safe-note" style="margin-top:12px;">
+          安全掃描建議：單次 100 檔內最佳，超過 100 檔會先跳出警告並要求確認；超過 150 檔則不執行，以避免請求過多造成延遲、失敗或資料來源限流。
+        </div>
+        <div class="screen-stat" style="margin-top:10px;">
+          <span id="screenPoolHint">目前將使用追蹤清單作為篩選資料池。</span>
+        </div>
+      </div>
+
+      <!-- ── 簡易篩選條件（指示燈模式）── -->
+      <div class="card" style="margin-bottom:12px;">
+        <div class="sec-title">🎯 簡易篩選條件</div>
+        <div class="screen-grid">
+          <div class="card screen-card indicator-mode" data-screen-filter="buyFit">
+            <div class="screen-card-top">
+              <div class="screen-card-title">適合買進</div><span class="screen-tag buy">買入</span>
+            </div>
+            <div class="screen-card-desc">收盤站上 MA20，且綜合評分偏高。</div>
+          </div>
+          <div class="card screen-card indicator-mode" data-screen-filter="sellWatch">
+            <div class="screen-card-top">
+              <div class="screen-card-title">考慮賣出</div><span class="screen-tag sell">賣出</span>
+            </div>
+            <div class="screen-card-desc">收盤跌破 MA20，且綜合評分偏弱。</div>
+          </div>
+          <div class="card screen-card indicator-mode" data-screen-filter="volumeSpike">
+            <div class="screen-card-top">
+              <div class="screen-card-title">量能異動</div><span class="screen-tag filter">篩選</span>
+            </div>
+            <div class="screen-card-desc">今日成交量大於 5 日均量 1.5 倍。</div>
+          </div>
+          <div class="card screen-card indicator-mode" data-screen-filter="oversold">
+            <div class="screen-card-top">
+              <div class="screen-card-title">超跌反彈</div><span class="screen-tag buy">買入</span>
+            </div>
+            <div class="screen-card-desc">RSI(14) 小於 30，觀察是否出現反彈。</div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- 操作步驟 wizard 佔位符 (JS 會填入) -->
-    <div class="card" id="screenInteractiveWizard" style="margin-bottom:12px;"></div>
-
-    <!-- 掃描進度卡 -->
-    <div class="card" id="screenProgressCard" style="margin-bottom:12px;display:none;">
-      <div class="sec-title" style="margin:0 0 8px 0;">⏳ 掃描進度</div>
-      <div id="screenProgressText" class="muted" style="margin-bottom:8px;font-size:.88rem;">等待開始</div>
-      <div style="height:10px;border-radius:999px;background:#0d1117;border:1px solid rgba(96,165,250,.2);overflow:hidden;">
-        <div id="screenProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#2563eb,#22c55e);transition:width .25s;border-radius:999px;"></div>
-      </div>
-      <div id="screenProgressMeta" class="muted" style="margin-top:6px;font-size:.76rem;">0 / 0</div>
-    </div>
-
-    <!-- 操作按鈕列 (在操作步驟下方) -->
-    <div id="screenActionRow" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-      <button class="btn btn-blue" id="btnRunScreener" style="padding:12px 24px;font-size:.96rem;">⚡ 開始篩選</button>
-      <button class="btn" id="btnRunDeepScan" style="padding:12px 22px;font-size:.96rem;background:#21262d;color:#6b7280;border:1px solid var(--border);cursor:not-allowed;" disabled>🧠 深度篩選（結果需≥2筆）</button>
-      <button class="btn" id="btnStopScreener" style="padding:12px 22px;display:none;">⏹️ 停止掃描</button>
-      <button class="btn" id="btnExportScreenPdf" style="padding:12px 22px;">🧾 匯出 PDF</button>
-      <button class="btn" id="btnClearScreener" style="padding:12px 22px;">🗑️ 一鍵清除</button>
-    </div>
-
-    <div class="card" id="screenResultCard" style="margin-bottom:12px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-        <div class="sec-title" style="margin:0;">📋 篩選結果</div>
-        <div id="screenRunStatus" class="muted" style="font-size:.78rem;">尚未開始篩選</div>
-      </div>
-      <div id="screenResultSummary" class="screen-stat" style="margin:10px 0 12px;">尚未開始篩選。</div>
-      <div class="tbl-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>代號 / 名稱</th><th>綜合分數</th><th>技術 / 基本面</th><th>現價 / MA20</th><th>RSI / 量比</th><th>月營收年增 / EPS</th><th></th>
-            </tr>
-          </thead>
-          <tbody id="screenResultBody"></tbody>
-        </table>
-      </div>
-      <div id="screenResultEmpty" class="screen-empty">尚無篩選結果</div>
-    </div>
-
-    <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-        <div class="sec-title" style="margin:0;">🕘 篩選紀錄</div>
-        <button class="btn-xs btn-xs-gray" id="btnClearScreenHistory">清除紀錄</button>
-      </div>
-      <div id="screenHistoryList" style="margin-top:12px;"></div>
-    </div>
-  </div>
-
-  <!-- ════ PAGE 6: AI 診斷報告 (v3.3) ════ -->
-  <div id="page-aiReport" class="page">
-    <div class="card" style="margin-bottom:12px;">
-      <div class="sec-title" id="aiReportTitle">🤖 AI 診斷報告</div>
-      <div style="display:flex;gap:8px;">
-        <div class="symbol-field" style="flex:1;"><input list="aiSymbols" id="aiSymbol" class="inp" placeholder="輸入代號 e.g. 2330 / 0050" style="flex:1;" autocomplete="off"/><div id="aiSymbolHint" class="symbol-inline-name strong">請輸入股票代號</div><div id="aiSymbolSuggest" class="symbol-suggest"></div></div>
-        <datalist id="aiSymbols"></datalist>
-        <button class="btn btn-blue" id="btnGenAIReport" style="padding:9px 18px;font-size:.9rem;">🔍 分析</button>
-      </div>
-      <div id="aiQueryFocus" class="ai-query-focus"></div>
-    </div>
-    <div id="aiReportLoading" style="display:none;text-align:center;padding:40px 0;color:var(--muted);">
-      <div class="mini-loader" style="width:24px;height:24px;border-width:3px;margin:0 auto 12px;display:block;"></div>
-      <div>載入歷史資料中，請稍候…</div>
-    </div>
-    <div id="aiReportOutput" style="display:none;">
-      <!-- 走勢圖 -->
+      <!-- ── 進階篩選 ── -->
       <div class="card" style="margin-bottom:12px;">
-        <div class="sec-title" id="aiChartTitle">📈 近期走勢圖（近60日）</div>
-        <canvas id="aiTrendCanvas" style="width:100%;height:180px;display:block;"></canvas>
-        <div style="display:flex;gap:16px;font-size:.7rem;color:var(--muted);margin-top:6px;padding:0 4px;">
-          <span style="color:#60a5fa;">─ 收盤價</span>
-          <span style="color:#fbbf24;">- - MA5（週線）</span>
-          <span style="color:#34d399;">─ MA20（月線）</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div class="sec-title" style="margin:0;">⚙️ 進階篩選</div>
+          <div id="btnToggleScreenAdv" class="screen-adv-toggle">展開進階條件 ▼</div>
+        </div>
+        <div class="screen-adv-panel" id="screenAdvPanel">
+          <div class="screen-adv-grid">
+            <div>
+              <label class="screen-field-label">綜合分數最低</label>
+              <input id="screenMinTotal" class="inp" type="number" min="0" max="100" placeholder="例如 65" />
+            </div>
+            <div>
+              <label class="screen-field-label">基本面分數最低</label>
+              <input id="screenMinFund" class="inp" type="number" min="0" max="100" placeholder="例如 60" />
+            </div>
+            <div>
+              <label class="screen-field-label">RSI 上限</label>
+              <input id="screenMaxRsi" class="inp" type="number" min="0" max="100" placeholder="例如 30" />
+            </div>
+            <div>
+              <label class="screen-field-label">量比最低</label>
+              <input id="screenMinVolRatio" class="inp" type="number" step="0.1" min="0" placeholder="例如 1.5" />
+            </div>
+            <div>
+              <label class="screen-field-label">月營收年增最低%</label>
+              <input id="screenMinRevYoY" class="inp" type="number" step="0.1" placeholder="例如 10" />
+            </div>
+            <div>
+              <label class="screen-field-label">近四季 EPS 最低</label>
+              <input id="screenMinEPS" class="inp" type="number" step="0.01" placeholder="例如 8" />
+            </div>
+            <div>
+              <label class="screen-field-label">結果排序</label>
+              <select id="screenSortBy" class="inp">
+                <option value="totalDesc">綜合分數高到低</option>
+                <option value="rsiAsc">RSI 低到高</option>
+                <option value="volDesc">量比高到低</option>
+                <option value="revDesc">營收年增高到低</option>
+              </select>
+            </div>
+            <div>
+              <label class="screen-field-label">最多顯示筆數</label>
+              <input id="screenLimit" class="inp" type="number" min="5" max="100" step="1" value="20" />
+            </div>
+          </div>
         </div>
       </div>
-      <!-- 建議卡片 -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-        <div class="card ai-rec-card" id="aiHolderCard">
-          <div class="ai-rec-title" id="aiHolderTitle">💼 賣出建議</div>
-          <div class="ai-rec-tag" id="aiHolderTag">—</div>
-          <div class="ai-rec-body" id="aiHolderAdvice">—</div>
+
+      <!-- ── 操作步驟 ── -->
+      <div id="screenInteractiveWizard" class="card" style="margin-bottom:12px;"></div>
+
+      <!-- ── 動作按鈕列（移到操作步驟之下） ── -->
+      <div class="screen-action-row">
+        <button class="btn btn-blue" id="btnRunScreener" style="padding:12px 24px;font-size:.96rem;">⚡ 開始篩選</button>
+        <button class="btn" id="btnRunDeepScan"
+          style="padding:12px 22px;background:#166534;color:#fff;display:none;">🧠 深度篩選</button>
+        <button class="btn" id="btnExportScreenPdf" style="padding:12px 22px;">🧾 匯出 PDF</button>
+        <button class="btn" id="btnClearScreener" style="padding:12px 22px;">🗑️ 一鍵清除</button>
+      </div>
+      <!-- hidden legacy stop button -->
+      <button id="btnStopScreener" style="display:none;"></button>
+
+      <!-- ── 掃描進度卡 ── -->
+      <div id="screenProgressCard" class="screen-progress-card">
+        <div class="screen-progress-header">
+          <div>
+            <span class="screen-progress-spinner"></span>
+            <span id="screenProgressText" class="screen-progress-text">準備掃描…</span>
+          </div>
+          <span id="screenProgressMeta" class="screen-progress-meta">0 / 0</span>
         </div>
-        <div class="card ai-rec-card" id="aiEntryCard">
-          <div class="ai-rec-title" id="aiEntryTitle">🛒 買入建議</div>
-          <div class="ai-rec-tag" id="aiEntryTag">—</div>
-          <div class="ai-rec-body" id="aiEntryAdvice">—</div>
-        </div>
-      </div>
-      <!-- 技術分析三段 -->
-      <div class="card" style="margin-bottom:10px;">
-        <div class="sec-title">📊 綜合技術判定</div>
-        <div id="aiTechSummary" class="ai-section-body">—</div>
-      </div>
-      <div class="card" style="margin-bottom:10px;">
-        <div class="sec-title">🕯 K線型態解析</div>
-        <div id="aiCandlePattern" class="ai-section-body">—</div>
-      </div>
-      <div class="card" style="margin-bottom:10px;">
-        <div class="sec-title">⚖️ 量價關係心法</div>
-        <div id="aiVolumePrice" class="ai-section-body">—</div>
-      </div>
-      <!-- 指標數值條 -->
-      <div class="card ai-indicator-row" style="margin-bottom:10px;">
-        <div id="aiIndicatorBar">—</div>
-      </div>
-      <div class="ai-fund-grid">
-        <div class="card">
-          <div class="sec-title">🏛 基本面評分</div>
-          <div id="aiFundScore" class="ai-fund-score">—</div>
-          <div id="aiFundSummary" class="ai-fund-sub">—</div>
-        </div>
-        <div class="card">
-          <div class="sec-title">💰 EPS / 體質</div>
-          <div id="aiFundMetrics" class="ai-fund-list">—</div>
-        </div>
-        <div class="card">
-          <div class="sec-title">📰 訂單 / 利多</div>
-          <div id="aiNewsSummary" class="ai-fund-list">—</div>
-          <div id="aiNewsList" class="ai-news-list" style="margin-top:8px;"></div>
+        <div class="screen-progress-bar-wrap">
+          <div id="screenProgressBar" class="screen-progress-bar" style="width:0%;"></div>
         </div>
       </div>
-      <p style="font-size:.65rem;color:#6b7280;text-align:center;padding:8px 4px;">
-        ⚠️ 以上建議僅供參考，基於技術分析計算，不構成投資建議。投資有風險，請自行評估。
-      </p>
+
+      <!-- ── 篩選結果 ── -->
+      <div class="card" id="screenResultCard" style="margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div class="sec-title" style="margin:0;">📋 篩選結果</div>
+          <div id="screenRunStatus" class="muted" style="font-size:.78rem;">尚未開始篩選</div>
+        </div>
+        <div id="screenResultSummary" class="screen-stat" style="margin:10px 0 12px;">尚未開始篩選。</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>代號 / 名稱</th>
+                <th>綜合分數</th>
+                <th>技術 / 基本面</th>
+                <th>現價 / MA20</th>
+                <th>RSI / 量比</th>
+                <th>月營收年增 / EPS</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="screenResultBody"></tbody>
+          </table>
+        </div>
+        <div id="screenResultEmpty" class="screen-empty">尚無篩選結果</div>
+      </div>
+
+      <!-- ── 篩選紀錄 ── -->
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div class="sec-title" style="margin:0;">🕘 篩選紀錄</div>
+          <button class="btn-xs btn-xs-gray" id="btnClearScreenHistory">清除紀錄</button>
+        </div>
+        <div id="screenHistoryList" style="margin-top:12px;"></div>
+      </div>
     </div>
-  </div>
-</main>
 
-<!-- ── Bottom Nav（手機）── -->
-<nav id="bottomNav">
-  <button class="nav-item active" data-page="overview"><span class="icon">🏠</span>總覽</button>
-  <button class="nav-item" data-page="market"><span class="icon">📡</span>行情</button>
-  <button class="nav-item" data-page="portfolio"><span class="icon">📦</span>帳務</button>
-  <button class="nav-item" data-page="trade"><span class="icon">💹</span>交易</button>
-  <button class="nav-item" data-page="screener"><span class="icon">🧭</span><span>篩選器</span></button>
-  <button class="nav-item" data-page="aiReport"><span class="icon">🤖</span>AI</button>
-  <button class="nav-item" data-page="cloud"><span class="icon">☁️</span>雲端</button>
-</nav>
+    <!-- ════ PAGE 6: AI 診斷報告 (v3.3) ════ -->
+    <div id="page-aiReport" class="page">
+      <div class="card" style="margin-bottom:12px;">
+        <div class="sec-title" id="aiReportTitle">🤖 AI 診斷報告</div>
+        <div style="display:flex;gap:8px;">
+          <div class="symbol-field" style="flex:1;"><input list="aiSymbols" id="aiSymbol" class="inp"
+              placeholder="輸入代號 e.g. 2330 / 0050" style="flex:1;" autocomplete="off" />
+            <div id="aiSymbolHint" class="symbol-inline-name strong">請輸入股票代號</div>
+            <div id="aiSymbolSuggest" class="symbol-suggest"></div>
+          </div>
+          <datalist id="aiSymbols"></datalist>
+          <button class="btn btn-blue" id="btnGenAIReport" style="padding:9px 18px;font-size:.9rem;">🔍 分析</button>
+        </div>
+        <div id="aiQueryFocus" class="ai-query-focus"></div>
+      </div>
+      <div id="aiReportLoading" style="display:none;text-align:center;padding:40px 0;color:var(--muted);">
+        <div class="mini-loader" style="width:24px;height:24px;border-width:3px;margin:0 auto 12px;display:block;">
+        </div>
+        <div>載入歷史資料中，請稍候…</div>
+      </div>
+      <div id="aiReportOutput" style="display:none;">
+        <!-- 走勢圖 -->
+        <div class="card" style="margin-bottom:12px;">
+          <div class="sec-title" id="aiChartTitle">📈 近期走勢圖（近60日）</div>
+          <canvas id="aiTrendCanvas" style="width:100%;height:180px;display:block;"></canvas>
+          <div style="display:flex;gap:16px;font-size:.7rem;color:var(--muted);margin-top:6px;padding:0 4px;">
+            <span style="color:#60a5fa;">─ 收盤價</span>
+            <span style="color:#fbbf24;">- - MA5（週線）</span>
+            <span style="color:#34d399;">─ MA20（月線）</span>
+          </div>
+        </div>
+        <!-- 建議卡片 -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div class="card ai-rec-card" id="aiHolderCard">
+            <div class="ai-rec-title" id="aiHolderTitle">💼 賣出建議</div>
+            <div class="ai-rec-tag" id="aiHolderTag">—</div>
+            <div class="ai-rec-body" id="aiHolderAdvice">—</div>
+          </div>
+          <div class="card ai-rec-card" id="aiEntryCard">
+            <div class="ai-rec-title" id="aiEntryTitle">🛒 買入建議</div>
+            <div class="ai-rec-tag" id="aiEntryTag">—</div>
+            <div class="ai-rec-body" id="aiEntryAdvice">—</div>
+          </div>
+        </div>
+        <!-- 技術分析三段 -->
+        <div class="card" style="margin-bottom:10px;">
+          <div class="sec-title">📊 綜合技術判定</div>
+          <div id="aiTechSummary" class="ai-section-body">—</div>
+        </div>
+        <div class="card" style="margin-bottom:10px;">
+          <div class="sec-title">🕯 K線型態解析</div>
+          <div id="aiCandlePattern" class="ai-section-body">—</div>
+        </div>
+        <div class="card" style="margin-bottom:10px;">
+          <div class="sec-title">⚖️ 量價關係心法</div>
+          <div id="aiVolumePrice" class="ai-section-body">—</div>
+        </div>
+        <!-- 指標數值條 -->
+        <div class="card ai-indicator-row" style="margin-bottom:10px;">
+          <div id="aiIndicatorBar">—</div>
+        </div>
+        <div class="ai-fund-grid">
+          <div class="card">
+            <div class="sec-title">🏛 基本面評分</div>
+            <div id="aiFundScore" class="ai-fund-score">—</div>
+            <div id="aiFundSummary" class="ai-fund-sub">—</div>
+          </div>
+          <div class="card">
+            <div class="sec-title">💰 EPS / 體質</div>
+            <div id="aiFundMetrics" class="ai-fund-list">—</div>
+          </div>
+          <div class="card">
+            <div class="sec-title">📰 訂單 / 利多</div>
+            <div id="aiNewsSummary" class="ai-fund-list">—</div>
+            <div id="aiNewsList" class="ai-news-list" style="margin-top:8px;"></div>
+          </div>
+        </div>
+        <p style="font-size:.65rem;color:#6b7280;text-align:center;padding:8px 4px;">
+          ⚠️ 以上建議僅供參考，基於技術分析計算，不構成投資建議。投資有風險，請自行評估。
+        </p>
+      </div>
+    </div>
+  </main>
 
-<div id="toast"></div>
+  <!-- ── Bottom Nav（手機）── -->
+  <nav id="bottomNav">
+    <button class="nav-item active" data-page="overview"><span class="icon">🏠</span>總覽</button>
+    <button class="nav-item" data-page="market"><span class="icon">📡</span>行情</button>
+    <button class="nav-item" data-page="portfolio"><span class="icon">📦</span>帳務</button>
+    <button class="nav-item" data-page="trade"><span class="icon">💹</span>交易</button>
+    <button class="nav-item" data-page="screener"><span class="icon">🧭</span><span>篩選器</span></button>
+    <button class="nav-item" data-page="aiReport"><span class="icon">🤖</span>AI</button>
+    <button class="nav-item" data-page="cloud"><span class="icon">☁️</span>雲端</button>
+  </nav>
 
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <div id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
-<!-- App -->
-<script src="app.v3.9.2-2.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
-<!-- SPA 導覽 -->
-<script>
-(function(){
-  var cur = 'overview';
-  function go(page){
-    if(page===cur) return;
-    cur = page;
-    document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
-    var t = document.getElementById('page-'+page);
-    if(t) t.classList.add('active');
-    document.querySelectorAll('#bottomNav .nav-item, #sideNav .side-item').forEach(function(b){
-      b.classList.toggle('active', b.dataset.page===page);
-    });
-    if(typeof window.__onPageEnter==='function') window.__onPageEnter(page);
-  }
-  document.querySelectorAll('#bottomNav .nav-item, #sideNav .side-item').forEach(function(b){
-    b.addEventListener('click', function(){ go(b.dataset.page); });
-  });
-  // btnReset2（雲端備份頁重置）
-  document.addEventListener('DOMContentLoaded', function(){
-    var r2 = document.getElementById('btnReset2');
-    if(r2) r2.addEventListener('click', function(){
-      if(typeof resetAllData==='function') resetAllData();
-    });
-  });
-  window.__navigate = go;
-  window.__currentPage = function(){ return cur; };
-})();
-</script>
+  <!-- App -->
+  <script src="app.js?v=3.9.15"></script>
+
+  <!-- SPA 導覽 -->
+  <script>
+    (function () {
+      var cur = 'overview';
+      function go(page) {
+        if (page === cur) return;
+        cur = page;
+        document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('active'); });
+        var t = document.getElementById('page-' + page);
+        if (t) t.classList.add('active');
+        document.querySelectorAll('#bottomNav .nav-item, #sideNav .side-item').forEach(function (b) {
+          b.classList.toggle('active', b.dataset.page === page);
+        });
+        if (typeof window.__onPageEnter === 'function') window.__onPageEnter(page);
+      }
+      document.querySelectorAll('#bottomNav .nav-item, #sideNav .side-item').forEach(function (b) {
+        b.addEventListener('click', function () { go(b.dataset.page); });
+      });
+      // btnReset2（雲端備份頁重置）
+      document.addEventListener('DOMContentLoaded', function () {
+        var r2 = document.getElementById('btnReset2');
+        if (r2) r2.addEventListener('click', function () {
+          if (typeof resetAllData === 'function') resetAllData();
+        });
+      });
+      window.__navigate = go;
+      window.__currentPage = function () { return cur; };
+    })();
+  </script>
 
   <!-- ════ 投資模擬試算 Modal (v3.2) ════ -->
   <div id="scenarioModal" role="dialog" aria-modal="true">
@@ -1016,77 +2764,75 @@
       <h2>📊 投資模擬試算</h2>
       <div style="margin-bottom:10px;">
         <div class="scenario-label">股票代號</div>
-        <div class="symbol-field"><input list="scenarioSymbols" id="scenarioSymbol" class="scenario-inp" placeholder="e.g. 2330" autocomplete="off"/><div id="scenarioSymbolName" class="symbol-inline-name strong">請輸入股票代號</div><div id="scenarioSymbolSuggest" class="symbol-suggest"></div></div>
+        <div class="symbol-field"><input list="scenarioSymbols" id="scenarioSymbol" class="scenario-inp"
+            placeholder="e.g. 2330" autocomplete="off" />
+          <div id="scenarioSymbolName" class="symbol-inline-name strong">請輸入股票代號</div>
+          <div id="scenarioSymbolSuggest" class="symbol-suggest"></div>
+        </div>
         <datalist id="scenarioSymbols"></datalist>
         <div style="margin-top:8px;">
           <div class="scenario-label">持股庫存快速帶入</div>
           <select id="scenarioHoldingSelect" class="scenario-inp">
             <option value="">請選擇持股庫存（可自動帶入買入價與股數）</option>
           </select>
-          <div id="scenarioHoldingHint" class="symbol-inline-name" style="margin-top:6px;">若選擇已持有股票，系統會自動帶入均價與股數，你只需輸入賣出價即可試算。</div>
+          <div id="scenarioHoldingHint" class="symbol-inline-name" style="margin-top:6px;">
+            若選擇已持有股票，系統會自動帶入均價與股數，你只需輸入賣出價即可試算。</div>
         </div>
       </div>
       <div class="scenario-row">
         <div>
           <div class="scenario-label">基本設定 — 預計買入價</div>
-          <input id="scenarioEntryPrice" class="scenario-inp" type="number" step="0.01" placeholder="e.g. 550"/>
+          <input id="scenarioEntryPrice" class="scenario-inp" type="number" step="0.01" placeholder="e.g. 550" />
         </div>
         <div>
           <div class="scenario-label">預計股數</div>
-          <input id="scenarioShares" class="scenario-inp" type="number" min="1" placeholder="e.g. 1000"/>
+          <input id="scenarioShares" class="scenario-inp" type="number" min="1" placeholder="e.g. 1000" />
         </div>
       </div>
       <div style="margin-bottom:12px;">
         <div class="scenario-label">目標賣出價</div>
-        <input id="scenarioExitPrice" class="scenario-inp" type="number" step="0.01" placeholder="e.g. 600"/>
+        <input id="scenarioExitPrice" class="scenario-inp" type="number" step="0.01" placeholder="e.g. 600" />
       </div>
       <div class="scenario-result-grid">
-        <div><div class="s-stat-label">預計投入成本</div><div id="scenarioBuyCost" class="s-stat-val">—</div></div>
-        <div><div class="s-stat-label">預計獲利金額</div><div id="scenarioSellNet" class="s-stat-val">—</div></div>
+        <div>
+          <div class="s-stat-label">預計投入成本</div>
+          <div id="scenarioBuyCost" class="s-stat-val">—</div>
+        </div>
+        <div>
+          <div class="s-stat-label">預計獲利金額</div>
+          <div id="scenarioSellNet" class="s-stat-val">—</div>
+        </div>
         <div class="s-profit-block">
-          <div class="s-stat-label" style="margin-bottom:4px;">預計淨獲利 <span style="font-size:.62rem;color:#6b7280;">① 已扣除所有稅費</span></div>
+          <div class="s-stat-label" style="margin-bottom:4px;">預計淨獲利 <span style="font-size:.62rem;color:#6b7280;">①
+              已扣除所有稅費</span></div>
           <div id="scenarioProfit" class="s-profit-big">—</div>
           <div id="scenarioRoi" class="s-roi">—</div>
         </div>
       </div>
-      <div class="scenario-bar-wrap"><div id="scenarioBar" class="scenario-bar" style="--bar-pct:0%;"></div></div>
+      <div class="scenario-bar-wrap">
+        <div id="scenarioBar" class="scenario-bar" style="--bar-pct:0%;"></div>
+      </div>
       <p id="scenarioFeeNote" class="scenario-fee-note">—</p>
       <button class="btn-scenario-apply" id="btnApplyScenario" disabled>以此條件下單</button>
     </div>
   </div>
 
-<div id="screenAdminModal" class="screen-modal-backdrop" aria-hidden="true">
-  <div class="screen-modal" role="dialog" aria-modal="true" aria-labelledby="screenAdminModalTitle">
-    <div id="screenAdminModalTitle" class="screen-modal-title">🛡️ 管理員驗證</div>
-    <div class="screen-modal-sub">輸入管理員密碼後，系統會以 SHA-256 雜湊比對驗證，通過後才會顯示管理員專用控制項。</div>
-    <input id="screenAdminPassword" class="inp" type="password" placeholder="請輸入管理員密碼" autocomplete="current-password" />
-    <div id="screenAdminModalMsg" class="screen-modal-msg"></div>
-    <div class="screen-modal-actions">
-      <button class="btn" type="button" id="btnScreenAdminCancel">取消</button>
-      <button class="btn btn-blue" type="button" id="btnScreenAdminSubmit">驗證並解鎖</button>
+  <div id="screenAdminModal" class="screen-modal-backdrop" aria-hidden="true">
+    <div class="screen-modal" role="dialog" aria-modal="true" aria-labelledby="screenAdminModalTitle">
+      <div id="screenAdminModalTitle" class="screen-modal-title">🛡️ 管理員驗證</div>
+      <div class="screen-modal-sub">輸入管理員密碼後，系統會以 SHA-256 雜湊比對驗證，通過後才會顯示管理員專用控制項。</div>
+      <input id="screenAdminPassword" class="inp" type="password" placeholder="請輸入管理員密碼"
+        autocomplete="current-password" />
+      <div id="screenAdminModalMsg" class="screen-modal-msg"></div>
+      <div class="screen-modal-actions">
+        <button class="btn" type="button" id="btnScreenAdminCancel">取消</button>
+        <button class="btn btn-blue" type="button" id="btnScreenAdminSubmit">驗證並解鎖</button>
+      </div>
     </div>
   </div>
-</div>
 
-<script>
-(function(){
-  document.addEventListener('DOMContentLoaded',function(){
-    var d=document.createElement('div');
-    d.style.cssText='position:fixed;right:10px;bottom:70px;z-index:99999;background:#111827;color:#4ade80;border:1px solid rgba(74,222,128,.3);padding:4px 10px;border-radius:999px;font:11px monospace';
-    d.textContent='✓ app.v3.9.2-2.js / v3.9.14';
-    document.body.appendChild(d);
-  });
-})();
-</script>
-<script>
-(function(){
-  document.addEventListener('DOMContentLoaded',function(){
-    var d=document.createElement('div');d.id='v3914-debug-badge';
-    d.style.cssText='position:fixed;right:10px;bottom:68px;z-index:99999;background:#0d1117;color:#4ade80;border:1px solid rgba(74,222,128,.3);padding:3px 10px;border-radius:999px;font:11px monospace;pointer-events:none;';
-    d.textContent='✓ app.v3.9.2-2.js v3.9.14';
-    document.body.appendChild(d);
-  });
-})();
-</script>
+  <div id="screenWizardFixMarker" style="display:none">v3.9.15-wizard-fix</div>
+
 </body>
+
 </html>
