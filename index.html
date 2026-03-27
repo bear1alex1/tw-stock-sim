@@ -226,7 +226,10 @@
     .screen-card{cursor:pointer;transition:all .2s ease;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,#202b3d 0%,#1a2332 100%);box-shadow:0 10px 22px rgba(0,0,0,.12);min-height:122px;position:relative;overflow:hidden;}
     .screen-card::before{content:'';position:absolute;inset:0 auto 0 0;width:4px;background:linear-gradient(180deg,rgba(96,165,250,.0),rgba(96,165,250,.65),rgba(96,165,250,0));opacity:.6;}
     .screen-card:hover{border-color:#4f78c2;transform:translateY(-2px);box-shadow:0 16px 28px rgba(0,0,0,.18);}
-    .screen-card.active{border-color:#60a5fa;box-shadow:0 0 0 1px rgba(96,165,250,.35) inset,0 14px 30px rgba(0,0,0,.22);background:linear-gradient(180deg,#243550,#1a2536);}
+    .screen-card.active{border-color:#7fb5ff;box-shadow:0 0 0 2px rgba(96,165,250,.45) inset,0 0 0 1px rgba(255,255,255,.05),0 16px 34px rgba(56,139,253,.22);background:linear-gradient(180deg,#28405f,#1d2c42);transform:translateY(-2px) scale(1.015);}
+    .screen-card.active::after{content:"✓ 已選取";position:absolute;right:12px;bottom:10px;padding:4px 8px;border-radius:999px;font-size:.68rem;font-weight:900;background:rgba(96,165,250,.18);color:#cfe4ff;border:1px solid rgba(96,165,250,.35);letter-spacing:.04em;}
+    .screen-card.active .screen-card-title{color:#ffffff;text-shadow:0 0 18px rgba(96,165,250,.12);}
+    .screen-card.active .screen-card-desc{color:#dbeafe;}
     .screen-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px;}
     .screen-card-title{font-size:1.36rem;font-weight:900;color:#fff;letter-spacing:.3px;}
     .screen-card-desc{font-size:.8rem;color:#aebed8;line-height:1.7;}
@@ -263,6 +266,15 @@
     @media(max-width:1100px){.screen-grid,.screen-adv-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
     @media(max-width:700px){.screen-grid,.screen-adv-grid{grid-template-columns:1fr;}}
 
+    .screen-mode-grid{display:grid;grid-template-columns:1.1fr 1.4fr;gap:12px;align-items:end;}
+    .screen-extra-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:12px;}
+    .screen-safe-note{padding:11px 12px;border:1px dashed rgba(96,165,250,.28);border-radius:10px;background:rgba(56,139,253,.06);color:#bfd8ff;font-size:.78rem;line-height:1.65;}
+    .screen-inline-note{font-size:.74rem;color:#8fb3e8;line-height:1.5;margin-top:6px;}
+    .screen-input-soft-disabled{opacity:.5;pointer-events:none;}
+    @media(max-width:1100px){.screen-mode-grid,.screen-extra-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+    @media(max-width:700px){.screen-mode-grid,.screen-extra-grid{grid-template-columns:1fr;}}
+
+
   </style>
 </head>
 <body>
@@ -273,7 +285,7 @@
     <span style="font-size:1.2rem;">📈</span>
     <div>
       <div style="font-weight:800;color:var(--text);font-size:.92rem;line-height:1.2;">
-        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.8.1</span>
+        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.8.2</span>
       </div>
       <div id="lastSaved" style="font-size:.65rem;color:#555;line-height:1.2;">最後儲存：—</div>
     </div>
@@ -627,7 +639,7 @@
   <div id="page-screener" class="page">
     <div class="card" style="margin-bottom:12px;">
       <div class="sec-title">🧭 條件篩選器</div>
-      <div style="display:grid;grid-template-columns:1.1fr 1.4fr;gap:12px;align-items:end;">
+      <div class="screen-mode-grid">
         <div>
           <label class="screen-field-label">篩選資料池</label>
           <select id="screenUniverse" class="inp">
@@ -635,12 +647,42 @@
             <option value="holdings">持股庫存</option>
             <option value="union">追蹤 + 持股</option>
             <option value="custom">自訂清單</option>
+            <option value="allStocks">全部股票</option>
+            <option value="range">代號範圍</option>
           </select>
         </div>
         <div>
           <label class="screen-field-label">自訂代號清單</label>
           <textarea id="screenCustomList" class="inp" rows="2" placeholder="輸入代號，以逗號、空白或換行分隔，例如：2330, 2317, 0050" style="width:100%;resize:vertical;"></textarea>
+          <div class="screen-inline-note">只有在「自訂清單」模式下會使用這個欄位。</div>
         </div>
+      </div>
+      <div class="screen-extra-grid">
+        <div>
+          <label class="screen-field-label">代號起始</label>
+          <input id="screenRangeStart" class="inp" type="number" min="1" max="9999" placeholder="例如 1 或 1101" />
+        </div>
+        <div>
+          <label class="screen-field-label">代號結束</label>
+          <input id="screenRangeEnd" class="inp" type="number" min="1" max="9999" placeholder="例如 3000 或 9999" />
+        </div>
+        <div>
+          <label class="screen-field-label">類別模式</label>
+          <select id="screenCategoryType" class="inp">
+            <option value="none">不指定</option>
+            <option value="industry">官方產業</option>
+            <option value="concept">主流概念</option>
+          </select>
+        </div>
+        <div>
+          <label class="screen-field-label">類別選項</label>
+          <select id="screenCategoryValue" class="inp">
+            <option value="">全部類別</option>
+          </select>
+        </div>
+      </div>
+      <div class="screen-safe-note" style="margin-top:12px;">
+        安全掃描建議：單次 100 檔內最佳，超過 100 檔會先跳出警告並要求確認；超過 150 檔則不執行，以避免請求過多造成延遲、失敗或資料來源限流。
       </div>
       <div class="screen-stat" style="margin-top:10px;">
         <span id="screenPoolHint">目前將使用追蹤清單作為篩選資料池。</span>
@@ -719,6 +761,7 @@
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
       <button class="btn btn-blue" id="btnRunScreener" style="padding:12px 24px;font-size:.96rem;">🔍 開始篩選</button>
+      <button class="btn" id="btnStopScreener" style="padding:12px 22px;display:none;">⏹️ 停止掃描</button>
       <button class="btn" id="btnClearScreener" style="padding:12px 22px;">🗑️ 一鍵清除</button>
     </div>
 
@@ -848,7 +891,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
 <!-- App -->
-<script src="app.js?v=3.8.1"></script>
+<script src="app.js?v=3.8.2"></script>
 
 <!-- SPA 導覽 -->
 <script>
