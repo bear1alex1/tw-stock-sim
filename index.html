@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-  <title>台股虛擬操盤 v3.9.12</title>
+  <title>台股虛擬操盤 v3.9.14</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
@@ -308,7 +308,7 @@
     <span style="font-size:1.2rem;">📈</span>
     <div>
       <div style="font-weight:800;color:var(--text);font-size:.92rem;line-height:1.2;">
-        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.9.12</span>
+        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.9.14</span>
       </div>
       <div id="lastSaved" style="font-size:.65rem;color:#555;line-height:1.2;">最後儲存：—</div>
     </div>
@@ -953,7 +953,7 @@
 <div id="toast"></div>
 
 <!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="app.v3.9.14-2.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
@@ -1052,6 +1052,29 @@
   </div>
 </div>
 
-<div id="screenWizardFixMarker" style="display:none">v3.9.12-wizard-fix</div>
+<div id="screenWizardFixMarker" style="display:none">v3.9.14-wizard-fix</div>
+
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="app.v3.9.2-2.js"></script>
+<script>
+(function(){
+  document.addEventListener('DOMContentLoaded', function(){
+    var d=document.createElement('div');
+    d.id='v3914-debug-badge';
+    d.style.cssText='position:fixed;right:12px;bottom:12px;z-index:99999;background:#111827;color:#93c5fd;border:1px solid rgba(96,165,250,.35);padding:6px 10px;border-radius:999px;font:12px sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.35)';
+    d.textContent='JS: app.v3.9.2-2.js / v3.9.14';
+    document.body.appendChild(d);
+  });
+})();
+</script>
+
 </body>
 </html>
