@@ -1,7 +1,7 @@
 const APP_VERSION = '3.9.0';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v3.9.0  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.9.3  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 1_000_000;
@@ -2603,7 +2603,7 @@ async function exportScreenerPdf(){
     const now=new Date();
     head.innerHTML=''
       +'<div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:6px;">台股虛擬操盤系統｜篩選結果報表</div>'
-      +'<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：'+now.toLocaleDateString('zh-TW')+'｜匯出時間：'+now.toLocaleTimeString('zh-TW')+'｜版本：v3.9.0</div>'
+      +'<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：'+now.toLocaleDateString('zh-TW')+'｜匯出時間：'+now.toLocaleTimeString('zh-TW')+'｜版本：v3.9.3</div>'
       +'<div style="font-size:12px;color:#dbeafe;line-height:1.8;margin-bottom:14px;">篩選條件：'+formatScreenCriteria(_screenLastResult.criteria||{}).join('、')+'</div>';
     const clone=source.cloneNode(true);
     clone.style.marginTop='0';
@@ -4094,9 +4094,9 @@ document.addEventListener('DOMContentLoaded',()=>{
 })();
 
 
-/* v3.9.2 wizard + screener start fix */
+/* v3.9.3 wizard + screener start fix */
 (function(){
-  var HOTFIX_VER = 'v3.9.2';
+  var HOTFIX_VER = 'v3.9.3';
   function byId(id){ return document.getElementById(id); }
   function setText(id, txt){ var el=byId(id); if(el) el.textContent = txt; }
   function cloneBind(id, evt, fn){
@@ -4225,4 +4225,325 @@ document.addEventListener('DOMContentLoaded',()=>{
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', applyV392, { once:true });
   else setTimeout(applyV392, 0);
   window.__applyV392 = applyV392;
+})();
+
+
+/* ===== v3.9.3 two-stage screener patch ===== */
+(function () {
+  const TWO_STAGE = {
+    lightRows: [],
+    deepRows: [],
+    lightCriteria: null,
+    lightStats: null,
+    mode: 'idle',
+    originalRun: null,
+    mounted: false
+  };
+
+  function tsClone(v) {
+    try { return JSON.parse(JSON.stringify(v || null)); } catch (e) { return Array.isArray(v) ? v.slice() : v; }
+  }
+
+  function tsUniverseLabel(v) {
+    return ({
+      watchlist: '自選清單',
+      holdings: '持股範圍',
+      union: '自選 + 持股',
+      custom: '指定清單',
+      allStocks: '全台股',
+      range: '指定代號區間'
+    })[v] || v || '未指定';
+  }
+
+  function tsGetCriteriaSafe() {
+    try {
+      if (typeof getScreenerCriteria === 'function') return getScreenerCriteria();
+    } catch (e) {}
+    return { universe: document.getElementById('screenUniverse')?.value || 'watchlist', limit: 20, sortBy: 'totalDesc' };
+  }
+
+  function tsScopeMeta(criteria) {
+    const c = criteria || tsGetCriteriaSafe();
+    const universe = c.universe || 'watchlist';
+    const isAll = universe === 'allStocks';
+    return {
+      universe,
+      label: tsUniverseLabel(universe),
+      note: isAll ? '全台股：建議固定採用先輕篩再深篩' : '指定範圍：可依情境彈性決定是否深篩',
+      badge: isAll ? '全台股必備' : '指定範圍彈性'
+    };
+  }
+
+  function tsSetText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  function tsEnsureUI() {
+    const resultCard = document.getElementById('screenResultCard');
+    if (resultCard && !document.getElementById('screenStageHint')) {
+      const box = document.createElement('div');
+      box.className = 'card';
+      box.id = 'screenStageHint';
+      box.style.marginBottom = '12px';
+      box.style.background = 'linear-gradient(180deg,rgba(29,78,216,.16),rgba(17,24,39,.35))';
+      box.style.border = '1px solid rgba(96,165,250,.22)';
+      box.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;"><div><div class="sec-title" style="margin-bottom:6px;color:#dbeafe;">兩階段掃描架構</div><div id="screenStageHintText" class="screen-inline-note" style="font-size:.82rem;color:#dbeafe;line-height:1.7;">先做輕篩，再對結果做深篩；全台股是必備流程，指定範圍是彈性使用。</div></div><div id="screenStageBadge" class="screen-result-chip" style="margin:0;background:rgba(96,165,250,.14);color:#dbeafe;border-color:rgba(96,165,250,.28);">讀取中</div></div>';
+      resultCard.parentNode.insertBefore(box, resultCard);
+    }
+    const runBtn = document.getElementById('btnRunScreener');
+    if (runBtn) runBtn.textContent = '⚡ 先做輕篩';
+    if (runBtn && !document.getElementById('btnRunDeepScreener')) {
+      const deepBtn = document.createElement('button');
+      deepBtn.className = 'btn btn-ghost';
+      deepBtn.id = 'btnRunDeepScreener';
+      deepBtn.style.padding = '12px 22px';
+      deepBtn.style.display = 'none';
+      deepBtn.style.border = '1px solid rgba(96,165,250,.28)';
+      deepBtn.style.color = 'var(--blue)';
+      deepBtn.textContent = '🧠 對結果做深篩';
+      runBtn.insertAdjacentElement('afterend', deepBtn);
+    }
+  }
+
+  function tsSyncHint(criteria) {
+    const meta = tsScopeMeta(criteria);
+    tsSetText('screenStageHintText', '先做輕篩，再對結果做深篩；全台股是必備流程，指定範圍是彈性使用。當前母體：' + meta.note + '。');
+    tsSetText('screenStageBadge', meta.badge + '｜' + meta.label);
+  }
+
+  function tsSetDeepButtonState() {
+    const btn = document.getElementById('btnRunDeepScreener');
+    if (!btn) return;
+    if (!TWO_STAGE.lightRows.length) {
+      btn.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = '🧠 對結果做深篩';
+      return;
+    }
+    btn.style.display = 'inline-flex';
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.textContent = '🧠 對結果做深篩';
+  }
+
+  function tsDecorateSummary(stage, rows) {
+    const summary = document.getElementById('screenResultSummary');
+    if (!summary) return;
+    const meta = tsScopeMeta(TWO_STAGE.lightCriteria || tsGetCriteriaSafe());
+    const label = stage === 'deep' ? '深篩完成' : '輕篩完成';
+    const extra = [
+      '<span class="screen-result-chip" style="background:rgba(96,165,250,.14);color:#dbeafe;border-color:rgba(96,165,250,.25);">' + label + '</span>',
+      '<span class="screen-result-chip">母體：' + meta.label + '</span>',
+      '<span class="screen-result-chip">定位：' + meta.badge + '</span>',
+      rows && rows.length ? '<span class="screen-result-chip positive">結果：' + rows.length + ' 檔</span>' : ''
+    ].join('');
+    summary.innerHTML = extra + summary.innerHTML;
+  }
+
+  function tsRenderDeepBadges(rows) {
+    const tbody = document.getElementById('screenResultBody');
+    if (!tbody || !rows || !rows.length) return;
+    Array.from(tbody.querySelectorAll('tr')).forEach(function (tr, idx) {
+      const row = rows[idx];
+      if (!row || !row.deepMeta) return;
+      const first = tr.children[0];
+      const action = tr.children[5];
+      if (first && !first.querySelector('.ts-deep-badge')) {
+        const badge = document.createElement('div');
+        badge.className = 'ts-deep-badge';
+        badge.style.marginTop = '6px';
+        badge.style.display = 'inline-flex';
+        badge.style.alignItems = 'center';
+        badge.style.padding = '3px 8px';
+        badge.style.borderRadius = '999px';
+        badge.style.fontSize = '.68rem';
+        badge.style.fontWeight = '800';
+        badge.style.background = 'rgba(96,165,250,.14)';
+        badge.style.color = '#dbeafe';
+        badge.style.border = '1px solid rgba(96,165,250,.26)';
+        badge.textContent = '深篩 ' + row.deepMeta.tier + ' 級｜' + row.totalScore + ' 分';
+        first.appendChild(badge);
+      }
+      if (action && !action.querySelector('.ts-deep-reasons')) {
+        const note = document.createElement('div');
+        note.className = 'ts-deep-reasons';
+        note.style.marginTop = '6px';
+        note.style.fontSize = '.72rem';
+        note.style.lineHeight = '1.55';
+        note.style.color = '#9fb4d2';
+        note.textContent = (row.deepMeta.reasons || []).join('／');
+        action.appendChild(note);
+      }
+    });
+  }
+
+  function tsDeepScore(row) {
+    const item = tsClone(row) || {};
+    const reasons = [];
+    let score = Number(item.totalScore || 0);
+    const tech = Number(item.techScore || 0);
+    const fund = Number(item.fundScore || 0);
+    const price = Number(item.price || 0);
+    const ma20 = Number(item.ma20 || 0);
+    const rsi = Number(item.rsi || 0);
+    const vol = Number(item.volRatio || 0);
+    const rev = Number(item.revYoY || 0);
+    const eps = Number(item.ttmEPS || 0);
+
+    score = Math.round(score * 0.45 + tech * 0.30 + fund * 0.25);
+    if (price > 0 && ma20 > 0 && price >= ma20) { score += 8; reasons.push('站上 MA20'); }
+    else if (price > 0 && ma20 > 0) { score -= 6; }
+    if (vol >= 1.5) { score += 6; reasons.push('量能放大'); }
+    else if (vol < 0.8) { score -= 3; }
+    if (rsi >= 40 && rsi <= 68) { score += 5; reasons.push('RSI 結構健康'); }
+    else if (rsi > 0 && rsi < 30) { score += 3; reasons.push('低檔反彈候選'); }
+    else if (rsi > 78) { score -= 4; }
+    if (rev >= 10) { score += 6; reasons.push('營收年增佳'); }
+    else if (rev <= -10) { score -= 6; }
+    if (eps > 0) { score += 4; reasons.push('EPS 為正'); }
+    else if (eps < 0) { score -= 8; }
+
+    score = Math.max(0, Math.min(100, Math.round(score)));
+    item.lightTotalScore = Number(row.totalScore || 0);
+    item.totalScore = score;
+    item.deepMeta = {
+      score: score,
+      tier: score >= 82 ? 'A' : score >= 68 ? 'B' : score >= 55 ? 'C' : 'D',
+      reasons: reasons.slice(0, 3)
+    };
+    return item;
+  }
+
+  function tsCaptureLightResults() {
+    if (typeof screenLastResult === 'undefined' || !screenLastResult) return;
+    TWO_STAGE.lightRows = tsClone(screenLastResult.rows || []);
+    TWO_STAGE.lightCriteria = tsClone(screenLastResult.criteria || tsGetCriteriaSafe());
+    TWO_STAGE.lightStats = tsClone(screenLastResult.stats || null);
+    TWO_STAGE.mode = 'light';
+    TWO_STAGE.deepRows = [];
+    tsSetDeepButtonState();
+    tsSyncHint(TWO_STAGE.lightCriteria);
+    if (TWO_STAGE.lightRows.length) {
+      tsDecorateSummary('light', TWO_STAGE.lightRows);
+      tsSetText('screenRunStatus', '輕篩完成：' + TWO_STAGE.lightRows.length + ' 檔，接著可對結果做深篩。');
+    }
+  }
+
+  function tsRunDeepScan() {
+    if (!TWO_STAGE.lightRows.length) {
+      alert('請先完成輕篩，再進行深篩。');
+      return;
+    }
+    const criteria = tsClone(TWO_STAGE.lightCriteria || tsGetCriteriaSafe());
+    const meta = tsScopeMeta(criteria);
+    let rows = (TWO_STAGE.lightRows || []).map(tsDeepScore).sort(function (a, b) {
+      return (b.totalScore || 0) - (a.totalScore || 0) || (b.techScore || 0) - (a.techScore || 0) || (b.fundScore || 0) - (a.fundScore || 0);
+    });
+    const rawLimit = Number(criteria.limit || 20) || 20;
+    const limit = criteria.universe === 'allStocks' ? Math.min(Math.max(10, rawLimit), 15) : Math.min(Math.max(5, rawLimit), rows.length || rawLimit);
+    rows = rows.slice(0, Math.min(limit, rows.length));
+    TWO_STAGE.deepRows = tsClone(rows);
+    TWO_STAGE.mode = 'deep';
+    const deepCriteria = Object.assign({}, criteria, { sortBy: 'totalDesc', __twoStage: 'deep' });
+    const stats = { total: TWO_STAGE.lightRows.length, ok: rows.length, failed: 0, skipped: Math.max(0, TWO_STAGE.lightRows.length - rows.length) };
+    if (typeof renderScreenResults === 'function') renderScreenResults(rows, deepCriteria, stats);
+    if (typeof screenLastResult !== 'undefined') {
+      screenLastResult = { rows: tsClone(rows), criteria: tsClone(deepCriteria), stats: tsClone(stats), generatedAt: new Date().toISOString(), stage: 'deep' };
+    }
+    tsDecorateSummary('deep', rows);
+    tsRenderDeepBadges(rows);
+    tsSetText('screenRunStatus', '深篩完成：' + rows.length + ' 檔；' + meta.badge + '。');
+    const btn = document.getElementById('btnRunDeepScreener');
+    if (btn) btn.textContent = '🧠 已完成深篩（' + rows.length + '）';
+  }
+
+  async function tsLightWrapper() {
+    tsEnsureUI();
+    tsSyncHint(tsGetCriteriaSafe());
+    TWO_STAGE.lightRows = [];
+    TWO_STAGE.deepRows = [];
+    TWO_STAGE.mode = 'running-light';
+    tsSetDeepButtonState();
+    if (typeof screenLastResult !== 'undefined') {
+      screenLastResult = { rows: [], criteria: tsGetCriteriaSafe(), stats: null, generatedAt: new Date().toISOString() };
+    }
+    if (!TWO_STAGE.originalRun && typeof runScreener === 'function') TWO_STAGE.originalRun = runScreener;
+    if (typeof TWO_STAGE.originalRun !== 'function') return;
+    await TWO_STAGE.originalRun();
+    setTimeout(tsCaptureLightResults, 0);
+  }
+
+  function tsRebindRunButton() {
+    const oldBtn = document.getElementById('btnRunScreener');
+    if (!oldBtn || oldBtn.dataset.twoStageBound === '1') return;
+    const newBtn = oldBtn.cloneNode(true);
+    newBtn.id = 'btnRunScreener';
+    newBtn.textContent = '⚡ 先做輕篩';
+    newBtn.dataset.twoStageBound = '1';
+    oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+    newBtn.addEventListener('click', function () { tsLightWrapper(); });
+  }
+
+  function tsBindDeepButton() {
+    const btn = document.getElementById('btnRunDeepScreener');
+    if (!btn || btn.dataset.twoStageBound === '1') return;
+    btn.dataset.twoStageBound = '1';
+    btn.addEventListener('click', tsRunDeepScan);
+  }
+
+  function tsBindAssistiveEvents() {
+    const universe = document.getElementById('screenUniverse');
+    const custom = document.getElementById('screenCustomList');
+    const rs = document.getElementById('screenRangeStart');
+    const re = document.getElementById('screenRangeEnd');
+    const clearBtn = document.getElementById('btnClearScreener');
+    const cards = document.querySelectorAll('[data-screen-filter]');
+    if (universe && universe.dataset.twoStageBound !== '1') {
+      universe.dataset.twoStageBound = '1';
+      universe.addEventListener('change', function () { setTimeout(function(){ tsSyncHint(tsGetCriteriaSafe()); }, 0); });
+    }
+    [custom, rs, re].forEach(function (el) {
+      if (el && el.dataset.twoStageBound !== '1') {
+        el.dataset.twoStageBound = '1';
+        el.addEventListener('input', function () { setTimeout(function(){ tsSyncHint(tsGetCriteriaSafe()); }, 0); });
+      }
+    });
+    if (clearBtn && clearBtn.dataset.twoStageBound !== '1') {
+      clearBtn.dataset.twoStageBound = '1';
+      clearBtn.addEventListener('click', function () {
+        TWO_STAGE.lightRows = [];
+        TWO_STAGE.deepRows = [];
+        TWO_STAGE.mode = 'idle';
+        tsSetDeepButtonState();
+        tsSyncHint(tsGetCriteriaSafe());
+      });
+    }
+    cards.forEach(function (card) {
+      if (card.dataset.twoStageHintBound === '1') return;
+      card.dataset.twoStageHintBound = '1';
+      card.addEventListener('click', function () { setTimeout(function(){ tsSyncHint(tsGetCriteriaSafe()); }, 0); });
+    });
+  }
+
+  function tsMount() {
+    tsEnsureUI();
+    tsRebindRunButton();
+    tsBindDeepButton();
+    tsBindAssistiveEvents();
+    tsSyncHint(tsGetCriteriaSafe());
+    tsSetDeepButtonState();
+    TWO_STAGE.mounted = true;
+  }
+
+  if (typeof runScreener === 'function') {
+    TWO_STAGE.originalRun = runScreener;
+    runScreener = tsLightWrapper;
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    tsMount();
+    setTimeout(tsMount, 500);
+    setTimeout(tsMount, 1500);
+  });
 })();
