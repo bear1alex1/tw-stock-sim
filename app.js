@@ -1,7 +1,7 @@
-const APP_VERSION = '3.9.16';   // ← 只改這裡就能更版
+const APP_VERSION = '3.9.17';   // ← 只改這裡就能更版
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v3.9.16  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.9.17  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
 const INITIAL_CASH = 9_000_000;
@@ -2383,37 +2383,9 @@ function handleScreenAdminAction(action) {
   }
   updateScreenAdminUI();
 }
-function setScreenPoolHint() {
-  const sel = document.getElementById('screenUniverse');
-  const hint = document.getElementById('screenPoolHint');
-  const ta = document.getElementById('screenCustomList');
-  const rs = document.getElementById('screenRangeStart');
-  const re = document.getElementById('screenRangeEnd');
-  if (!sel || !hint || !ta || !rs || !re) return;
-  const v = sel.value || 'watchlist';
-  const customOn = (v === 'custom');
-  const rangeOn = (v === 'range');
-  ta.disabled = !customOn;
-  ta.style.opacity = customOn ? '1' : '.55';
-  rs.disabled = !rangeOn;
-  re.disabled = !rangeOn;
-  rs.style.opacity = rangeOn ? '1' : '.55';
-  re.style.opacity = rangeOn ? '1' : '.55';
-  const customPanel = document.getElementById('screenCustomPanel');
-  const rangePanel = document.getElementById('screenRangePanel');
-  if (customPanel) customPanel.classList.toggle('show', customOn);
-  if (rangePanel) rangePanel.classList.toggle('show', rangeOn);
-  if (v === 'watchlist') hint.textContent = '目前將使用自選清單作為掃描母體。';
-  else if (v === 'holdings') hint.textContent = '目前將使用持股清單作為掃描母體。';
-  else if (v === 'union') hint.textContent = '目前將合併自選清單與持股清單進行掃描。';
-  else if (v === 'custom') hint.textContent = '目前將使用你手動輸入的指定清單進行掃描。';
-  else if (v === 'allStocks') hint.textContent = canUseAllStocks() ? '目前將以全台股作為掃描母體，再套用條件篩選。' : '全台股模式已被鎖定，僅限管理員開啟。';
-  else hint.textContent = canUseWideRange() ? '目前將依指定區間建立掃描母體，再套用條件篩選。' : '目前將依指定區間建立掃描母體；一般模式建議控制在 100 檔內。';
-  updateScanWorkButtons();
-}
 function updateScanWorkButtons() {
   const current = document.getElementById('screenUniverse')?.value || 'watchlist';
-  document.querySelectorAll('[data-screen-job]').forEach(function(btn) {
+  document.querySelectorAll('[data-screen-job]').forEach(function (btn) {
     const mode = btn.dataset.screenJob;
     const locked = (mode === 'allStocks' && !canUseAllStocks());
     btn.classList.toggle('active', mode === current);
@@ -2439,9 +2411,35 @@ function confirmScanWorkNext() {
   if (!card) return;
   card.classList.add('screen-step-focus');
   card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  setTimeout(function() {
-    card.classList.remove('screen-step-focus');
-  }, 1400);
+  setTimeout(function () { card.classList.remove('screen-step-focus'); }, 1400);
+}
+function setScreenPoolHint() {
+  const sel = document.getElementById('screenUniverse');
+  const hint = document.getElementById('screenPoolHint');
+  const ta = document.getElementById('screenCustomList');
+  const rs = document.getElementById('screenRangeStart');
+  const re = document.getElementById('screenRangeEnd');
+  if (!sel || !hint || !ta || !rs || !re) return;
+  const v = sel.value || 'watchlist';
+  const customOn = (v === 'custom');
+  const rangeOn = (v === 'range');
+  ta.disabled = !customOn;
+  ta.style.opacity = customOn ? '1' : '.55';
+  rs.disabled = !rangeOn;
+  re.disabled = !rangeOn;
+  rs.style.opacity = rangeOn ? '1' : '.55';
+  re.style.opacity = rangeOn ? '1' : '.55';
+  const customPanel = document.getElementById('screenCustomPanel');
+  const rangePanel = document.getElementById('screenRangePanel');
+  if (customPanel) customPanel.classList.toggle('show', customOn);
+  if (rangePanel) rangePanel.classList.toggle('show', rangeOn);
+  if (v === 'watchlist') hint.textContent = '目前將使用自選清單作為掃描母體。';
+  else if (v === 'holdings') hint.textContent = '目前將使用持股清單作為掃描母體。';
+  else if (v === 'union') hint.textContent = '目前將合併自選清單與持股清單進行掃描。';
+  else if (v === 'custom') hint.textContent = '目前將使用你手動輸入的指定清單進行掃描。';
+  else if (v === 'allStocks') hint.textContent = canUseAllStocks() ? '目前將以全台股作為掃描母體，再套用類別與條件篩選。' : '全部股票模式已被鎖定，僅限管理員開啟。';
+  else hint.textContent = canUseWideRange() ? '目前將依指定區間建立掃描母體，再套用類別與條件篩選。' : '目前將依指定區間建立掃描母體；一般模式建議控制在 100 檔內。';
+  updateScanWorkButtons();
 }
 async function populateScreenCategoryOptions() {
   const type = document.getElementById('screenCategoryType');
@@ -2718,7 +2716,7 @@ async function exportScreenerPdf() {
     setScreenerRunning(_screenScanJob.running);
   }
 }
-// [v3.9.16] first runScreener/bindScreenerUI removed — final definitions below handle everything
+// [v3.9.17] first runScreener/bindScreenerUI removed — final definitions below handle everything
 function renderScreenerHistory() {
   const box = document.getElementById('screenHistoryList');
   if (!box) return;
@@ -3031,6 +3029,7 @@ async function runDeepScan() {
 
 
 function bindScreenerUI() {
+  // Non-indicator filter cards get toggle behavior
   document.querySelectorAll('[data-screen-filter]').forEach(function (card) {
     card.addEventListener('click', function () {
       card.classList.toggle('active');
@@ -3038,39 +3037,58 @@ function bindScreenerUI() {
     });
   });
   document.querySelectorAll('[data-screen-job]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      setScanWorkMode(btn.dataset.screenJob);
-    });
+    btn.addEventListener('click', function () { setScanWorkMode(btn.dataset.screenJob); });
   });
   document.getElementById('btnConfirmScreenWork')?.addEventListener('click', confirmScanWorkNext);
   document.getElementById('screenUniverse')?.addEventListener('change', setScreenPoolHint);
   document.getElementById('screenCategoryType')?.addEventListener('change', populateScreenCategoryOptions);
-  document.getElementById('btnRunScreener')?.addEventListener('click', runScreener);
+  document.getElementById('screenCustomList')?.addEventListener('input', function () { state.screenCustomList = this.value; saveState(state); });
+  updateScanWorkButtons();
+
+  // Toggle: run button acts as start OR stop
+  document.getElementById('btnRunScreener')?.addEventListener('click', function () {
+    if (window.__v3914Scanning || (_screenScanJob && _screenScanJob.running)) {
+      // Stop scan
+      window.__v3914ScanCancel = true;
+      if (_screenScanJob) _screenScanJob.cancelled = true;
+      var s = document.getElementById('screenRunStatus');
+      if (s) s.textContent = '收到停止指令，正在等待當前股票完成後停止…';
+    } else {
+      runScreener();
+    }
+  });
   document.getElementById('btnStopScreener')?.addEventListener('click', function () {
-    if (window.v3914Scanning) window.v3914ScanCancel = true;
-    if (screenScanJob) screenScanJob.cancelled = true;
+    window.__v3914ScanCancel = true;
+    if (_screenScanJob) _screenScanJob.cancelled = true;
   });
-  document.getElementById('btnRunDeepScan')?.addEventListener('click', runDeepScreener);
-  document.getElementById('btnClearScreener')?.addEventListener('click', clearScreenerInputs);
+  // Deep scan toggle: click again while running → stop
+  document.getElementById('btnRunDeepScan')?.addEventListener('click', function () {
+    if (window.__v3914DeepCancel === false && this.classList.contains('btn-stop-scan')) {
+      window.__v3914DeepCancel = true;
+      this.textContent = '停止中…';
+      return;
+    }
+    runDeepScan();
+  });
   document.getElementById('btnExportScreenPdf')?.addEventListener('click', exportScreenerPdf);
+  document.getElementById('btnClearScreener')?.addEventListener('click', clearScreenerInputs);
+  document.getElementById('btnClearScreenHistory')?.addEventListener('click', function () { state.screenHistory = []; saveState(state); renderScreenerHistory(); });
+  document.getElementById('btnToggleScreenAdv')?.addEventListener('click', function () {
+    const p = document.getElementById('screenAdvPanel'); if (!p) return;
+    const show = !p.classList.contains('show'); p.classList.toggle('show', show);
+    this.textContent = show ? '收合進階條件 ▲' : '展開進階條件 ▼';
+  });
   document.getElementById('screenAdminEntry')?.addEventListener('click', openScreenAdminModal);
-  document.querySelectorAll('[data-admin-act]').forEach(function(btn) {
-    btn.addEventListener('click', function() { handleScreenAdminAction(btn.dataset.adminAct); });
-  });
-  document.getElementById('btnScreenAdminUnlock')?.addEventListener('click', submitScreenAdminUnlock);
   document.getElementById('btnScreenAdminCancel')?.addEventListener('click', closeScreenAdminModal);
-  document.getElementById('screenAdminModal')?.addEventListener('click', function(e) {
-    if (e.target && e.target.id === 'screenAdminModal') closeScreenAdminModal();
-  });
-  document.getElementById('screenAdminPassword')?.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') submitScreenAdminUnlock();
-    if (e.key === 'Escape') closeScreenAdminModal();
-  });
+  document.getElementById('btnScreenAdminSubmit')?.addEventListener('click', submitScreenAdminUnlock);
+  document.getElementById('screenAdminPassword')?.addEventListener('keydown', function (e) { if (e.key === 'Enter') submitScreenAdminUnlock(); });
+  document.getElementById('screenAdminModal')?.addEventListener('click', function (e) { if (e.target === this) closeScreenAdminModal(); });
   setScreenerRunning(false);
   syncIndicatorLights();
-  updateScanWorkButtons();
   setScreenPoolHint();
+  updateScanWorkButtons();
 }
+
 function navigateToPage(page) {
   document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('active'); });
   const target = document.getElementById('page-' + page);
@@ -3825,9 +3843,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
-/* v3.9.16: ETF fundamental patch + wizard bindings (no runScreener/bindScreenerUI override) */
+/* v3.9.17: ETF fundamental patch + wizard bindings (no runScreener/bindScreenerUI override) */
 (function () {
-  var HOTFIX_VER = 'v3.9.16';
+  var HOTFIX_VER = 'v3.9.17';
   var __origAnalyzeAIFundamentals = (typeof analyzeAIFundamentals === 'function') ? analyzeAIFundamentals : null;
 
   function hotfixText(id, value) { var el = document.getElementById(id); if (el) el.textContent = value; }
