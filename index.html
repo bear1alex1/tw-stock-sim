@@ -206,6 +206,18 @@
     .ai-score-pill.mid{background:linear-gradient(135deg,#d97706,#f59e0b);}
     .ai-score-pill.risk{background:linear-gradient(135deg,#dc2626,#ef4444);}
 
+    .ai-fund-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;}
+    .ai-fund-score{font-size:1.32rem;font-weight:900;margin-bottom:6px;}
+    .ai-fund-sub{font-size:.78rem;color:#9fb4d2;line-height:1.6;}
+    .ai-fund-list{font-size:.84rem;color:#d7dee9;line-height:1.65;}
+    .ai-news-list{display:flex;flex-direction:column;gap:8px;}
+    .ai-news-item{padding:8px 10px;border:1px solid rgba(255,255,255,.06);border-radius:8px;background:rgba(255,255,255,.02);font-size:.8rem;line-height:1.5;color:#d7dee9;}
+    .ai-fund-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:.76rem;font-weight:800;margin-right:6px;margin-bottom:6px;background:#1f2937;color:#fff;}
+    .ai-fund-chip.red{background:rgba(239,68,68,.14);color:#ff8a8a;}
+    .ai-fund-chip.green{background:rgba(34,197,94,.14);color:#52d68a;}
+    .ai-fund-chip.orange{background:rgba(245,158,11,.14);color:#fbbf24;}
+    @media(max-width:1100px){.ai-fund-grid{grid-template-columns:1fr;}}
+
   </style>
 </head>
 <body>
@@ -216,7 +228,7 @@
     <span style="font-size:1.2rem;">📈</span>
     <div>
       <div style="font-weight:800;color:var(--text);font-size:.92rem;line-height:1.2;">
-        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.6</span>
+        台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.7</span>
       </div>
       <div id="lastSaved" style="font-size:.65rem;color:#555;line-height:1.2;">最後儲存：—</div>
     </div>
@@ -620,6 +632,22 @@
       <div class="card ai-indicator-row" style="margin-bottom:10px;">
         <div id="aiIndicatorBar">—</div>
       </div>
+      <div class="ai-fund-grid">
+        <div class="card">
+          <div class="sec-title">🏛 基本面評分</div>
+          <div id="aiFundScore" class="ai-fund-score">—</div>
+          <div id="aiFundSummary" class="ai-fund-sub">—</div>
+        </div>
+        <div class="card">
+          <div class="sec-title">💰 EPS / 體質</div>
+          <div id="aiFundMetrics" class="ai-fund-list">—</div>
+        </div>
+        <div class="card">
+          <div class="sec-title">📰 訂單 / 利多</div>
+          <div id="aiNewsSummary" class="ai-fund-list">—</div>
+          <div id="aiNewsList" class="ai-news-list" style="margin-top:8px;"></div>
+        </div>
+      </div>
       <p style="font-size:.65rem;color:#6b7280;text-align:center;padding:8px 4px;">
         ⚠️ 以上建議僅供參考，基於技術分析計算，不構成投資建議。投資有風險，請自行評估。
       </p>
@@ -645,7 +673,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
 <!-- App -->
-<script src="app.js?v=3.6"></script>
+<script src="app.js?v=3.7"></script>
 
 <!-- SPA 導覽 -->
 <script>
