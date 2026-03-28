@@ -1,4 +1,4 @@
-const APP_VERSION = '3.10.0';   // ← 只改這裡就能更版
+const APP_VERSION = '3.10.2';   // ← 只改這裡就能更版
 
 // --- Screener Limits & Rate Control ---
 const SCREEN_BATCH_SIZE = 5;
