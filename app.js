@@ -2299,27 +2299,28 @@ function padStockCode(v) {
   return String(n).padStart(4, '0');
 }
 function updateScreenAdminUI() {
-  const status = document.getElementById('screenAdminStatus');
-  const tools = document.getElementById('screenAdminTools');
-  const allOpt = document.querySelector('#screenUniverse option[value="allStocks"]');
-  if (status) {
-    if (isScreenAdminUnlocked()) {
-      status.textContent = '管理模式｜' + (canUseAllStocks() ? '全掃已開啟' : '全掃未開啟') + '｜' + (canUseWideRange() ? '大範圍已開啟' : '大範圍未開啟');
-      status.classList.add('ok');
+  const isUnlocked = isScreenAdminUnlocked();
+
+  if (isUnlocked) {
+    _screenAdmin.fullscan = true;
+    _screenAdmin.widerange = true;
+  }
+
+  const poolAll = document.getElementById('poolAllStocks');
+  if (poolAll) {
+    if (isUnlocked) {
+      poolAll.classList.remove('locked');
+      poolAll.classList.add('admin-unlocked');
     } else {
-      status.textContent = '一般模式｜全掃已鎖定';
-      status.classList.remove('ok');
+      poolAll.classList.add('locked');
+      poolAll.classList.remove('admin-unlocked');
+      const uSel = document.getElementById('screenUniverse');
+      if (uSel && uSel.value === 'allStocks') {
+        if (typeof selectPool === 'function') selectPool('watchlist');
+      }
     }
   }
-  if (tools) tools.classList.toggle('show', isScreenAdminUnlocked());
-  if (allOpt) {
-    const allow = canUseAllStocks();
-    allOpt.hidden = !allow;
-    allOpt.disabled = !allow;
-    if (!allow && document.getElementById('screenUniverse') && document.getElementById('screenUniverse').value === 'allStocks') {
-      document.getElementById('screenUniverse').value = 'watchlist';
-    }
-  }
+  
   setScreenPoolHint();
 }
 function openScreenAdminModal() {
@@ -2823,6 +2824,13 @@ function evaluateScreenResult(item, criteria) {
   return true;
 }
 
+function syncIndicatorLights() {
+  const active = Array.from(document.querySelectorAll('.screen-step-body [data-screen-filter].active')).map(el => el.dataset.screenFilter);
+  document.querySelectorAll('.screen-filter-grid > .indicator-mode[data-screen-filter]').forEach(card => {
+    card.classList.toggle('active', active.includes(card.dataset.screenFilter));
+  });
+}
+
 async function runScreener() {
   if (window.__v3914Scanning) { window.__v3914ScanCancel = true; return; }
   var status = document.getElementById('screenRunStatus');
@@ -2844,12 +2852,23 @@ async function runScreener() {
   else if (uMode === 'holdings') symbols = Object.keys(state && state.holdings ? state.holdings : {});
   else if (uMode === 'union') symbols = Array.from(new Set([].concat(state && state.watchlist ? state.watchlist : [], Object.keys(state && state.holdings ? state.holdings : {}))));
   else if (uMode === 'custom') { var rawList = document.getElementById('screenCustomList') ? document.getElementById('screenCustomList').value : ''; symbols = rawList.split(/[\s,，;；]+/).map(function (x) { return normalizeSymbol(x); }).filter(Boolean); }
-  else if (uMode === 'range') { var rs = parseInt((document.getElementById('screenRangeStart') || {}).value || '0', 10), re2 = parseInt((document.getElementById('screenRangeEnd') || {}).value || '0', 10); if (rs > 0 && re2 >= rs) { for (var ri = rs; ri <= Math.min(re2, rs + 149); ri++)symbols.push(String(ri).padStart(4, '0')); } }
+  else if (uMode === 'range') {
+    var rs = parseInt((document.getElementById('screenRangeStart') || {}).value || '0', 10);
+    var re2 = parseInt((document.getElementById('screenRangeEnd') || {}).value || '0', 10);
+    if (rs > 0 && re2 >= rs) {
+      for (var ri = rs; ri <= Math.min(re2, rs + 300); ri++) {
+         var symStr = String(ri).padStart(4, '0');
+         if (!_stockInfoLoaded || stockNameCache[symStr] || stockMetaCache[symStr] || (typeof isETF === 'function' && isETF(symStr))) {
+             symbols.push(symStr);
+         }
+      }
+    }
+  }
   else if (uMode === 'allStocks') { try { symbols = Object.keys(stockMetaCache || {}).filter(function (c) { return /^\d{4}$/.test(c); }).sort().slice(0, 150); } catch (e2) { symbols = []; } }
   symbols = Array.from(new Set(symbols.map(function (x) { return normalizeSymbol(x); }).filter(Boolean)));
 
   if (!symbols.length) {
-    if (status) status.textContent = '沒有可掃描的股票，請先在自選或持股中新增股票';
+    if (status) status.textContent = '範圍內沒有可掃描的有效股票代碼';
     return;
   }
 
@@ -3039,13 +3058,7 @@ async function runDeepScan() {
 
 
 function bindScreenerUI() {
-  // Non-indicator filter cards get toggle behavior
-  document.querySelectorAll('[data-screen-filter]:not(.indicator-mode)').forEach(function (card) {
-    card.addEventListener('click', function () {
-      card.classList.toggle('active');
-      syncIndicatorLights();
-    });
-  });
+  // Filter cards are handled via inline HTML onclick to call updateWizFilterSub
   document.getElementById('screenUniverse')?.addEventListener('change', setScreenPoolHint);
   document.getElementById('screenCategoryType')?.addEventListener('change', populateScreenCategoryOptions);
   document.getElementById('screenCustomList')?.addEventListener('input', function () { state.screenCustomList = this.value; saveState(state); });
@@ -3973,42 +3986,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     syncIndicatorLights();
   };
-
-  function bindScreenerUI() {
-    const advBtn = document.getElementById('btnToggleScreenAdv');
-    if (advBtn) {
-      advBtn.addEventListener('click', function() {
-        const panel = document.getElementById('screenAdvPanel');
-        if (panel) {
-          panel.classList.toggle('open');
-          advBtn.textContent = panel.classList.contains('open') ? '⚙ 收合進階條件 ▲' : '⚙ 展開進階條件 ▼';
-        }
-      });
-    }
-
-    const runBtn = document.getElementById('btnRunScreener');
-    if (runBtn) runBtn.addEventListener('click', runScreener);
-
-    const stopBtn = document.getElementById('btnStopScreener');
-    if (stopBtn) stopBtn.addEventListener('click', function() {
-       window.__v3914ScanCancel = true;
-       setScreenerRunning(false);
-       const status = document.getElementById('screenRunStatus');
-       if (status) status.textContent = '掃描已強制中斷。';
-    });
-
-    const clearBtn = document.getElementById('btnClearScreener');
-    if (clearBtn) clearBtn.addEventListener('click', clearScreenerInputs);
-
-    const exportBtn = document.getElementById('btnExportScreenPdf');
-    if (exportBtn) exportBtn.addEventListener('click', exportScreenerPdf);
-
-    const deepBtn = document.getElementById('btnRunDeepScan');
-    if (deepBtn) deepBtn.addEventListener('click', function() {
-       // Currently binds to advanced mode if necessary.
-       alert('深度篩選功能已整合至進階條件面板。');
-    });
-  }
 
   function applyAll() {
     patchRenderAIReportForETF();
