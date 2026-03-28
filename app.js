@@ -1,4 +1,4 @@
-const APP_VERSION = '3.10.2';   // ← 只改這裡就能更版
+const APP_VERSION = '3.10.3';   // ← 只改這裡就能更版
 
 // --- Screener Limits & Rate Control ---
 const SCREEN_BATCH_SIZE = 5;
@@ -2659,7 +2659,7 @@ async function exportScreenerPdf() {
     const now = new Date();
     head.innerHTML = ''
       + '<div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:6px;">台股虛擬操盤系統｜篩選結果報表</div>'
-      + '<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：' + now.toLocaleDateString('zh-TW') + '｜匯出時間：' + now.toLocaleTimeString('zh-TW') + '｜版本：v3.9.0</div>'
+      + '<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：' + now.toLocaleDateString('zh-TW') + '｜匯出時間：' + now.toLocaleTimeString('zh-TW') + '｜版本：v3.10.3</div>'
       + '<div style="font-size:12px;color:#dbeafe;line-height:1.8;margin-bottom:14px;">篩選條件：' + formatScreenCriteria(_screenLastResult.criteria || {}).join('、') + '</div>';
     const clone = source.cloneNode(true);
     clone.style.marginTop = '0';
@@ -2968,7 +2968,8 @@ async function runScreener() {
           }
           
           var tech = analyzeAIData(sym, priceRows);
-          var fund = await Promise.race([analyzeAIFundamental(sym, tech.name || getStockName(sym) || ''), new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, 12000); })]);
+          // 第一階段快篩：僅用技術面，不抓基本面 API (速度優先)
+        var fund = { score: 50, metrics: [], summary: '第一階段快篩（僅技術面）', label: '-', newsRows: [], orderHint: '' };
           
           var closes = priceRows.map(function (r) { return r.close; });
           var vols = priceRows.map(function (r) { return num(r.volume) || 0; });
@@ -3069,12 +3070,28 @@ async function runDeepScan() {
   for (var i = 0; i < rows.length; i++) {
     if (window.__v3914DeepCancel) break;
     var r = JSON.parse(JSON.stringify(rows[i]));
-    var score = Math.round((r.totalScore || 0) * 0.55 + (r.techScore || 0) * 0.25 + (r.fundScore || 0) * 0.20);
+    // 第二階段深篩：補抓真實基本面資料
+    try {
+      var fundDeep = await Promise.race([
+        analyzeAIFundamental(r.symbol, r.name || getStockName(r.symbol) || ''),
+        new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, 14000); })
+      ]);
+      r.fundScore = (fundDeep.score || 0) > 0 ? fundDeep.score : (r.fundScore || 50);
+      var revMetric = extractMetricValue(fundDeep.metrics, '營收年增率');
+      var epsMetric = extractMetricValue(fundDeep.metrics, 'EPS');
+      if (revMetric !== null) r.revYoY = revMetric;
+      if (epsMetric !== null) r.ttmEPS = epsMetric;
+      r.fund = fundDeep;
+    } catch (eDeep) {
+      console.warn('深度篩選-基本面', r.symbol, eDeep && eDeep.message ? eDeep.message : eDeep);
+    }
+    // 重新評分：技術面 55% + 基本面 45%
+    var score = Math.round((r.techScore || 0) * 0.55 + (r.fundScore || 50) * 0.45);
     if (r.price != null && r.ma20 != null && r.price >= r.ma20) score += 8;
     if ((r.volRatio || 0) >= 1.2) score += 5;
     if (r.rsi != null && r.rsi >= 35 && r.rsi <= 68) score += 4;
-    if ((r.revYoY || 0) >= 0) score += 3;
-    if ((r.ttmEPS || 0) > 0) score += 3;
+    if (r.revYoY != null && r.revYoY > 0) score += 5;
+    if (r.ttmEPS != null && r.ttmEPS > 0) score += 5;
     r.totalScore = Math.max(0, Math.min(100, score));
     out.push(r);
     if (progressBar) progressBar.style.width = Math.round(((i + 1) / rows.length) * 100) + '%';
@@ -3094,7 +3111,10 @@ async function runDeepScan() {
 }
 
 
+let __screenerUIBound = false;
 function bindScreenerUI() {
+  if (__screenerUIBound) return; // 單次綁定保護：防止重複呼叫產生多個監聽器
+  __screenerUIBound = true;
   // Filter cards are handled via inline HTML onclick to call updateWizFilterSub
   document.getElementById('screenUniverse')?.addEventListener('change', setScreenPoolHint);
   document.getElementById('screenCategoryType')?.addEventListener('change', populateScreenCategoryOptions);
