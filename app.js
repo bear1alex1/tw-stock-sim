@@ -2811,20 +2811,99 @@ function extractMetricValue(metrics, label) {
   if (!item) return null;
   return num(item.value);
 }
-function evaluateScreenResult(item, criteria) {
-  const filters = criteria.simple || [];
-  for (const f of filters) {
-    if (f === 'buyFit' && !(item.price > item.ma20 && item.totalScore >= 65)) return false;
-    if (f === 'sellWatch' && !(item.price < item.ma20 && item.totalScore <= 35)) return false;
-    if (f === 'volumeSpike' && !((item.volRatio || 0) >= 1.5)) return false;
-    if (f === 'oversold' && !((item.rsi || 999) < 30)) return false;
+window.__screenLastResult = { rows: [], criteria: null, stats: null, generatedAt: null, stage: null };
+
+function snapshotScreenResults(rows, criteria, stats, stageLabel) {
+  window.__screenLastResult = {
+    rows: JSON.parse(JSON.stringify(rows)),
+    criteria: JSON.parse(JSON.stringify(criteria || {})),
+    stats: stats ? JSON.parse(JSON.stringify(stats)) : null,
+    generatedAt: new Date().toISOString(),
+    stage: stageLabel
+  };
+}
+
+function buildStage1Item(symbol, priceRows, tech) {
+  var closes = priceRows.map(function(r) { return r.close; });
+  var vols = priceRows.map(function(r) { return num(r.volume) || 0; });
+  var lastRow = priceRows[priceRows.length - 1] || {};
+  var avg5v = (vols.slice(-6, -1).reduce(function(a,b){return a+b;},0)/Math.max(1,Math.min(5,vols.length-1)))||0;
+  var volRatio = avg5v > 0 ? ((num(lastRow.volume)||0)/avg5v) : null;
+  var rsi = calcRSI(closes, 14);
+  var techScore = num(tech.comprehensiveScore) || 0;
+
+  return {
+    symbol: symbol,
+    name: tech.name || getStockName(symbol) || '',
+    price: num(lastRow.close),
+    ma20: num(tech.m20),
+    rsi: rsi,
+    volRatio: volRatio,
+    techScore: techScore,
+    stage1Score: techScore,
+    fundScore: null,
+    revYoY: null,
+    ttmEPS: null,
+    fund: null,
+    totalScore: techScore,
+    tech: tech,
+    stage: 1,
+    deepScanned: false
+  };
+}
+
+async function enrichStage2Item(item) {
+  if (item.deepScanned) return item;
+  try {
+    var fund = await Promise.race([
+      analyzeAIFundamental(item.symbol, item.name),
+      new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timeout')); }, 12000); })
+    ]);
+    if (fund) {
+      item.fund = fund;
+      item.fundScore = num(fund.score) || 0;
+      item.revYoY = extractMetricValue(fund.metrics, '月營收年增');
+      item.ttmEPS = extractMetricValue(fund.metrics, '近四季 EPS');
+    }
+  } catch(e) { console.warn('[Stage2] fundamental fetch timeout/error for', item.symbol); }
+  
+  // Update attributes regardless of total success to preserve stage 1 data
+  item.deepScanned = true;
+  item.stage = 2;
+
+  // Re-calculate totalScore
+  var fS = item.fundScore || 0;
+  var score = Math.round((item.techScore || 0) * 0.6 + fS * 0.4);
+  if (item.price != null && item.ma20 != null && item.price >= item.ma20) score += 8;
+  if ((item.volRatio || 0) >= 1.2) score += 5;
+  if (item.rsi != null && item.rsi >= 35 && item.rsi <= 68) score += 4;
+  if ((item.revYoY || 0) >= 0) score += 3;
+  if ((item.ttmEPS || 0) > 0) score += 3;
+  item.totalScore = Math.max(0, Math.min(100, score));
+
+  return item;
+}
+
+function evaluateStage1Result(item, criteria) {
+  var s = criteria.simple || [];
+  if (s.length > 0) {
+    if (s.includes('buyFit') && !(item.price != null && item.ma20 != null && item.price >= item.ma20)) return false;
+    if (s.includes('sellWatch') && !(item.price != null && item.ma20 != null && item.price < item.ma20)) return false;
+    if (s.includes('volumeSpike') && !((item.volRatio || 0) >= 1.5)) return false;
+    if (s.includes('oversold') && !((item.rsi || 999) < 30)) return false;
   }
-  if (criteria.minTotal != null && item.totalScore < criteria.minTotal) return false;
-  if (criteria.minFund != null && item.fundScore < criteria.minFund) return false;
-  if (criteria.maxRsi != null && (item.rsi == null || item.rsi > criteria.maxRsi)) return false;
-  if (criteria.minVolRatio != null && (item.volRatio == null || item.volRatio < criteria.minVolRatio)) return false;
-  if (criteria.minRevYoY != null && (item.revYoY == null || item.revYoY < criteria.minRevYoY)) return false;
-  if (criteria.minEPS != null && (item.ttmEPS == null || item.ttmEPS < criteria.minEPS)) return false;
+  if (criteria.maxRsi != null && !isNaN(criteria.maxRsi) && item.rsi != null && item.rsi > criteria.maxRsi) return false;
+  if (criteria.minVolRatio != null && !isNaN(criteria.minVolRatio) && item.volRatio != null && item.volRatio < criteria.minVolRatio) return false;
+  if (criteria.minTotal != null && !isNaN(criteria.minTotal) && item.stage1Score < criteria.minTotal) return false;
+  return true;
+}
+
+function evaluateStage2Result(item, criteria) {
+  if (!evaluateStage1Result(item, criteria)) return false;
+  if (criteria.minTotal != null && !isNaN(criteria.minTotal) && item.totalScore < criteria.minTotal) return false;
+  if (criteria.minFund != null && !isNaN(criteria.minFund) && (item.fundScore || 0) < criteria.minFund) return false;
+  if (criteria.minRevYoY != null && !isNaN(criteria.minRevYoY) && (item.revYoY == null || item.revYoY < criteria.minRevYoY)) return false;
+  if (criteria.minEPS != null && !isNaN(criteria.minEPS) && (item.ttmEPS == null || item.ttmEPS < criteria.minEPS)) return false;
   return true;
 }
 
@@ -2845,11 +2924,8 @@ async function runScreener() {
   var progressText = document.getElementById('screenProgressText');
   var progressBar = document.getElementById('screenProgressBar');
   var progressMeta = document.getElementById('screenProgressMeta');
-  var runBtn = document.getElementById('btnRunScreener');
-  var stopBtn = document.getElementById('btnStopScreener');
   var deepBtn = document.getElementById('btnRunDeepScan');
 
-  // resolve universe
   var uMode = document.getElementById('screenUniverse') ? document.getElementById('screenUniverse').value : 'union';
   var symbols = [];
   if (uMode === 'watchlist') symbols = (state && state.watchlist ? state.watchlist : []).slice();
@@ -2876,9 +2952,7 @@ async function runScreener() {
     return;
   }
 
-  // start UI
   window.__v3914Scanning = true; window.__v3914ScanCancel = false;
-  window.__v3914LastRows = []; window.__v3914LastCriteria = {};
   if (_screenScanJob) { _screenScanJob.running = true; _screenScanJob.cancelled = false; }
   setScreenerRunning(true);
   if (deepBtn) { deepBtn.disabled = true; deepBtn.style.display = 'none'; }
@@ -2889,52 +2963,28 @@ async function runScreener() {
   if (empty) empty.style.display = '';
   if (summary) summary.style.display = 'none';
 
-  // API constraints check
   if (symbols.length > SCREEN_SCAN_HARD_LIMIT) {
-    if (status) status.textContent = '篩選取消。';
-    alert('⚠️ 安全限制：\n您選擇的股票池過大（' + symbols.length + ' 檔）。\n由於目前資料需從伺服器即時取回多項特徵指標，為避免請求過量遭到封鎖，單次掃描不得超過 ' + SCREEN_SCAN_HARD_LIMIT + ' 檔。\n請縮小範圍或改用其他母體。');
+    alert('單次掃描不得超過 ' + SCREEN_SCAN_HARD_LIMIT + ' 檔。');
     window.__v3914ScanCancel = true;
   } else if (symbols.length > SCREEN_SCAN_SOFT_LIMIT) {
-    if (!confirm('⚠️ 工作量提醒：\n您準備掃描 ' + symbols.length + ' 檔股票，這可能需要幾分鐘的時間，且頻繁掃描大量股票可能觸發 API 限制。\n確定要繼續嗎？')) {
-      if (status) status.textContent = '篩選取消。';
+    if (!confirm('掃描 ' + symbols.length + ' 檔股票可能花費較長時間，確定要繼續嗎？')) {
       window.__v3914ScanCancel = true;
     }
   }
 
-  // get criteria
-  var simpleFilters = Array.from(document.querySelectorAll('[data-screen-filter].active')).map(function (el) { return el.dataset.screenFilter; });
   var criteria = {
-    simple: simpleFilters,
-    minTotal: Number(document.getElementById('screenMinTotal') ? document.getElementById('screenMinTotal').value : '') || null,
-    minFund: Number(document.getElementById('screenMinFund') ? document.getElementById('screenMinFund').value : '') || null,
-    maxRsi: Number(document.getElementById('screenMaxRsi') ? document.getElementById('screenMaxRsi').value : '') || null,
-    minVolRatio: Number(document.getElementById('screenMinVolRatio') ? document.getElementById('screenMinVolRatio').value : '') || null,
-    minRevYoY: Number(document.getElementById('screenMinRevYoY') ? document.getElementById('screenMinRevYoY').value : '') || null,
-    minEPS: Number(document.getElementById('screenMinEPS') ? document.getElementById('screenMinEPS').value : '') || null,
-    sortBy: (document.getElementById('screenSortBy') || {}).value || 'totalDesc',
-    limit: parseInt(((document.getElementById('screenLimit') || {}).value || '20'), 10) || 20,
+    simple: Array.from(document.querySelectorAll('[data-screen-filter].active')).map(function (el) { return el.dataset.screenFilter; }),
+    minTotal: Number(document.getElementById('screenMinTotal')?.value) || null,
+    minFund: Number(document.getElementById('screenMinFund')?.value) || null,
+    maxRsi: Number(document.getElementById('screenMaxRsi')?.value) || null,
+    minVolRatio: Number(document.getElementById('screenMinVolRatio')?.value) || null,
+    minRevYoY: Number(document.getElementById('screenMinRevYoY')?.value) || null,
+    minEPS: Number(document.getElementById('screenMinEPS')?.value) || null,
+    sortBy: document.getElementById('screenSortBy')?.value || 'totalDesc',
+    limit: parseInt(document.getElementById('screenLimit')?.value || '20', 10) || 20,
     universe: uMode
   };
   window.__v3914LastCriteria = criteria;
-
-  function relaxedPass(item) {
-    var s = criteria.simple || [];
-    if (!s.length && !criteria.minTotal && !criteria.minFund && !criteria.maxRsi && !criteria.minVolRatio && !criteria.minRevYoY && !criteria.minEPS) return true;
-
-    if (s.length > 0) {
-      if (s.includes('buyFit') && !(((item.price != null && item.ma20 != null && item.price >= item.ma20)) || (item.totalScore || 0) >= 55)) return false;
-      if (s.includes('sellWatch') && !(((item.price != null && item.ma20 != null && item.price < item.ma20)) || (item.totalScore || 0) <= 45)) return false;
-      if (s.includes('volumeSpike') && !((item.volRatio || 0) >= 1.2)) return false;
-      if (s.includes('oversold') && !((item.rsi || 999) <= 35)) return false;
-    }
-
-    var gates = [];
-    if (criteria.minTotal && !isNaN(criteria.minTotal)) gates.push((item.totalScore || 0) >= criteria.minTotal);
-    // 第一階段不檢查基本面，留在深度篩選才把這些 criteria 拿出來檢查
-    if (criteria.maxRsi && !isNaN(criteria.maxRsi) && item.rsi != null) gates.push(item.rsi <= criteria.maxRsi);
-    if (criteria.minVolRatio && !isNaN(criteria.minVolRatio) && item.volRatio != null) gates.push(item.volRatio >= criteria.minVolRatio);
-    return gates.length ? gates.every(Boolean) : true;
-  }
 
   var rows = [], allItems = [], ok = 0, fail = 0, skip = 0;
   var backoffMs = SCREEN_BATCH_DELAY;
@@ -2944,8 +2994,7 @@ async function runScreener() {
       if (window.__v3914ScanCancel || (_screenScanJob && _screenScanJob.cancelled)) break;
       var sym = normalizeSymbol(symbols[i]);
       if (status) status.textContent = '掃描中 ' + (i + 1) + '/' + symbols.length + '：' + sym + '｜成功 ' + ok + '｜略過 ' + skip + '｜失敗 ' + fail;
-      var pct = Math.round((i / symbols.length) * 100);
-      if (progressBar) progressBar.style.width = pct + '%';
+      if (progressBar) progressBar.style.width = Math.round((i / symbols.length) * 100) + '%';
       if (progressText) progressText.textContent = '正在分析 ' + sym + '…';
       if (progressMeta) progressMeta.textContent = (i + 1) + ' / ' + symbols.length + '｜成功 ' + ok + '｜失敗 ' + fail + '｜略過 ' + skip;
 
@@ -2955,85 +3004,68 @@ async function runScreener() {
       while (currentRetries < 2) {
         if (window.__v3914ScanCancel || (_screenScanJob && _screenScanJob.cancelled)) break;
         try {
-          var priceRows = await Promise.race([fetchAIReportData(sym), new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, 14000); })]);
+          var priceRows = await Promise.race([
+            fetchAIReportData(sym),
+            new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, 14000); })
+          ]);
 
           if (!priceRows || priceRows.length < 30) {
-            // Not necessarily a rate limit; could be 404 or delisted.
-            // We'll treat an empty response without throwing as a skip.
-            skip++;
-            fetchSuccess = true; // successfully determined it's empty
-            break;
+            skip++; fetchSuccess = true; break;
           }
 
           var tech = analyzeAIData(sym, priceRows);
-          // 第一階段【輕量篩選】：不抓取基本面資料，大幅提升掃描速度
-          var fund = { score: 0, metrics: null };
+          var item = buildStage1Item(sym, priceRows, tech);
+          ok++;
+          allItems.push(item);
 
-          var closes = priceRows.map(function (r) { return r.close; });
-          var vols = priceRows.map(function (r) { return num(r.volume) || 0; });
-          var lastRow = priceRows[priceRows.length - 1] || {};
-          var avg5v = (vols.slice(-6, -1).reduce(function (a, b) { return a + b; }, 0) / Math.max(1, Math.min(5, vols.length - 1))) || 0;
-          var volRatio = avg5v > 0 ? ((num(lastRow.volume) || 0) / avg5v) : null;
-          var rsi = calcRSI(closes, 14);
-          var totalScore = num(tech.comprehensiveScore) || 0; // 第一階段以技術面分數為主
+          if (evaluateStage1Result(item, criteria)) {
+            rows.push(item);
+          }
 
-          var item = {
-            symbol: sym, name: tech.name || getStockName(sym) || '',
-            price: num(lastRow.close), ma20: num(tech.m20),
-            techScore: num(tech.comprehensiveScore) || 0, fundScore: 0,
-            totalScore: totalScore, rsi: rsi, volRatio: volRatio,
-            revYoY: null,
-            ttmEPS: null,
-            tech: tech, fund: fund
-          };
-
-          ok++; allItems.push(item);
-          if (relaxedPass(item)) rows.push(item);
-
-          // Reset backoff on success
           backoffMs = SCREEN_BATCH_DELAY;
           fetchSuccess = true;
-          break; // success, exit retry loop
-
+          break;
         } catch (e3) {
           currentRetries++;
-          console.warn('[screener]', sym, 'try', currentRetries, e3 && e3.message ? e3.message : e3);
-          if (e3 && e3.message && (e3.message.includes('429') || e3.message.includes('rate limit') || e3.message.includes('fetch') || e3.message.includes('timeout') || e3.message.includes('Network'))) {
-            if (progressText) progressText.textContent = '觸發頻率限制或逾時，重試中 (' + (backoffMs / 1000).toFixed(1) + 's)…';
-            await new Promise(function (r) { setTimeout(r, backoffMs); });
-            backoffMs = Math.min(backoffMs * 2, 5000); // Cap at 5s
+          if (e3 && e3.message && (e3.message.includes('429') || e3.message.includes('fetch'))) {
+            if (progressText) progressText.textContent = '重試中 (' + (backoffMs / 1000).toFixed(1) + 's)…';
+            await new Promise(r => setTimeout(r, backoffMs));
+            backoffMs = Math.min(backoffMs * 2, 5000);
           } else {
-            // Unknown error, wait a tiny bit and retry anyway
-            await new Promise(function (r) { setTimeout(r, 1000); });
+            await new Promise(r => setTimeout(r, 1000));
           }
         }
       }
 
       if (!fetchSuccess && !window.__v3914ScanCancel && !(_screenScanJob && _screenScanJob.cancelled)) {
-        fail++; // exhausted retries
+        fail++;
       }
 
       if ((i + 1) % SCREEN_BATCH_SIZE === 0 && i < symbols.length - 1) {
-        await new Promise(function (r) { setTimeout(r, backoffMs); });
+        await new Promise(r => setTimeout(r, backoffMs));
       }
     }
 
-    // fallback: if 0 hits but we have items, show top by score
     if (!rows.length && allItems.length) {
-      rows = allItems.slice().sort(function (a, b) { return (b.totalScore || 0) - (a.totalScore || 0); }).slice(0, Math.min(criteria.limit || 20, allItems.length));
+      rows = allItems.slice().sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0)).slice(0, criteria.limit);
     }
-    window.__v3914LastRows = rows;
-    renderScreenResults(rows, criteria, { total: symbols.length, ok: ok, failed: fail, skipped: skip });
-    var hitCount = rows.length;
+    
+    var stats = { total: symbols.length, ok: ok, failed: fail, skipped: skip };
     var wasCancelled = window.__v3914ScanCancel || (_screenScanJob && _screenScanJob.cancelled);
+    var label = wasCancelled ? 'partial' : 'stage1';
+    snapshotScreenResults(rows, criteria, stats, label);
+    renderScreenResults(rows, criteria, stats);
+
+    var hitCount = rows.length;
     if (status) status.textContent = wasCancelled ? '掃描已停止' : '篩選完成｜掃描 ' + symbols.length + ' 檔｜命中 ' + hitCount + ' 檔';
     if (progressBar) progressBar.style.width = '100%';
-    if (progressText) progressText.textContent = wasCancelled ? '掃描已停止' : '✅ 篩選完成';
+    if (progressText) progressText.textContent = wasCancelled ? '掃描已停止' : '✅快篩完成';
     if (progressMeta) progressMeta.textContent = '命中 ' + hitCount + ' 檔';
     if (summary) {
       summary.style.display = 'block';
-      summary.innerHTML = (wasCancelled ? '<span style="color:#ef4444;">已中斷</span>｜' : '') + '完成掃描 ' + symbols.length + ' 檔，符合條件共 <strong>' + hitCount + '</strong> 檔。' + (hitCount > 0 ? '（已按' + (document.getElementById('screenSortBy')?.options[document.getElementById('screenSortBy').selectedIndex]?.text || '設定') + '排序）' : '');
+      summary.innerHTML = (wasCancelled ? '<span style="color:#ef4444;">已中斷</span>｜' : '') + '完成掃描，符合條件共 <strong>' + hitCount + '</strong> 檔。';
     }
+
     if (deepBtn && hitCount >= 5) {
       deepBtn.disabled = false; deepBtn.innerHTML = '🧠 深度篩選 (<span id="btnRunDeepCount">' + hitCount + '</span>)';
       deepBtn.style.display = ''; deepBtn.style.background = '#166534'; deepBtn.style.color = '#fff';
@@ -3041,6 +3073,7 @@ async function runScreener() {
       deepBtn.disabled = true; deepBtn.innerHTML = '🧠 深度篩選 (條件不足)';
       deepBtn.style.display = ''; deepBtn.style.background = '#4b5563'; deepBtn.style.color = '#9ca3af';
     }
+    
     state.screenHistory = [{ time: new Date().toLocaleString('zh-TW'), poolLabel: uMode, count: hitCount, filters: JSON.stringify(criteria.simple) }].concat(state.screenHistory || []).slice(0, 20);
     saveState(state);
     if (typeof renderScreenerHistory === 'function') renderScreenerHistory();
@@ -3051,59 +3084,51 @@ async function runScreener() {
   }
 }
 
-
 async function runDeepScan() {
-  var rows = window.__v3914LastRows || [];
-  if (rows.length < 5) { alert('深度篩選需要至少 5 筆第一階段篩選結果，以便確保樣本具有比較價值！請先調整輕度篩選條件。'); return; }
+  if (!window.__screenLastResult || !window.__screenLastResult.rows || window.__screenLastResult.rows.length === 0) {
+    alert('深度篩選需要針對第一階段的結果進行分析，請先執行「開始篩選」！');
+    return;
+  }
+  
+  var rows = window.__screenLastResult.rows;
+  var criteria = window.__screenLastResult.criteria || {};
+  var stats = window.__screenLastResult.stats;
+  
   var deepBtn = document.getElementById('btnRunDeepScan');
   var status = document.getElementById('screenRunStatus');
   var progressText = document.getElementById('screenProgressText');
   var progressBar = document.getElementById('screenProgressBar');
   var progressMeta = document.getElementById('screenProgressMeta');
-  var progressCard = document.getElementById('screenProgressCard');
+  
   window.__v3914DeepCancel = false;
-  if (progressCard) progressCard.classList.add('show');
   if (deepBtn) { deepBtn.textContent = '⏹️ 停止深度篩選'; deepBtn.classList.add('btn-stop-scan'); }
+  
   var out = [];
   for (var i = 0; i < rows.length; i++) {
     if (window.__v3914DeepCancel) break;
+    
     var r = JSON.parse(JSON.stringify(rows[i]));
+    var enrichedItem = await enrichStage2Item(r);
     
-    // 第二階段【深度篩選】：補抓基本面資料，並重新計算總分
-    try {
-      var fund = await Promise.race([analyzeAIFundamental(r.symbol, r.name), new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, 12000); })]);
-      r.fund = fund;
-      r.fundScore = num(fund.score) || 0;
-      r.revYoY = extractMetricValue(fund.metrics, '月營收年增');
-      r.ttmEPS = extractMetricValue(fund.metrics, '近四季 EPS');
-    } catch(e) { }
-
-    var score = Math.round((r.techScore || 0) * 0.6 + (r.fundScore || 0) * 0.4);
-    if (r.price != null && r.ma20 != null && r.price >= r.ma20) score += 8;
-    if ((r.volRatio || 0) >= 1.2) score += 5;
-    if (r.rsi != null && r.rsi >= 35 && r.rsi <= 68) score += 4;
-    if ((r.revYoY || 0) >= 0) score += 3;
-    if ((r.ttmEPS || 0) > 0) score += 3;
-    r.totalScore = Math.max(0, Math.min(100, score));
+    if (evaluateStage2Result(enrichedItem, criteria)) {
+      out.push(enrichedItem);
+    }
     
-    // 檢查進階基本面條件過濾
-    var criteria = window.__v3914LastCriteria || {};
-    var pass = true;
-    if (criteria.minFund && !isNaN(criteria.minFund) && r.fundScore < criteria.minFund) pass = false;
-    if (criteria.minRevYoY && !isNaN(criteria.minRevYoY) && r.revYoY != null && r.revYoY < criteria.minRevYoY) pass = false;
-    if (criteria.minEPS && !isNaN(criteria.minEPS) && r.ttmEPS != null && r.ttmEPS < criteria.minEPS) pass = false;
-    
-    if (pass) out.push(r);
     if (progressBar) progressBar.style.width = Math.round(((i + 1) / rows.length) * 100) + '%';
-    if (progressText) progressText.textContent = '深度篩選中 ' + (i + 1) + ' / ' + rows.length;
+    if (progressText) progressText.textContent = '深篩中 ' + (i + 1) + ' / ' + rows.length;
     if (progressMeta) progressMeta.textContent = (i + 1) + ' / ' + rows.length;
-    if (status) status.textContent = '深度篩選中 ' + (i + 1) + ' / ' + rows.length;
+    if (status) status.textContent = '深篩中 ' + (i + 1) + ' / ' + rows.length;
     if ((i + 1) % 3 === 0) await new Promise(function (r2) { setTimeout(r2, 40); });
   }
-  out.sort(function (a, b) { return (b.totalScore || 0) - (a.totalScore || 0); });
-  var criteria = Object.assign({}, window.__v3914LastCriteria || {}, { __twoStage: 'deep' });
-  renderScreenResults(out, criteria, { total: rows.length, ok: out.length, failed: 0, skipped: 0 });
-  if (status) status.textContent = window.__v3914DeepCancel ? '深度篩選已停止' : '深度篩選完成｜保留 ' + out.length + ' 檔（多因子重排）';
+  
+  // Sort heavily based on the new totalScores
+  out.sort(function(a, b) { return (b.totalScore || 0) - (a.totalScore || 0); });
+  
+  var label = window.__v3914DeepCancel ? 'partial' : 'stage2';
+  snapshotScreenResults(out, criteria, stats, label);
+  renderScreenResults(out, criteria, stats);
+
+  if (status) status.textContent = window.__v3914DeepCancel ? '深度篩選已停止' : '深度篩選完成｜保留 ' + out.length + ' 檔';
   if (progressText) progressText.textContent = window.__v3914DeepCancel ? '深度篩選已停止' : '✅ 深度篩選完成';
   if (progressBar) progressBar.style.width = '100%';
   if (progressMeta) progressMeta.textContent = '保留 ' + out.length + ' 檔';
