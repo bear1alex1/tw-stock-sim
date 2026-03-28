@@ -2821,6 +2821,9 @@ function snapshotScreenResults(rows, criteria, stats, stageLabel) {
     generatedAt: new Date().toISOString(),
     stage: stageLabel
   };
+  
+  // 🎯 新增：將結果同步給 _screenLastResult，這樣 PDF 匯出功能才能抓到最新的深篩資料！
+  _screenLastResult = window.__screenLastResult;
 }
 
 function buildStage1Item(symbol, priceRows, tech) {
@@ -3145,9 +3148,16 @@ async function runDeepScan() {
   if (progressText) progressText.textContent = window.__v3914DeepCancel ? '深度篩選已停止' : '✅ 深度篩選完成';
   if (progressBar) progressBar.style.width = '100%';
   if (progressMeta) progressMeta.textContent = '保留 ' + out.length + ' 檔';
-  if (deepBtn) { deepBtn.textContent = '🧠 深度篩選'; deepBtn.classList.remove('btn-stop-scan'); deepBtn.style.background = '#166534'; deepBtn.style.color = '#fff'; }
+  
+  // 🎯 修改：深篩完成後將按鈕鎖定反灰，不可重複點擊
+  if (deepBtn) { 
+    deepBtn.disabled = true;
+    deepBtn.textContent = window.__v3914DeepCancel ? '🧠 深度篩選 (已中斷)' : '✅ 深度篩選完成'; 
+    deepBtn.classList.remove('btn-stop-scan'); 
+    deepBtn.style.background = '#4b5563'; // 灰色背景
+    deepBtn.style.color = '#9ca3af';      // 灰色文字
+  }
 }
-
 
 function bindScreenerUI() {
   if (window.__screenerBound) return;
