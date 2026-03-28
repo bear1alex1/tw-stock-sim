@@ -2916,6 +2916,10 @@ function syncIndicatorLights() {
 
 async function runScreener() {
   if (window.__v3914Scanning) { window.__v3914ScanCancel = true; return; }
+
+  // 🎯 差異修改 1：強制等待台股代碼總表載入，確保後續比對能抓到真實存在的股號
+  await preloadStockNames();
+
   var status = document.getElementById('screenRunStatus');
   var summary = document.getElementById('screenResultSummary');
   var body = document.getElementById('screenResultBody');
@@ -2936,41 +2940,50 @@ async function runScreener() {
     var rs = parseInt((document.getElementById('screenRangeStart') || {}).value || '0', 10);
     var re2 = parseInt((document.getElementById('screenRangeEnd') || {}).value || '0', 10);
     if (rs > 0 && re2 >= rs) {
-      for (var ri = rs; ri <= Math.min(re2, rs + 300); ri++) {
+      // 🎯 差異修改 2：移除無意義的 +300 盲掃限制，直接掃描使用者輸入的區間
+      for (var ri = rs; ri <= re2; ri++) {
         var symStr = String(ri).padStart(4, '0');
-        if (!_stockInfoLoaded || stockNameCache[symStr] || stockMetaCache[symStr] || (typeof isETF === 'function' && isETF(symStr))) {
+        // 🎯 差異修改 3：嚴格過濾，只把快取字典中真正存在的股票加入陣列
+        if (stockNameCache[symStr] || stockMetaCache[symStr] || (typeof isETF === 'function' && isETF(symStr))) {
           symbols.push(symStr);
         }
       }
     }
   }
   else if (uMode === 'allStocks') { try { symbols = Object.keys(stockMetaCache || {}).filter(function (c) { return /^\d{4}$/.test(c); }).sort().slice(0, 150); } catch (e2) { symbols = []; } }
+  
+  // 去除重複並過濾空值
   symbols = Array.from(new Set(symbols.map(function (x) { return normalizeSymbol(x); }).filter(Boolean)));
 
   if (!symbols.length) {
     if (status) status.textContent = '範圍內沒有可掃描的有效股票代碼';
+    alert('❌ 此區段內沒有任何真實存在的股票代號，請重新輸入。');
     return;
+  }
+
+  // 🎯 差異修改 4：以「過濾後的真實有效數量」來觸發告警，阻擋超次數 API 浪費
+  if (symbols.length > SCREEN_SCAN_HARD_LIMIT) {
+    alert('❌ 本次區段解析出 ' + symbols.length + ' 檔有效股票。單次掃描不得超過 ' + SCREEN_SCAN_HARD_LIMIT + ' 檔，系統已主動阻擋以保護 API 額度。');
+    window.__v3914ScanCancel = true;
+    return;
+  } else if (symbols.length > SCREEN_SCAN_SOFT_LIMIT) {
+    if (!confirm('⚠️ 本次區段解析出 ' + symbols.length + ' 檔有效股票。數量較多可能需要數十秒時間，確定要繼續掃描技術面嗎？')) {
+      window.__v3914ScanCancel = true;
+      return;
+    }
   }
 
   window.__v3914Scanning = true; window.__v3914ScanCancel = false;
   if (_screenScanJob) { _screenScanJob.running = true; _screenScanJob.cancelled = false; }
   setScreenerRunning(true);
+  
   if (deepBtn) { deepBtn.disabled = true; deepBtn.style.display = 'none'; }
-  if (progressText) progressText.textContent = '開始掃描 ' + symbols.length + ' 支股票…';
+  if (progressText) progressText.textContent = '開始淺層掃描 ' + symbols.length + ' 支股票技術面…';
   if (progressBar) progressBar.style.width = '0%';
   if (progressMeta) progressMeta.textContent = '0 / ' + symbols.length;
   if (body) body.innerHTML = '';
   if (empty) empty.style.display = '';
   if (summary) summary.style.display = 'none';
-
-  if (symbols.length > SCREEN_SCAN_HARD_LIMIT) {
-    alert('單次掃描不得超過 ' + SCREEN_SCAN_HARD_LIMIT + ' 檔。');
-    window.__v3914ScanCancel = true;
-  } else if (symbols.length > SCREEN_SCAN_SOFT_LIMIT) {
-    if (!confirm('掃描 ' + symbols.length + ' 檔股票可能花費較長時間，確定要繼續嗎？')) {
-      window.__v3914ScanCancel = true;
-    }
-  }
 
   var criteria = {
     simple: Array.from(document.querySelectorAll('[data-screen-filter].active')).map(function (el) { return el.dataset.screenFilter; }),
@@ -2995,7 +3008,7 @@ async function runScreener() {
       var sym = normalizeSymbol(symbols[i]);
       if (status) status.textContent = '掃描中 ' + (i + 1) + '/' + symbols.length + '：' + sym + '｜成功 ' + ok + '｜略過 ' + skip + '｜失敗 ' + fail;
       if (progressBar) progressBar.style.width = Math.round((i / symbols.length) * 100) + '%';
-      if (progressText) progressText.textContent = '正在分析 ' + sym + '…';
+      if (progressText) progressText.textContent = '正在分析技術面 ' + sym + '…';
       if (progressMeta) progressMeta.textContent = (i + 1) + ' / ' + symbols.length + '｜成功 ' + ok + '｜失敗 ' + fail + '｜略過 ' + skip;
 
       let fetchSuccess = false;
@@ -3057,16 +3070,17 @@ async function runScreener() {
     renderScreenResults(rows, criteria, stats);
 
     var hitCount = rows.length;
-    if (status) status.textContent = wasCancelled ? '掃描已停止' : '篩選完成｜掃描 ' + symbols.length + ' 檔｜命中 ' + hitCount + ' 檔';
+    if (status) status.textContent = wasCancelled ? '掃描已停止' : '淺層篩選完成｜掃描 ' + symbols.length + ' 檔｜技術面命中 ' + hitCount + ' 檔';
     if (progressBar) progressBar.style.width = '100%';
-    if (progressText) progressText.textContent = wasCancelled ? '掃描已停止' : '✅快篩完成';
+    if (progressText) progressText.textContent = wasCancelled ? '掃描已停止' : '✅ 技術面快篩完成';
     if (progressMeta) progressMeta.textContent = '命中 ' + hitCount + ' 檔';
     if (summary) {
       summary.style.display = 'block';
-      summary.innerHTML = (wasCancelled ? '<span style="color:#ef4444;">已中斷</span>｜' : '') + '完成掃描，符合條件共 <strong>' + hitCount + '</strong> 檔。';
+      summary.innerHTML = (wasCancelled ? '<span style="color:#ef4444;">已中斷</span>｜' : '') + '完成技術面掃描，符合條件共 <strong>' + hitCount + '</strong> 檔。';
     }
 
-    if (deepBtn && hitCount >= 5) {
+    // 🎯 差異修改 5：只要技術面有過關的股票 (hitCount > 0)，就開放深度篩選按鈕
+    if (deepBtn && hitCount > 0) {
       deepBtn.disabled = false; deepBtn.innerHTML = '🧠 深度篩選 (<span id="btnRunDeepCount">' + hitCount + '</span>)';
       deepBtn.style.display = ''; deepBtn.style.background = '#166534'; deepBtn.style.color = '#fff';
     } else if (deepBtn) {
@@ -3083,7 +3097,6 @@ async function runScreener() {
     setScreenerRunning(false);
   }
 }
-
 async function runDeepScan() {
   if (!window.__screenLastResult || !window.__screenLastResult.rows || window.__screenLastResult.rows.length === 0) {
     alert('深度篩選需要針對第一階段的結果進行分析，請先執行「開始篩選」！');
