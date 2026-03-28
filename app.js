@@ -2030,7 +2030,9 @@ async function fetchKLineData(symbol) {
     const target = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}${sfx}?range=3mo&interval=1d`;
     for (const px of PROXIES) {
       try {
-        const r = await timedFetch(px(target), 8000); if (!r.ok) continue;
+        const r = await timedFetch(px(target), 8000); 
+        if (r.status === 429) throw new Error('429 Rate Limit');
+        if (!r.ok) continue;
         const text = await r.text(); if (!text || text.startsWith('<')) continue;
         const json = JSON.parse(text); const result = json?.chart?.result?.[0]; if (!result) continue;
         const ts = result.timestamp || []; const q = result.indicators?.quote?.[0] || {}; const out = [];
@@ -2039,7 +2041,9 @@ async function fetchKLineData(symbol) {
           if (o && h && l && c) out.push({ time: new Date(ts[i] * 1000).toISOString().slice(0, 10), open: o, high: h, low: l, close: c });
         }
         if (out.length) return out;
-      } catch (_) { }
+      } catch (e) { 
+        if (e && e.message && e.message.includes('429')) throw e; 
+      }
     }
   }
   return [];
@@ -2916,10 +2920,14 @@ async function runScreener() {
   function relaxedPass(item) {
     var s = criteria.simple || [];
     if (!s.length && !criteria.minTotal && !criteria.minFund && !criteria.maxRsi && !criteria.minVolRatio && !criteria.minRevYoY && !criteria.minEPS) return true;
-    if (s.includes('buyFit') && (((item.price != null && item.ma20 != null && item.price >= item.ma20)) || (item.totalScore || 0) >= 55)) return true;
-    if (s.includes('sellWatch') && (((item.price != null && item.ma20 != null && item.price < item.ma20)) || (item.totalScore || 0) <= 45)) return true;
-    if (s.includes('volumeSpike') && (item.volRatio || 0) >= 1.2) return true;
-    if (s.includes('oversold') && (item.rsi || 999) <= 35) return true;
+    
+    if (s.length > 0) {
+      if (s.includes('buyFit') && !(((item.price != null && item.ma20 != null && item.price >= item.ma20)) || (item.totalScore || 0) >= 55)) return false;
+      if (s.includes('sellWatch') && !(((item.price != null && item.ma20 != null && item.price < item.ma20)) || (item.totalScore || 0) <= 45)) return false;
+      if (s.includes('volumeSpike') && !((item.volRatio || 0) >= 1.2)) return false;
+      if (s.includes('oversold') && !((item.rsi || 999) <= 35)) return false;
+    }
+    
     var gates = [];
     if (criteria.minTotal && !isNaN(criteria.minTotal)) gates.push((item.totalScore || 0) >= criteria.minTotal);
     if (criteria.minFund && !isNaN(criteria.minFund)) gates.push((item.fundScore || 0) >= criteria.minFund);
@@ -2927,7 +2935,7 @@ async function runScreener() {
     if (criteria.minVolRatio && !isNaN(criteria.minVolRatio) && item.volRatio != null) gates.push(item.volRatio >= criteria.minVolRatio);
     if (criteria.minRevYoY && !isNaN(criteria.minRevYoY) && item.revYoY != null) gates.push(item.revYoY >= criteria.minRevYoY);
     if (criteria.minEPS && !isNaN(criteria.minEPS) && item.ttmEPS != null) gates.push(item.ttmEPS >= criteria.minEPS);
-    return gates.length ? gates.every(Boolean) : false;
+    return gates.length ? gates.every(Boolean) : true;
   }
 
   var rows = [], allItems = [], ok = 0, fail = 0, skip = 0;
@@ -2943,43 +2951,69 @@ async function runScreener() {
       if (progressText) progressText.textContent = '正在分析 ' + sym + '…';
       if (progressMeta) progressMeta.textContent = (i + 1) + ' / ' + symbols.length + '｜成功 ' + ok + '｜失敗 ' + fail + '｜略過 ' + skip;
       
-      try {
-        var priceRows = await Promise.race([fetchAIReportData(sym), new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, 14000); })]);
-        if (!priceRows || priceRows.length < 30) { skip++; continue; }
-        var tech = analyzeAIData(sym, priceRows);
-        var fund = await Promise.race([analyzeAIFundamental(sym, tech.name || getStockName(sym) || ''), new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, 12000); })]);
-        var closes = priceRows.map(function (r) { return r.close; });
-        var vols = priceRows.map(function (r) { return num(r.volume) || 0; });
-        var lastRow = priceRows[priceRows.length - 1] || {};
-        var avg5v = (vols.slice(-6, -1).reduce(function (a, b) { return a + b; }, 0) / Math.max(1, Math.min(5, vols.length - 1))) || 0;
-        var volRatio = avg5v > 0 ? ((num(lastRow.volume) || 0) / avg5v) : null;
-        var rsi = calcRSI(closes, 14);
-        var totalScore = Math.round((num(tech.comprehensiveScore) || 0) * 0.6 + (num(fund.score) || 0) * 0.4);
-        var item = {
-          symbol: sym, name: tech.name || getStockName(sym) || '',
-          price: num(lastRow.close), ma20: num(tech.m20),
-          techScore: num(tech.comprehensiveScore) || 0, fundScore: num(fund.score) || 0,
-          totalScore: totalScore, rsi: rsi, volRatio: volRatio,
-          revYoY: extractMetricValue(fund.metrics, '月營收年增'),
-          ttmEPS: extractMetricValue(fund.metrics, '近四季 EPS'),
-          tech: tech, fund: fund
-        };
-        ok++; allItems.push(item);
-        if (relaxedPass(item)) rows.push(item);
-        
-        // Reset backoff on success
-        backoffMs = SCREEN_BATCH_DELAY;
-        
-      } catch (e3) { 
-        fail++; 
-        console.warn('[screener]', sym, e3 && e3.message ? e3.message : e3); 
-        // Rate limit hit (429) -> exponential backoff
-        if (e3 && e3.message && (e3.message.includes('429') || e3.message.includes('rate limit') || e3.message.includes('fetch'))) {
-           if (progressText) progressText.textContent = '觸發頻率限制，降速中 (' + (backoffMs/1000).toFixed(1) + 's)…';
-           await new Promise(function(r){ setTimeout(r, backoffMs); });
-           backoffMs = Math.min(backoffMs * 2, 5000); // Cap at 5s
+      let fetchSuccess = false;
+      let currentRetries = 0;
+      
+      while (currentRetries < 2) {
+        if (window.__v3914ScanCancel || (_screenScanJob && _screenScanJob.cancelled)) break;
+        try {
+          var priceRows = await Promise.race([fetchAIReportData(sym), new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, 14000); })]);
+          
+          if (!priceRows || priceRows.length < 30) {
+              // Not necessarily a rate limit; could be 404 or delisted.
+              // We'll treat an empty response without throwing as a skip.
+              skip++; 
+              fetchSuccess = true; // successfully determined it's empty
+              break; 
+          }
+          
+          var tech = analyzeAIData(sym, priceRows);
+          var fund = await Promise.race([analyzeAIFundamental(sym, tech.name || getStockName(sym) || ''), new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, 12000); })]);
+          
+          var closes = priceRows.map(function (r) { return r.close; });
+          var vols = priceRows.map(function (r) { return num(r.volume) || 0; });
+          var lastRow = priceRows[priceRows.length - 1] || {};
+          var avg5v = (vols.slice(-6, -1).reduce(function (a, b) { return a + b; }, 0) / Math.max(1, Math.min(5, vols.length - 1))) || 0;
+          var volRatio = avg5v > 0 ? ((num(lastRow.volume) || 0) / avg5v) : null;
+          var rsi = calcRSI(closes, 14);
+          var totalScore = Math.round((num(tech.comprehensiveScore) || 0) * 0.6 + (num(fund.score) || 0) * 0.4);
+          
+          var item = {
+            symbol: sym, name: tech.name || getStockName(sym) || '',
+            price: num(lastRow.close), ma20: num(tech.m20),
+            techScore: num(tech.comprehensiveScore) || 0, fundScore: num(fund.score) || 0,
+            totalScore: totalScore, rsi: rsi, volRatio: volRatio,
+            revYoY: extractMetricValue(fund.metrics, '月營收年增'),
+            ttmEPS: extractMetricValue(fund.metrics, '近四季 EPS'),
+            tech: tech, fund: fund
+          };
+          
+          ok++; allItems.push(item);
+          if (relaxedPass(item)) rows.push(item);
+          
+          // Reset backoff on success
+          backoffMs = SCREEN_BATCH_DELAY;
+          fetchSuccess = true;
+          break; // success, exit retry loop
+          
+        } catch (e3) { 
+          currentRetries++;
+          console.warn('[screener]', sym, 'try', currentRetries, e3 && e3.message ? e3.message : e3); 
+          if (e3 && e3.message && (e3.message.includes('429') || e3.message.includes('rate limit') || e3.message.includes('fetch') || e3.message.includes('timeout') || e3.message.includes('Network'))) {
+             if (progressText) progressText.textContent = '觸發頻率限制或逾時，重試中 (' + (backoffMs/1000).toFixed(1) + 's)…';
+             await new Promise(function(r){ setTimeout(r, backoffMs); });
+             backoffMs = Math.min(backoffMs * 2, 5000); // Cap at 5s
+          } else {
+             // Unknown error, wait a tiny bit and retry anyway
+             await new Promise(function(r){ setTimeout(r, 1000); });
+          }
         }
       }
+      
+      if (!fetchSuccess && !window.__v3914ScanCancel && !(_screenScanJob && _screenScanJob.cancelled)) {
+         fail++; // exhausted retries
+      }
+      
       if ((i + 1) % SCREEN_BATCH_SIZE === 0 && i < symbols.length - 1) {
         await new Promise(function (r) { setTimeout(r, backoffMs); });
       }
