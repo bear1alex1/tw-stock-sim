@@ -2659,10 +2659,22 @@ async function exportScreenerPdf() {
     const now = new Date();
     head.innerHTML = ''
       + '<div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:6px;">台股虛擬操盤系統｜篩選結果報表</div>'
-      + '<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：' + now.toLocaleDateString('zh-TW') + '｜匯出時間：' + now.toLocaleTimeString('zh-TW') + '｜版本：v3.9.0</div>'
+      + '<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：' + now.toLocaleDateString('zh-TW') + '｜匯出時間：' + now.toLocaleTimeString('zh-TW') + '｜版本：v3.10.2</div>'
       + '<div style="font-size:12px;color:#dbeafe;line-height:1.8;margin-bottom:14px;">篩選條件：' + formatScreenCriteria(_screenLastResult.criteria || {}).join('、') + '</div>';
+    
     const clone = source.cloneNode(true);
     clone.style.marginTop = '0';
+    
+    // 🎯 解開所有捲動與高度限制，讓 PDF 抓到完整清單
+    clone.style.height = 'auto';
+    clone.style.maxHeight = 'none';
+    clone.style.overflow = 'visible';
+    clone.querySelectorAll('div, table, tbody').forEach(el => {
+      el.style.overflow = 'visible';
+      el.style.maxHeight = 'none';
+      el.style.height = 'auto';
+    });
+
     wrap.appendChild(head);
     wrap.appendChild(clone);
     document.body.appendChild(wrap);
@@ -2730,6 +2742,7 @@ function poolLabelByValue(v) {
 function bindScreenerResultEvents() {
   const tbody = document.getElementById('screenResultBody');
   if (!tbody) return;
+  
   tbody.querySelectorAll('[data-screen-trade]').forEach(function (btn) {
     btn.onclick = function () {
       const sym = btn.dataset.screenTrade;
@@ -2745,6 +2758,7 @@ function bindScreenerResultEvents() {
       }, 150);
     };
   });
+  
   tbody.querySelectorAll('[data-screen-ai]').forEach(function (btn) {
     btn.onclick = function () {
       const sym = btn.dataset.screenAi;
@@ -2753,6 +2767,23 @@ function bindScreenerResultEvents() {
       renderSymbolHint('aiSymbol', 'aiSymbolHint');
       if (typeof window.__navigate === 'function') window.__navigate('aiReport');
       setTimeout(function () { generateAIReport(sym); }, 120);
+    };
+  });
+
+  // 🎯 新增：追蹤按鈕邏輯
+  tbody.querySelectorAll('[data-screen-watch]').forEach(function (btn) {
+    btn.onclick = function () {
+      const sym = normalizeSymbol(btn.dataset.screenWatch);
+      if (!state.watchlist.includes(sym)) {
+        state.watchlist.unshift(sym); // 加到最前面
+        state.watchlist = [...new Set(state.watchlist)];
+        saveState(state);
+        showToast('✅ 已將 ' + sym + ' 加入追蹤清單');
+        if (typeof renderWatchlistImmediate === 'function') renderWatchlistImmediate();
+        if (typeof refreshWatchlistPrices === 'function') refreshWatchlistPrices();
+      } else {
+        showToast('⚠️ ' + sym + ' 已在您的追蹤清單中囉！');
+      }
     };
   });
 }
@@ -2801,7 +2832,11 @@ function renderScreenResults(rows, criteria, stats) {
       + '<td><div class="' + priceToneClass + '">' + formatPrice(r.price) + '</div><div style="font-size:.72rem;color:#8b949e;">MA20 ' + formatPrice(r.ma20) + '</div></td>'
       + '<td><div>' + (r.rsi == null ? '—' : r.rsi.toFixed(2)) + '</div><div style="font-size:.72rem;color:#8b949e;">量比 ' + (r.volRatio == null ? '—' : r.volRatio.toFixed(2)) + '</div></td>'
       + '<td><div>' + renderToneValue(r.revYoY, revText) + '</div><div style="font-size:.72rem;color:#8b949e;">EPS ' + renderToneValue(r.ttmEPS, epsText) + '</div></td>'
-      + '<td><button class="btn-xs" data-screen-ai="' + r.symbol + '">AI</button> <button class="btn-xs btn-xs-gray" data-screen-trade="' + r.symbol + '">交易</button></td>';
+      + '<td><div style="display:flex; gap:4px; flex-wrap:wrap; max-width:120px;">'
+      + '<button class="btn-xs" data-screen-ai="' + r.symbol + '">AI</button>'
+      + '<button class="btn-xs btn-xs-gray" data-screen-trade="' + r.symbol + '">交易</button>'
+      + '<button class="btn-xs btn-xs-gray" data-screen-watch="' + r.symbol + '" style="color:#f3b73b; border-color:#f3b73b;">⭐追蹤</button>'
+      + '</div></td>';
     tbody.appendChild(tr);
   });
   bindScreenerResultEvents();
@@ -2919,8 +2954,6 @@ function syncIndicatorLights() {
 
 async function runScreener() {
   if (window.__v3914Scanning) { window.__v3914ScanCancel = true; return; }
-
-  // 🎯 差異修改 1：強制等待台股代碼總表載入，確保後續比對能抓到真實存在的股號
   await preloadStockNames();
 
   var status = document.getElementById('screenRunStatus');
@@ -2943,10 +2976,8 @@ async function runScreener() {
     var rs = parseInt((document.getElementById('screenRangeStart') || {}).value || '0', 10);
     var re2 = parseInt((document.getElementById('screenRangeEnd') || {}).value || '0', 10);
     if (rs > 0 && re2 >= rs) {
-      // 🎯 差異修改 2：移除無意義的 +300 盲掃限制，直接掃描使用者輸入的區間
       for (var ri = rs; ri <= re2; ri++) {
         var symStr = String(ri).padStart(4, '0');
-        // 🎯 差異修改 3：嚴格過濾，只把快取字典中真正存在的股票加入陣列
         if (stockNameCache[symStr] || stockMetaCache[symStr] || (typeof isETF === 'function' && isETF(symStr))) {
           symbols.push(symStr);
         }
@@ -2955,7 +2986,6 @@ async function runScreener() {
   }
   else if (uMode === 'allStocks') { try { symbols = Object.keys(stockMetaCache || {}).filter(function (c) { return /^\d{4}$/.test(c); }).sort().slice(0, 150); } catch (e2) { symbols = []; } }
   
-  // 去除重複並過濾空值
   symbols = Array.from(new Set(symbols.map(function (x) { return normalizeSymbol(x); }).filter(Boolean)));
 
   if (!symbols.length) {
@@ -2964,7 +2994,6 @@ async function runScreener() {
     return;
   }
 
-  // 🎯 差異修改 4：以「過濾後的真實有效數量」來觸發告警，阻擋超次數 API 浪費
   if (symbols.length > SCREEN_SCAN_HARD_LIMIT) {
     alert('❌ 本次區段解析出 ' + symbols.length + ' 檔有效股票。單次掃描不得超過 ' + SCREEN_SCAN_HARD_LIMIT + ' 檔，系統已主動阻擋以保護 API 額度。');
     window.__v3914ScanCancel = true;
@@ -3082,12 +3111,12 @@ async function runScreener() {
       summary.innerHTML = (wasCancelled ? '<span style="color:#ef4444;">已中斷</span>｜' : '') + '完成技術面掃描，符合條件共 <strong>' + hitCount + '</strong> 檔。';
     }
 
-    // 🎯 差異修改 5：只要技術面有過關的股票 (hitCount > 0)，就開放深度篩選按鈕
+    // 🎯 這裡將「深度篩選」文字改為「載入基本面」
     if (deepBtn && hitCount > 0) {
-      deepBtn.disabled = false; deepBtn.innerHTML = '🧠 深度篩選 (<span id="btnRunDeepCount">' + hitCount + '</span>)';
+      deepBtn.disabled = false; deepBtn.innerHTML = '📊 載入基本面 (<span id="btnRunDeepCount">' + hitCount + '</span>)';
       deepBtn.style.display = ''; deepBtn.style.background = '#166534'; deepBtn.style.color = '#fff';
     } else if (deepBtn) {
-      deepBtn.disabled = true; deepBtn.innerHTML = '🧠 深度篩選 (條件不足)';
+      deepBtn.disabled = true; deepBtn.innerHTML = '📊 載入基本面 (條件不足)';
       deepBtn.style.display = ''; deepBtn.style.background = '#4b5563'; deepBtn.style.color = '#9ca3af';
     }
     
@@ -3102,7 +3131,7 @@ async function runScreener() {
 }
 async function runDeepScan() {
   if (!window.__screenLastResult || !window.__screenLastResult.rows || window.__screenLastResult.rows.length === 0) {
-    alert('深度篩選需要針對第一階段的結果進行分析，請先執行「開始篩選」！');
+    alert('基本面載入需要針對第一階段的結果進行分析，請先執行「開始篩選」！');
     return;
   }
   
@@ -3117,7 +3146,8 @@ async function runDeepScan() {
   var progressMeta = document.getElementById('screenProgressMeta');
   
   window.__v3914DeepCancel = false;
-  if (deepBtn) { deepBtn.textContent = '⏹️ 停止深度篩選'; deepBtn.classList.add('btn-stop-scan'); }
+  // 🎯 修改按鈕文字
+  if (deepBtn) { deepBtn.textContent = '⏹️ 停止載入'; deepBtn.classList.add('btn-stop-scan'); }
   
   var out = [];
   for (var i = 0; i < rows.length; i++) {
@@ -3131,31 +3161,30 @@ async function runDeepScan() {
     }
     
     if (progressBar) progressBar.style.width = Math.round(((i + 1) / rows.length) * 100) + '%';
-    if (progressText) progressText.textContent = '深篩中 ' + (i + 1) + ' / ' + rows.length;
+    if (progressText) progressText.textContent = '載入中 ' + (i + 1) + ' / ' + rows.length;
     if (progressMeta) progressMeta.textContent = (i + 1) + ' / ' + rows.length;
-    if (status) status.textContent = '深篩中 ' + (i + 1) + ' / ' + rows.length;
+    if (status) status.textContent = '載入基本面中 ' + (i + 1) + ' / ' + rows.length;
     if ((i + 1) % 3 === 0) await new Promise(function (r2) { setTimeout(r2, 40); });
   }
   
-  // Sort heavily based on the new totalScores
   out.sort(function(a, b) { return (b.totalScore || 0) - (a.totalScore || 0); });
   
   var label = window.__v3914DeepCancel ? 'partial' : 'stage2';
   snapshotScreenResults(out, criteria, stats, label);
   renderScreenResults(out, criteria, stats);
 
-  if (status) status.textContent = window.__v3914DeepCancel ? '深度篩選已停止' : '深度篩選完成｜保留 ' + out.length + ' 檔';
-  if (progressText) progressText.textContent = window.__v3914DeepCancel ? '深度篩選已停止' : '✅ 深度篩選完成';
+  if (status) status.textContent = window.__v3914DeepCancel ? '基本面載入已停止' : '基本面載入完成｜保留 ' + out.length + ' 檔';
+  if (progressText) progressText.textContent = window.__v3914DeepCancel ? '基本面載入已停止' : '✅ 基本面載入完成';
   if (progressBar) progressBar.style.width = '100%';
   if (progressMeta) progressMeta.textContent = '保留 ' + out.length + ' 檔';
   
-  // 🎯 修改：深篩完成後將按鈕鎖定反灰，不可重複點擊
+  // 🎯 完成後鎖定按鈕並改字
   if (deepBtn) { 
     deepBtn.disabled = true;
-    deepBtn.textContent = window.__v3914DeepCancel ? '🧠 深度篩選 (已中斷)' : '✅ 深度篩選完成'; 
+    deepBtn.textContent = window.__v3914DeepCancel ? '📊 載入基本面 (已中斷)' : '✅ 基本面載入完成'; 
     deepBtn.classList.remove('btn-stop-scan'); 
-    deepBtn.style.background = '#4b5563'; // 灰色背景
-    deepBtn.style.color = '#9ca3af';      // 灰色文字
+    deepBtn.style.background = '#4b5563'; 
+    deepBtn.style.color = '#9ca3af';
   }
 }
 
