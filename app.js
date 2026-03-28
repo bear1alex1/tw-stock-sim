@@ -3035,9 +3035,12 @@ async function runScreener() {
       summary.style.display = 'block';
       summary.innerHTML = (wasCancelled ? '<span style="color:#ef4444;">已中斷</span>｜' : '') + '完成掃描 ' + symbols.length + ' 檔，符合條件共 <strong>' + hitCount + '</strong> 檔。' + (hitCount > 0 ? '（已按' + (document.getElementById('screenSortBy')?.options[document.getElementById('screenSortBy').selectedIndex]?.text || '設定') + '排序）' : '');
     }
-    if (deepBtn && hitCount >= 2) { 
+    if (deepBtn && hitCount >= 5) { 
         deepBtn.disabled = false; deepBtn.innerHTML = '🧠 深度篩選 (<span id="btnRunDeepCount">' + hitCount + '</span>)'; 
         deepBtn.style.display = ''; deepBtn.style.background = '#166534'; deepBtn.style.color = '#fff'; 
+    } else if (deepBtn) {
+        deepBtn.disabled = true; deepBtn.innerHTML = '🧠 深度篩選 (條件不足)';
+        deepBtn.style.display = ''; deepBtn.style.background = '#4b5563'; deepBtn.style.color = '#9ca3af';
     }
     state.screenHistory = [{ time: new Date().toLocaleString('zh-TW'), poolLabel: uMode, count: hitCount, filters: JSON.stringify(criteria.simple) }].concat(state.screenHistory || []).slice(0, 20);
     saveState(state);
@@ -3052,7 +3055,7 @@ async function runScreener() {
 
 async function runDeepScan() {
   var rows = window.__v3914LastRows || [];
-  if (rows.length < 2) { alert('深度篩選需要至少 2 筆篩選結果，請先執行開始篩選。'); return; }
+  if (rows.length < 5) { alert('深度篩選需要至少 5 筆第一階段篩選結果，以便確保樣本具有比較價值！請先調整輕度篩選條件。'); return; }
   var deepBtn = document.getElementById('btnRunDeepScan');
   var status = document.getElementById('screenRunStatus');
   var progressText = document.getElementById('screenProgressText');
@@ -3183,27 +3186,76 @@ function renderAISymbolOptions() {
   }).join('');
 }
 
+// ═══════════════════════════════════════════════════════
+//  Fast Proxy Race Utility
+// ═══════════════════════════════════════════════════════
+async function fetchWithProxyRace(targetUrl) {
+  const encodeUrl = encodeURIComponent(targetUrl);
+  const promises = [
+    (async () => {
+      const res = await fetch('https://api.allorigins.win/raw?url=' + encodeUrl, { cache: 'no-store' });
+      if (!res.ok) throw new Error(); return await res.json();
+    })(),
+    (async () => {
+      const res = await fetch('https://api.allorigins.win/get?url=' + encodeUrl, { cache: 'no-store' });
+      if (!res.ok) throw new Error();
+      const d = await res.json();
+      if (d.contents) return typeof d.contents === 'string' ? JSON.parse(d.contents) : d.contents;
+      throw new Error();
+    })(),
+    (async () => {
+      const res = await fetch('https://api.codetabs.com/v1/proxy?quest=' + encodeUrl, { cache: 'no-store' });
+      if (!res.ok) throw new Error(); return await res.json();
+    })(),
+    (async () => {
+      const res = await fetch('https://corsproxy.io/?' + encodeUrl, { cache: 'no-store' });
+      if (!res.ok) throw new Error(); return await res.json();
+    })()
+  ];
+  return await Promise.any(promises.map(p => {
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => reject(new Error('Timeout')), 6000);
+      p.then(res => { clearTimeout(timeoutId); resolve(res); }).catch(err => { clearTimeout(timeoutId); reject(err); });
+    });
+  }));
+}
+
 async function fetchAIReportData(symbol) {
   symbol = normalizeSymbol(symbol);
   if (!symbol) return null;
   const cached = aiReportCache[symbol];
   if (cached && Date.now() - cached.ts < 15 * 60 * 1000) return cached.data;
-  const start = daysAgo(150);
-  const url = 'https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=' + encodeURIComponent(symbol) + '&start_date=' + start + '&token=' + encodeURIComponent(_r());
-  const r = await timedFetch(url, 12000);
-  if (!r.ok) throw new Error('AI 資料讀取失敗');
-  const j = await r.json();
-  let arr = (j && j.data) || [];
-  arr = arr.map(function (it) {
-    return {
-      date: String(it.date || ''),
-      open: num(it.open || it.Open || it.start_price),
-      high: num(it.max || it.high || it.High || it.max_price),
-      low: num(it.min || it.low || it.Low || it.min_price),
-      close: num(it.close || it.Close || it.end_price),
-      volume: num(it.Trading_Volume || it.trading_volume || it.volume || it.TradingShares || 0)
-    };
-  }).filter(function (it) { return it.date && it.close > 0; }).sort(function (a, b) { return a.date.localeCompare(b.date); });
+  
+  let resultJSON = null;
+  let sfxList = ['.TW', '.TWO'];
+  
+  for (let sfx of sfxList) {
+    const target = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}${sfx}?range=6mo&interval=1d`;
+    try {
+      resultJSON = await fetchWithProxyRace(target);
+      if (resultJSON && resultJSON.chart && resultJSON.chart.result && resultJSON.chart.result[0]) {
+        break; // found the correct suffix
+      }
+    } catch (e) {
+      continue;
+    }
+  }
+
+  if (!resultJSON || !resultJSON.chart || !resultJSON.chart.result) throw new Error('AI 資料讀取失敗 (Proxy API 均逾時或無資料)');
+  
+  const result = resultJSON.chart.result[0];
+  const ts = result.timestamp || [];
+  const q = result.indicators?.quote?.[0] || {};
+  const arr = [];
+  
+  for (let i = 0; i < ts.length; i++) {
+    const o = num(q.open?.[i]), h = num(q.high?.[i]), l = num(q.low?.[i]), c = num(q.close?.[i]), v = num(q.volume?.[i] || 0);
+    if (o && h && l && c) {
+      arr.push({ date: new Date(ts[i] * 1000).toISOString().slice(0, 10), open: o, high: h, low: l, close: c, volume: v });
+    }
+  }
+  
+  arr.sort((a, b) => a.date.localeCompare(b.date));
   aiReportCache[symbol] = { ts: Date.now(), data: arr };
   return arr;
 }
