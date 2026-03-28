@@ -1,10 +1,19 @@
-const APP_VERSION = '3.9.17';   // ← 只改這裡就能更版
+const APP_VERSION = '3.10.0';   // ← 只改這裡就能更版
+
+// --- Screener Limits & Rate Control ---
+const SCREEN_BATCH_SIZE = 5;
+const SCREEN_BATCH_DELAY = 300; // ms
+const SCREEN_SCAN_SOFT_LIMIT = 100;
+const SCREEN_SCAN_HARD_LIMIT = 150;
+
+// --- Formatting Helpers ---
+function signedClass(v) { return v > 0 ? 'clr-up' : v < 0 ? 'clr-down' : 'clr-flat'; }
 
 // ═══════════════════════════════════════════════════════
-//  台股虛擬操盤系統 v3.9.17  |  SPA分頁 + Firebase雲端 + K線
+//  台股虛擬操盤系統 v3.10.0  |  SPA分頁 + Firebase雲端 + K線
 // ═══════════════════════════════════════════════════════
 
-const INITIAL_CASH = 9_000_000;
+const INITIAL_CASH = 1_000_000;
 const STORAGE_KEY = 'twStock_v2';
 
 let state = loadState();
@@ -2225,10 +2234,7 @@ function calcRSI(values, period = 14) {
 }
 
 
-const SCREEN_SCAN_SOFT_LIMIT = 100;
-const SCREEN_SCAN_HARD_LIMIT = 150;
-const SCREEN_BATCH_SIZE = 5;
-const SCREEN_BATCH_DELAY = 220;
+
 const SCREEN_ADMIN_HASH = '0912d4684c7301ab4f8e436d0dab16d0979e5e96082e552ce1590f917ecf0f76';
 const SCREEN_ADMIN_PEPPER = 'twstock.screen.admin|S390';
 const SCREEN_CONCEPT_MAP = {
@@ -2315,7 +2321,6 @@ function updateScreenAdminUI() {
     }
   }
   setScreenPoolHint();
-  updateScanWorkButtons();
 }
 function openScreenAdminModal() {
   const now = Date.now();
@@ -2383,36 +2388,6 @@ function handleScreenAdminAction(action) {
   }
   updateScreenAdminUI();
 }
-function updateScanWorkButtons() {
-  const current = document.getElementById('screenUniverse')?.value || 'watchlist';
-  document.querySelectorAll('[data-screen-job]').forEach(function (btn) {
-    const mode = btn.dataset.screenJob;
-    const locked = (mode === 'allStocks' && !canUseAllStocks());
-    btn.classList.toggle('active', mode === current);
-    btn.classList.toggle('is-disabled', locked && mode !== current);
-    btn.setAttribute('aria-pressed', mode === current ? 'true' : 'false');
-  });
-}
-function setScanWorkMode(mode) {
-  const sel = document.getElementById('screenUniverse');
-  if (!sel) return;
-  if (mode === 'allStocks' && !canUseAllStocks()) {
-    alert(getScreenMessage('adminOnly'));
-    updateScanWorkButtons();
-    return;
-  }
-  sel.value = mode || 'watchlist';
-  setScreenPoolHint();
-  if (mode === 'custom') document.getElementById('screenCustomList')?.focus();
-  if (mode === 'range') document.getElementById('screenRangeStart')?.focus();
-}
-function confirmScanWorkNext() {
-  const card = document.getElementById('screenFilterCard');
-  if (!card) return;
-  card.classList.add('screen-step-focus');
-  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  setTimeout(function () { card.classList.remove('screen-step-focus'); }, 1400);
-}
 function setScreenPoolHint() {
   const sel = document.getElementById('screenUniverse');
   const hint = document.getElementById('screenPoolHint');
@@ -2429,17 +2404,12 @@ function setScreenPoolHint() {
   re.disabled = !rangeOn;
   rs.style.opacity = rangeOn ? '1' : '.55';
   re.style.opacity = rangeOn ? '1' : '.55';
-  const customPanel = document.getElementById('screenCustomPanel');
-  const rangePanel = document.getElementById('screenRangePanel');
-  if (customPanel) customPanel.classList.toggle('show', customOn);
-  if (rangePanel) rangePanel.classList.toggle('show', rangeOn);
-  if (v === 'watchlist') hint.textContent = '目前將使用自選清單作為掃描母體。';
-  else if (v === 'holdings') hint.textContent = '目前將使用持股清單作為掃描母體。';
-  else if (v === 'union') hint.textContent = '目前將合併自選清單與持股清單進行掃描。';
-  else if (v === 'custom') hint.textContent = '目前將使用你手動輸入的指定清單進行掃描。';
-  else if (v === 'allStocks') hint.textContent = canUseAllStocks() ? '目前將以全台股作為掃描母體，再套用類別與條件篩選。' : '全部股票模式已被鎖定，僅限管理員開啟。';
-  else hint.textContent = canUseWideRange() ? '目前將依指定區間建立掃描母體，再套用類別與條件篩選。' : '目前將依指定區間建立掃描母體；一般模式建議控制在 100 檔內。';
-  updateScanWorkButtons();
+  if (v === 'watchlist') hint.textContent = '目前將使用追蹤清單作為篩選資料池。';
+  else if (v === 'holdings') hint.textContent = '目前將使用持股庫存作為篩選資料池。';
+  else if (v === 'union') hint.textContent = '目前將合併追蹤清單與持股庫存進行篩選。';
+  else if (v === 'custom') hint.textContent = '目前將使用你手動輸入的自訂代號清單進行篩選。';
+  else if (v === 'allStocks') hint.textContent = canUseAllStocks() ? '目前將以全部股票代號作為候選池，再套用類別與條件篩選。' : '全部股票模式已被鎖定，僅限管理員開啟。';
+  else hint.textContent = canUseWideRange() ? '目前將依代號範圍建立候選池，再套用類別與條件篩選。' : '目前將依代號範圍建立候選池；一般模式建議控制在 100 檔內。';
 }
 async function populateScreenCategoryOptions() {
   const type = document.getElementById('screenCategoryType');
@@ -2584,7 +2554,7 @@ function buildScreenReasonBadges(item, criteria) {
 }
 function renderToneValue(value, formatted) {
   const tone = getSignedTone(value);
-  return '<span class="' + (tone === 'positive' ? 'screen-price-positive' : tone === 'negative' ? 'screen-price-negative' : '') + '">' + formatted + '</span>';
+  return '<span class="' + (tone === 'positive' ? 'clr-up' : tone === 'negative' ? 'clr-down' : 'clr-flat') + '">' + formatted + '</span>';
 }
 function setScreenerRunning(running) {
   const runBtn = document.getElementById('btnRunScreener');
@@ -2610,7 +2580,7 @@ function setScreenerRunning(running) {
 }
 function syncIndicatorLights() {
   var active = Array.from(document.querySelectorAll('[data-screen-filter].active')).map(function(el) { return el.dataset.screenFilter; });
-  document.querySelectorAll('.screen-card[data-screen-filter]').forEach(function(card) {
+  document.querySelectorAll('.screen-card.indicator-mode[data-screen-filter]').forEach(function(card) {
     card.classList.toggle('active', active.indexOf(card.dataset.screenFilter) >= 0);
   });
 }
@@ -2635,16 +2605,17 @@ function renderScreenResults(rows, criteria, stats) {
   const skipped = stats && stats.skipped != null ? stats.skipped : 0;
   if (!rows.length) {
     empty.style.display = '';
-    summary.innerHTML = '<span class="screen-result-chip">掃描 ' + scanned + ' 檔</span><span class="screen-result-chip positive">成功 ' + ok + ' 檔</span><span class="screen-result-chip negative">失敗 ' + failed + ' 檔</span><span class="screen-result-chip">略過 ' + skipped + ' 檔</span>';
+    summary.innerHTML = '<span class="screen-result-chip">掃描 ' + scanned + ' 檔</span><span class="screen-result-chip clr-up">成功 ' + ok + ' 檔</span><span class="screen-result-chip clr-down">失敗 ' + failed + ' 檔</span><span class="screen-result-chip">略過 ' + skipped + ' 檔</span>';
     return;
   }
   empty.style.display = 'none';
-  summary.innerHTML = '<span class="screen-result-chip">掃描 ' + scanned + ' 檔</span><span class="screen-result-chip positive">成功 ' + ok + ' 檔</span><span class="screen-result-chip negative">失敗 ' + failed + ' 檔</span><span class="screen-result-chip">略過 ' + skipped + ' 檔</span>' + (formatScreenCriteria(criteria).map(function (t) { return '<span class="screen-result-chip">' + t + '</span>'; }).join(''));
+  summary.innerHTML = '<span class="screen-result-chip">掃描 ' + scanned + ' 檔</span><span class="screen-result-chip clr-up">成功 ' + ok + ' 檔</span><span class="screen-result-chip clr-down">失敗 ' + failed + ' 檔</span><span class="screen-result-chip">略過 ' + skipped + ' 檔</span>' + (formatScreenCriteria(criteria).map(function (t) { return '<span class="screen-result-chip">' + t + '</span>'; }).join(''));
   rows.forEach(function (r) {
     const totalTone = getScoreTone(r.totalScore);
     const techTone = getScoreTone(r.techScore);
     const fundTone = getScoreTone(r.fundScore);
-    const priceAbove = r.price != null && r.ma20 != null ? r.price >= r.ma20 : null;
+    const priceDiff = r.price != null && r.ma20 != null ? r.price - r.ma20 : 0;
+    const priceToneClass = getSignedTone(priceDiff) === 'positive' ? 'clr-up' : getSignedTone(priceDiff) === 'negative' ? 'clr-down' : 'clr-flat';
     const reasons = buildScreenReasonBadges(r, criteria);
     const revText = r.revYoY == null ? '—' : ((r.revYoY >= 0 ? '+' : '') + r.revYoY.toFixed(1) + '%');
     const epsText = r.ttmEPS == null ? '—' : ((r.ttmEPS >= 0 ? '+' : '') + r.ttmEPS.toFixed(2));
@@ -2655,7 +2626,7 @@ function renderScreenResults(rows, criteria, stats) {
       + '<div class="screen-reasons">' + reasons.map(function (tag) { return '<span class="screen-reason ' + tag.tone + '">' + tag.text + '</span>'; }).join('') + '</div></td>'
       + '<td><div class="screen-score-wrap"><span class="screen-score-box ' + totalTone + '">' + r.totalScore + '</span></div><div class="screen-score-sub">綜合分數</div></td>'
       + '<td><div class="screen-score-wrap"><span class="screen-score-box ' + techTone + '">' + r.techScore + '</span><span class="screen-score-box ' + fundTone + '">' + r.fundScore + '</span></div><div class="screen-score-sub">技術 / 基本面</div></td>'
-      + '<td><div class="' + (priceAbove === true ? 'screen-price-positive' : priceAbove === false ? 'screen-price-negative' : '') + '">' + formatPrice(r.price) + '</div><div style="font-size:.72rem;color:#8b949e;">MA20 ' + formatPrice(r.ma20) + '</div></td>'
+      + '<td><div class="' + priceToneClass + '">' + formatPrice(r.price) + '</div><div style="font-size:.72rem;color:#8b949e;">MA20 ' + formatPrice(r.ma20) + '</div></td>'
       + '<td><div>' + (r.rsi == null ? '—' : r.rsi.toFixed(2)) + '</div><div style="font-size:.72rem;color:#8b949e;">量比 ' + (r.volRatio == null ? '—' : r.volRatio.toFixed(2)) + '</div></td>'
       + '<td><div>' + renderToneValue(r.revYoY, revText) + '</div><div style="font-size:.72rem;color:#8b949e;">EPS ' + renderToneValue(r.ttmEPS, epsText) + '</div></td>'
       + '<td><button class="btn-xs" data-screen-ai="' + r.symbol + '">AI</button> <button class="btn-xs btn-xs-gray" data-screen-trade="' + r.symbol + '">交易</button></td>';
@@ -2716,7 +2687,7 @@ async function exportScreenerPdf() {
     setScreenerRunning(_screenScanJob.running);
   }
 }
-// [v3.9.17] first runScreener/bindScreenerUI removed — final definitions below handle everything
+// [v3.9.15] first runScreener/bindScreenerUI removed — final definitions below handle everything
 function renderScreenerHistory() {
   const box = document.getElementById('screenHistoryList');
   if (!box) return;
@@ -2801,16 +2772,17 @@ function renderScreenResults(rows, criteria, stats) {
   const skipped = stats && stats.skipped != null ? stats.skipped : 0;
   if (!rows.length) {
     empty.style.display = '';
-    summary.innerHTML = '<span class="screen-result-chip">掃描 ' + scanned + ' 檔</span><span class="screen-result-chip positive">成功 ' + ok + ' 檔</span><span class="screen-result-chip negative">失敗 ' + failed + ' 檔</span><span class="screen-result-chip">略過 ' + skipped + ' 檔</span>';
+    summary.innerHTML = '<span class="screen-result-chip">掃描 ' + scanned + ' 檔</span><span class="screen-result-chip clr-up">成功 ' + ok + ' 檔</span><span class="screen-result-chip clr-down">失敗 ' + failed + ' 檔</span><span class="screen-result-chip">略過 ' + skipped + ' 檔</span>';
     return;
   }
   empty.style.display = 'none';
-  summary.innerHTML = '<span class="screen-result-chip">掃描 ' + scanned + ' 檔</span><span class="screen-result-chip positive">成功 ' + ok + ' 檔</span><span class="screen-result-chip negative">失敗 ' + failed + ' 檔</span><span class="screen-result-chip">略過 ' + skipped + ' 檔</span>' + (formatScreenCriteria(criteria).map(function (t) { return '<span class="screen-result-chip">' + t + '</span>'; }).join(''));
+  summary.innerHTML = '<span class="screen-result-chip">掃描 ' + scanned + ' 檔</span><span class="screen-result-chip clr-up">成功 ' + ok + ' 檔</span><span class="screen-result-chip clr-down">失敗 ' + failed + ' 檔</span><span class="screen-result-chip">略過 ' + skipped + ' 檔</span>' + (formatScreenCriteria(criteria).map(function (t) { return '<span class="screen-result-chip">' + t + '</span>'; }).join(''));
   rows.forEach(function (r) {
     const totalTone = getScoreTone(r.totalScore);
     const techTone = getScoreTone(r.techScore);
     const fundTone = getScoreTone(r.fundScore);
-    const priceAbove = r.price != null && r.ma20 != null ? r.price >= r.ma20 : null;
+    const priceDiff = r.price != null && r.ma20 != null ? r.price - r.ma20 : 0;
+    const priceToneClass = getSignedTone(priceDiff) === 'positive' ? 'clr-up' : getSignedTone(priceDiff) === 'negative' ? 'clr-down' : 'clr-flat';
     const reasons = buildScreenReasonBadges(r, criteria);
     const revText = r.revYoY == null ? '—' : ((r.revYoY >= 0 ? '+' : '') + r.revYoY.toFixed(1) + '%');
     const epsText = r.ttmEPS == null ? '—' : ((r.ttmEPS >= 0 ? '+' : '') + r.ttmEPS.toFixed(2));
@@ -2821,7 +2793,7 @@ function renderScreenResults(rows, criteria, stats) {
       + '<div class="screen-reasons">' + reasons.map(function (tag) { return '<span class="screen-reason ' + tag.tone + '">' + tag.text + '</span>'; }).join('') + '</div></td>'
       + '<td><div class="screen-score-wrap"><span class="screen-score-box ' + totalTone + '">' + r.totalScore + '</span></div><div class="screen-score-sub">綜合分數</div></td>'
       + '<td><div class="screen-score-wrap"><span class="screen-score-box ' + techTone + '">' + r.techScore + '</span><span class="screen-score-box ' + fundTone + '">' + r.fundScore + '</span></div><div class="screen-score-sub">技術 / 基本面</div></td>'
-      + '<td><div class="' + (priceAbove === true ? 'screen-price-positive' : priceAbove === false ? 'screen-price-negative' : '') + '">' + formatPrice(r.price) + '</div><div style="font-size:.72rem;color:#8b949e;">MA20 ' + formatPrice(r.ma20) + '</div></td>'
+      + '<td><div class="' + priceToneClass + '">' + formatPrice(r.price) + '</div><div style="font-size:.72rem;color:#8b949e;">MA20 ' + formatPrice(r.ma20) + '</div></td>'
       + '<td><div>' + (r.rsi == null ? '—' : r.rsi.toFixed(2)) + '</div><div style="font-size:.72rem;color:#8b949e;">量比 ' + (r.volRatio == null ? '—' : r.volRatio.toFixed(2)) + '</div></td>'
       + '<td><div>' + renderToneValue(r.revYoY, revText) + '</div><div style="font-size:.72rem;color:#8b949e;">EPS ' + renderToneValue(r.ttmEPS, epsText) + '</div></td>'
       + '<td><button class="btn-xs" data-screen-ai="' + r.symbol + '">AI</button> <button class="btn-xs btn-xs-gray" data-screen-trade="' + r.symbol + '">交易</button></td>';
@@ -2892,7 +2864,19 @@ async function runScreener() {
   if (progressMeta) progressMeta.textContent = '0 / ' + symbols.length;
   if (body) body.innerHTML = '';
   if (empty) empty.style.display = '';
-  if (summary) summary.textContent = '掃描中…';
+  if (summary) summary.style.display = 'none';
+
+  // API constraints check
+  if (symbols.length > SCREEN_SCAN_HARD_LIMIT) {
+    if (status) status.textContent = '篩選取消。';
+    alert('⚠️ 安全限制：\n您選擇的股票池過大（' + symbols.length + ' 檔）。\n由於目前資料需從伺服器即時取回多項特徵指標，為避免請求過量遭到封鎖，單次掃描不得超過 ' + SCREEN_SCAN_HARD_LIMIT + ' 檔。\n請縮小範圍或改用其他母體。');
+    window.__v3914ScanCancel = true;
+  } else if (symbols.length > SCREEN_SCAN_SOFT_LIMIT) {
+    if (!confirm('⚠️ 工作量提醒：\n您準備掃描 ' + symbols.length + ' 檔股票，這可能需要幾分鐘的時間，且頻繁掃描大量股票可能觸發 API 限制。\n確定要繼續嗎？')) {
+      if (status) status.textContent = '篩選取消。';
+      window.__v3914ScanCancel = true;
+    }
+  }
 
   // get criteria
   var simpleFilters = Array.from(document.querySelectorAll('[data-screen-filter].active')).map(function (el) { return el.dataset.screenFilter; });
@@ -2928,6 +2912,8 @@ async function runScreener() {
   }
 
   var rows = [], allItems = [], ok = 0, fail = 0, skip = 0;
+  var backoffMs = SCREEN_BATCH_DELAY;
+  
   try {
     for (var i = 0; i < symbols.length; i++) {
       if (window.__v3914ScanCancel || (_screenScanJob && _screenScanJob.cancelled)) break;
@@ -2937,6 +2923,7 @@ async function runScreener() {
       if (progressBar) progressBar.style.width = pct + '%';
       if (progressText) progressText.textContent = '正在分析 ' + sym + '…';
       if (progressMeta) progressMeta.textContent = (i + 1) + ' / ' + symbols.length + '｜成功 ' + ok + '｜失敗 ' + fail + '｜略過 ' + skip;
+      
       try {
         var priceRows = await Promise.race([fetchAIReportData(sym), new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, 14000); })]);
         if (!priceRows || priceRows.length < 30) { skip++; continue; }
@@ -2960,9 +2947,25 @@ async function runScreener() {
         };
         ok++; allItems.push(item);
         if (relaxedPass(item)) rows.push(item);
-      } catch (e3) { fail++; console.warn('[screener]', sym, e3 && e3.message ? e3.message : e3); }
-      if ((i + 1) % 5 === 0 && i < symbols.length - 1) await new Promise(function (r) { setTimeout(r, 200); });
+        
+        // Reset backoff on success
+        backoffMs = SCREEN_BATCH_DELAY;
+        
+      } catch (e3) { 
+        fail++; 
+        console.warn('[screener]', sym, e3 && e3.message ? e3.message : e3); 
+        // Rate limit hit (429) -> exponential backoff
+        if (e3 && e3.message && (e3.message.includes('429') || e3.message.includes('rate limit') || e3.message.includes('fetch'))) {
+           if (progressText) progressText.textContent = '觸發頻率限制，降速中 (' + (backoffMs/1000).toFixed(1) + 's)…';
+           await new Promise(function(r){ setTimeout(r, backoffMs); });
+           backoffMs = Math.min(backoffMs * 2, 5000); // Cap at 5s
+        }
+      }
+      if ((i + 1) % SCREEN_BATCH_SIZE === 0 && i < symbols.length - 1) {
+        await new Promise(function (r) { setTimeout(r, backoffMs); });
+      }
     }
+    
     // fallback: if 0 hits but we have items, show top by score
     if (!rows.length && allItems.length) {
       rows = allItems.slice().sort(function (a, b) { return (b.totalScore || 0) - (a.totalScore || 0); }).slice(0, Math.min(criteria.limit || 20, allItems.length));
@@ -2975,7 +2978,14 @@ async function runScreener() {
     if (progressBar) progressBar.style.width = '100%';
     if (progressText) progressText.textContent = wasCancelled ? '掃描已停止' : '✅ 篩選完成';
     if (progressMeta) progressMeta.textContent = '命中 ' + hitCount + ' 檔';
-    if (deepBtn && hitCount >= 2) { deepBtn.disabled = false; deepBtn.textContent = '🧠 深度篩選'; deepBtn.style.display = ''; deepBtn.style.background = '#166534'; deepBtn.style.color = '#fff'; }
+    if (summary) {
+      summary.style.display = 'block';
+      summary.innerHTML = (wasCancelled ? '<span style="color:#ef4444;">已中斷</span>｜' : '') + '完成掃描 ' + symbols.length + ' 檔，符合條件共 <strong>' + hitCount + '</strong> 檔。' + (hitCount > 0 ? '（已按' + (document.getElementById('screenSortBy')?.options[document.getElementById('screenSortBy').selectedIndex]?.text || '設定') + '排序）' : '');
+    }
+    if (deepBtn && hitCount >= 2) { 
+        deepBtn.disabled = false; deepBtn.innerHTML = '🧠 深度篩選 (<span id="btnRunDeepCount">' + hitCount + '</span>)'; 
+        deepBtn.style.display = ''; deepBtn.style.background = '#166534'; deepBtn.style.color = '#fff'; 
+    }
     state.screenHistory = [{ time: new Date().toLocaleString('zh-TW'), poolLabel: uMode, count: hitCount, filters: JSON.stringify(criteria.simple) }].concat(state.screenHistory || []).slice(0, 20);
     saveState(state);
     if (typeof renderScreenerHistory === 'function') renderScreenerHistory();
@@ -3030,20 +3040,15 @@ async function runDeepScan() {
 
 function bindScreenerUI() {
   // Non-indicator filter cards get toggle behavior
-  document.querySelectorAll('[data-screen-filter]').forEach(function (card) {
+  document.querySelectorAll('[data-screen-filter]:not(.indicator-mode)').forEach(function (card) {
     card.addEventListener('click', function () {
       card.classList.toggle('active');
       syncIndicatorLights();
     });
   });
-  document.querySelectorAll('[data-screen-job]').forEach(function (btn) {
-    btn.addEventListener('click', function () { setScanWorkMode(btn.dataset.screenJob); });
-  });
-  document.getElementById('btnConfirmScreenWork')?.addEventListener('click', confirmScanWorkNext);
   document.getElementById('screenUniverse')?.addEventListener('change', setScreenPoolHint);
   document.getElementById('screenCategoryType')?.addEventListener('change', populateScreenCategoryOptions);
   document.getElementById('screenCustomList')?.addEventListener('input', function () { state.screenCustomList = this.value; saveState(state); });
-  updateScanWorkButtons();
 
   // Toggle: run button acts as start OR stop
   document.getElementById('btnRunScreener')?.addEventListener('click', function () {
@@ -3085,8 +3090,6 @@ function bindScreenerUI() {
   document.getElementById('screenAdminModal')?.addEventListener('click', function (e) { if (e.target === this) closeScreenAdminModal(); });
   setScreenerRunning(false);
   syncIndicatorLights();
-  setScreenPoolHint();
-  updateScanWorkButtons();
 }
 
 function navigateToPage(page) {
@@ -3843,9 +3846,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
-/* v3.9.17: ETF fundamental patch + wizard bindings (no runScreener/bindScreenerUI override) */
+/* v3.9.15: ETF fundamental patch + wizard bindings (no runScreener/bindScreenerUI override) */
 (function () {
-  var HOTFIX_VER = 'v3.9.17';
+  var HOTFIX_VER = 'v3.9.15';
   var __origAnalyzeAIFundamentals = (typeof analyzeAIFundamentals === 'function') ? analyzeAIFundamentals : null;
 
   function hotfixText(id, value) { var el = document.getElementById(id); if (el) el.textContent = value; }
@@ -3916,83 +3919,108 @@ document.addEventListener('DOMContentLoaded', () => {
     analyzeAIFundamentals.__v391patched = true;
   }
 
-  /* Wizard button bindings */
-  function setText(id, txt) { var el = document.getElementById(id); if (el) el.textContent = txt; }
-  function setActive(btns, key, value) {
-    btns.forEach(function (btn) { btn.classList.toggle('active', btn.dataset[key] === value); });
-  }
-  function clearActiveFilters() {
-    document.querySelectorAll('[data-screen-filter].active:not(.indicator-mode)').forEach(function (el) { el.classList.remove('active'); });
-  }
-  function setFilterActive(key, on) {
-    var el = document.querySelector('[data-screen-filter="' + key + '"]:not(.indicator-mode)');
-    if (el) el.classList.toggle('active', !!on);
-  }
-  function setInputValue(id, value) { var el = document.getElementById(id); if (el) el.value = value == null ? '' : String(value); }
-  function currentWizardState() {
-    var s = window.__screenWizardState || { universe: 'watchlist', preset: 'entry', risk: 'balanced' };
-    window.__screenWizardState = s;
-    return s;
-  }
-  function applyWizardToInputs() {
-    var s = currentWizardState();
-    setInputValue('screenUniverse', s.universe || 'watchlist');
-    clearActiveFilters();
-    ['screenMinTotal', 'screenMinFund', 'screenMaxRsi', 'screenMinVolRatio', 'screenMinRevYoY', 'screenMinEPS'].forEach(function (id) { setInputValue(id, ''); });
-    setInputValue('screenSortBy', 'totalDesc');
-    setInputValue('screenLimit', s.risk === 'aggressive' ? 30 : s.risk === 'conservative' ? 15 : 20);
-    var presets = {
-      entry: { filters: ['buyFit'], minTotal: { conservative: 72, balanced: 65, aggressive: 58 }, minFund: { conservative: 65, balanced: 58, aggressive: 50 }, minRevYoY: { conservative: 12, balanced: 8, aggressive: 5 }, minEPS: { conservative: 8, balanced: 5, aggressive: 3 }, maxRsi: { conservative: 68, balanced: 75, aggressive: 82 }, sortBy: 'totalDesc' },
-      breakout: { filters: ['buyFit', 'volumeSpike'], minTotal: { conservative: 70, balanced: 62, aggressive: 55 }, minFund: { conservative: 55, balanced: 48, aggressive: 40 }, minVolRatio: { conservative: 1.8, balanced: 1.5, aggressive: 1.2 }, maxRsi: { conservative: 72, balanced: 80, aggressive: 88 }, sortBy: 'volDesc' },
-      rebound: { filters: ['oversold'], minTotal: { conservative: 58, balanced: 50, aggressive: 42 }, minFund: { conservative: 45, balanced: 35, aggressive: 25 }, maxRsi: { conservative: 28, balanced: 32, aggressive: 38 }, minRevYoY: { conservative: 0, balanced: -5, aggressive: '' }, sortBy: 'rsiAsc' },
-      exit: { filters: ['sellWatch'], minTotal: { conservative: '', balanced: '', aggressive: '' }, minFund: { conservative: '', balanced: '', aggressive: '' }, maxRsi: { conservative: '', balanced: '', aggressive: '' }, minVolRatio: { conservative: '', balanced: '', aggressive: '' }, sortBy: 'totalDesc' }
+  /* =========================================================
+     v3.10 Step Wizard Controllers
+  ========================================================= */
+  window.toggleScreenStep = function(step) {
+    document.querySelectorAll('.screen-step-body').forEach(b => b.classList.remove('open'));
+    document.querySelectorAll('.screen-step').forEach(s => s.classList.remove('step-active'));
+    document.querySelectorAll('.screen-step-toggle').forEach(t => t.textContent = '▼');
+
+    const stepEl = document.getElementById('wizStep' + step);
+    const bodyEl = document.getElementById('wizStep' + step + 'Body');
+    const toggleEl = stepEl?.querySelector('.screen-step-toggle');
+    if (stepEl && bodyEl) {
+      stepEl.classList.add('step-active');
+      bodyEl.classList.add('open');
+      if (toggleEl) toggleEl.textContent = '▲';
+    }
+  };
+
+  window.nextStep = function(step) {
+    document.getElementById('wizStep' + (step - 1))?.classList.add('step-done');
+    toggleScreenStep(step);
+  };
+
+  window.selectPool = function(pool) {
+    document.querySelectorAll('.screen-pool-card').forEach(c => c.classList.remove('active'));
+    document.querySelector('.screen-pool-card[data-pool="' + pool + '"]')?.classList.add('active');
+    
+    document.querySelectorAll('.screen-pool-extra').forEach(e => e.classList.remove('show'));
+    if (pool === 'custom') document.getElementById('poolExtraCustom')?.classList.add('show');
+    if (pool === 'range' || pool === 'allStocks') document.getElementById('poolExtraRange')?.classList.add('show');
+
+    const uSel = document.getElementById('screenUniverse');
+    if (uSel) { uSel.value = pool; setScreenPoolHint(); }
+
+    const labels = {
+      watchlist: '自選清單', holdings: '持股庫存', union: '自選 + 持股',
+      custom: '指定清單', range: '指定區間', allStocks: '全台股'
     };
-    var p = presets[s.preset] || presets.entry;
-    (p.filters || []).forEach(function (k) { setFilterActive(k, true); });
-    if (p.minTotal) setInputValue('screenMinTotal', p.minTotal[s.risk]);
-    if (p.minFund) setInputValue('screenMinFund', p.minFund[s.risk]);
-    if (p.maxRsi) setInputValue('screenMaxRsi', p.maxRsi[s.risk]);
-    if (p.minVolRatio) setInputValue('screenMinVolRatio', p.minVolRatio[s.risk]);
-    if (p.minRevYoY) setInputValue('screenMinRevYoY', p.minRevYoY[s.risk]);
-    if (p.minEPS) setInputValue('screenMinEPS', p.minEPS[s.risk]);
-    setInputValue('screenSortBy', p.sortBy || 'totalDesc');
-    if (typeof setScreenPoolHint === 'function') setScreenPoolHint();
-    if (typeof syncIndicatorLights === 'function') syncIndicatorLights();
-    updateWizardSummary();
-  }
-  function updateWizardSummary() {
-    var s = currentWizardState();
-    var uMap = { watchlist: '追蹤清單', holdings: '持股庫存', union: '追蹤 + 持股', custom: '自訂清單' };
-    var pMap = { entry: '找偏多進場', breakout: '找放量突破', rebound: '找超賣反彈', exit: '檢查賣出觀察' };
-    var rMap = { conservative: '保守', balanced: '平衡', aggressive: '積極' };
-    setText('wizardSummaryText', '目前設定：從' + (uMap[s.universe] || s.universe) + (pMap[s.preset] || s.preset) + '，使用' + (rMap[s.risk] || s.risk) + '條件。');
-  }
-  function bindWizardButtons() {
-    document.querySelectorAll('[data-wiz-universe]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var s = currentWizardState(); s.universe = btn.dataset.wizUniverse; setActive([].slice.call(document.querySelectorAll('[data-wiz-universe]')), 'wizUniverse', s.universe); applyWizardToInputs();
+    const sub = document.getElementById('wizStep1Sub');
+    if (sub) sub.textContent = '已選：' + (labels[pool] || pool);
+  };
+
+  window.updateWizFilterSub = function() {
+    const active = document.querySelectorAll('.screen-filter-grid [data-screen-filter].active');
+    const sub = document.getElementById('wizStep2Sub');
+    if (!sub) return;
+    if (active.length === 0) {
+      sub.textContent = '尚未勾選條件（可直接開始）';
+    } else {
+      const names = Array.from(active).map(el => el.querySelector('.screen-card-title')?.textContent || '').filter(Boolean);
+      sub.textContent = '已勾選 ' + active.length + ' 個條件：' + names.join('、');
+    }
+    syncIndicatorLights();
+  };
+
+  function bindScreenerUI() {
+    const advBtn = document.getElementById('btnToggleScreenAdv');
+    if (advBtn) {
+      advBtn.addEventListener('click', function() {
+        const panel = document.getElementById('screenAdvPanel');
+        if (panel) {
+          panel.classList.toggle('open');
+          advBtn.textContent = panel.classList.contains('open') ? '⚙ 收合進階條件 ▲' : '⚙ 展開進階條件 ▼';
+        }
       });
+    }
+
+    const runBtn = document.getElementById('btnRunScreener');
+    if (runBtn) runBtn.addEventListener('click', runScreener);
+
+    const stopBtn = document.getElementById('btnStopScreener');
+    if (stopBtn) stopBtn.addEventListener('click', function() {
+       window.__v3914ScanCancel = true;
+       setScreenerRunning(false);
+       const status = document.getElementById('screenRunStatus');
+       if (status) status.textContent = '掃描已強制中斷。';
     });
-    document.querySelectorAll('[data-wiz-preset]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var s = currentWizardState(); s.preset = btn.dataset.wizPreset; setActive([].slice.call(document.querySelectorAll('[data-wiz-preset]')), 'wizPreset', s.preset); applyWizardToInputs();
-      });
-    });
-    document.querySelectorAll('[data-wiz-risk]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var s = currentWizardState(); s.risk = btn.dataset.wizRisk; setActive([].slice.call(document.querySelectorAll('[data-wiz-risk]')), 'wizRisk', s.risk); applyWizardToInputs();
-      });
+
+    const clearBtn = document.getElementById('btnClearScreener');
+    if (clearBtn) clearBtn.addEventListener('click', clearScreenerInputs);
+
+    const exportBtn = document.getElementById('btnExportScreenPdf');
+    if (exportBtn) exportBtn.addEventListener('click', exportScreenerPdf);
+
+    const deepBtn = document.getElementById('btnRunDeepScan');
+    if (deepBtn) deepBtn.addEventListener('click', function() {
+       // Currently binds to advanced mode if necessary.
+       alert('深度篩選功能已整合至進階條件面板。');
     });
   }
 
   function applyAll() {
     patchRenderAIReportForETF();
-    hotfixText('appVersion', HOTFIX_VER);
-    if (typeof document !== 'undefined') document.title = HOTFIX_VER;
-    currentWizardState();
-    bindWizardButtons();
-    applyWizardToInputs();
-    setText('screenRunStatus', '請先依步驟選股票池與條件，再按「開始篩選」。');
+    const vEl = document.getElementById('appVersion');
+    if (vEl) vEl.textContent = 'v' + APP_VERSION;
+    if (typeof document !== 'undefined') document.title = '台股虛擬操盤 v' + APP_VERSION;
+    
+    // Init wizard state
+    const currentUniverse = document.getElementById('screenUniverse')?.value || 'watchlist';
+    selectPool(currentUniverse);
+    updateWizFilterSub();
+    bindScreenerUI();
   }
 
   if (document.readyState === 'loading') {
@@ -4000,59 +4028,4 @@ document.addEventListener('DOMContentLoaded', () => {
   } else {
     setTimeout(applyAll, 0);
   }
-})();
-/* ===== v3.9.14 clean 2-step wizard renderer ===== */
-(function () {
-  if (window.__v3914WizardLoaded) return;
-  window.__v3914WizardLoaded = true;
-
-  var CSS = `.v3914wiz{font-family:inherit;}.v3914wiz-title{font-size:.8rem;font-weight:900;color:#4a9eff;text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;}.v3914step{display:flex;gap:12px;align-items:flex-start;padding:13px;border:1px solid rgba(48,54,61,.9);border-radius:12px;background:rgba(22,27,34,.8);margin-bottom:10px;transition:border-color .2s;}.v3914step.done{border-color:rgba(34,197,94,.35);}.v3914step.active{border-color:rgba(56,139,253,.5);background:rgba(30,40,58,.6);}.v3914num{width:28px;height:28px;border-radius:50%;background:#1f6feb;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;flex-shrink:0;font-size:.88rem;}.v3914step.done .v3914num{background:#166534;}.v3914info{flex:1;}.v3914stitle{font-size:.88rem;font-weight:800;color:#fff;margin-bottom:3px;}.v3914status{font-size:.76rem;color:#8b949e;}`;
-  if (!document.getElementById('v3914wiz-css')) { var s = document.createElement('style'); s.id = 'v3914wiz-css'; s.textContent = CSS; document.head.appendChild(s); }
-
-  function getUniverseLabel() {
-    var el = document.getElementById('screenUniverse');
-    if (!el) return '未選擇';
-    return ({ watchlist: '自選清單', holdings: '持股範圍', union: '自選 + 持股', custom: '自訂清單', allStocks: '全台股', range: '指定代號區間' })[el.value] || el.value;
-  }
-  function getFilterLabel() {
-    var active = Array.from(document.querySelectorAll('[data-screen-filter].active'));
-    if (!active.length) return '未勾選條件（可直接開始）';
-    return '已勾選 ' + active.length + ' 個條件：' + active.map(function (el) { return ({ buyFit: '適合買進', sellWatch: '考慮賣出', volumeSpike: '量能異動', oversold: '超跌反彈' })[el.dataset.screenFilter] || el.dataset.screenFilter; }).join('、');
-  }
-  function isScanning() { return !!window.__v3914Scanning; }
-
-  function render() {
-    var card = document.getElementById('screenInteractiveWizard');
-    if (!card) return;
-    var uniDone = true;
-    var uniLabel = getUniverseLabel();
-    var filterLabel = getFilterLabel();
-    var scanningText = isScanning() ? '<span style="color:#fbbf24">⏳ 掃描中…</span>' : '';
-    card.innerHTML = '<div class="v3914wiz">'
-      + '<div class="v3914wiz-title">🪜 操作步驟</div>'
-      + '<div class="v3914step done">'
-      + '<div class="v3914num">✓</div>'
-      + '<div class="v3914info"><div class="v3914stitle">選擇掃描母體</div>'
-      + '<div class="v3914status">已選：' + uniLabel + '</div></div>'
-      + '</div>'
-      + '<div class="v3914step ' + (isScanning() ? 'active' : 'done') + '">'
-      + '<div class="v3914num">' + (isScanning() ? '⏳' : '2') + '</div>'
-      + '<div class="v3914info"><div class="v3914stitle">勾選篩選條件</div>'
-      + '<div class="v3914status">' + filterLabel + scanningText + '</div></div>'
-      + '</div>'
-      + '</div>';
-  }
-
-  function init() {
-    render();
-    var uSel = document.getElementById('screenUniverse');
-    if (uSel && !uSel.dataset.v3914wiz) { uSel.dataset.v3914wiz = '1'; uSel.addEventListener('change', function () { setTimeout(render, 50); }); }
-    document.querySelectorAll('[data-screen-filter]').forEach(function (el) {
-      if (!el.dataset.v3914wiz) { el.dataset.v3914wiz = '1'; el.addEventListener('click', function () { setTimeout(render, 80); }); }
-    });
-    setInterval(render, 1500);
-  }
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
-  else setTimeout(init, 0);
 })();
