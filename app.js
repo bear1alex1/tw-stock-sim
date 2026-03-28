@@ -2967,6 +2967,25 @@ async function runScreener() {
   var deepBtn = document.getElementById('btnRunDeepScan');
 
   var uMode = document.getElementById('screenUniverse') ? document.getElementById('screenUniverse').value : 'union';
+  
+  // 🎯 核心修改 1：將 criteria 的擷取提前，因為我們需要先知道使用者選了什麼「類別」
+  var criteria = {
+    simple: Array.from(document.querySelectorAll('[data-screen-filter].active')).map(function (el) { return el.dataset.screenFilter; }),
+    minTotal: Number(document.getElementById('screenMinTotal')?.value) || null,
+    minFund: Number(document.getElementById('screenMinFund')?.value) || null,
+    maxRsi: Number(document.getElementById('screenMaxRsi')?.value) || null,
+    minVolRatio: Number(document.getElementById('screenMinVolRatio')?.value) || null,
+    minRevYoY: Number(document.getElementById('screenMinRevYoY')?.value) || null,
+    minEPS: Number(document.getElementById('screenMinEPS')?.value) || null,
+    sortBy: document.getElementById('screenSortBy')?.value || 'totalDesc',
+    limit: parseInt(document.getElementById('screenLimit')?.value || '20', 10) || 20,
+    universe: uMode,
+    // 確保抓到類別選項，用於提前過濾母體
+    categoryType: document.getElementById('screenCategoryType')?.value || 'none',
+    categoryValue: document.getElementById('screenCategoryValue')?.value || ''
+  };
+  window.__v3914LastCriteria = criteria;
+
   var symbols = [];
   if (uMode === 'watchlist') symbols = (state && state.watchlist ? state.watchlist : []).slice();
   else if (uMode === 'holdings') symbols = Object.keys(state && state.holdings ? state.holdings : {});
@@ -2986,25 +3005,34 @@ async function runScreener() {
   }
   else if (uMode === 'allStocks') { try { symbols = Object.keys(stockMetaCache || {}).filter(function (c) { return /^\d{4}$/.test(c); }).sort().slice(0, 150); } catch (e2) { symbols = []; } }
   
+  // 基本去重與空值過濾
   symbols = Array.from(new Set(symbols.map(function (x) { return normalizeSymbol(x); }).filter(Boolean)));
 
+  // 🎯 核心修改 2：在數量檢查之前，先套用「類別過濾」進行交集！
+  // 這樣 1000-2000 區間的 259 檔，如果選了 AI 股，就會在這裡瞬間被縮減到正確的數量。
+  if (typeof filterByCategory === 'function') {
+    symbols = filterByCategory(symbols, criteria);
+  }
+
+  // 🎯 核心修改 3：拿「過濾後」的最終數量來做檢查
   if (!symbols.length) {
-    if (status) status.textContent = '範圍內沒有可掃描的有效股票代碼';
-    alert('❌ 此區段內沒有任何真實存在的股票代號，請重新輸入。');
+    if (status) status.textContent = '範圍內沒有符合類別的有效股票代碼';
+    alert('❌ 在指定的範圍與類別中，找不到任何符合的股票代號，請重新設定條件。');
     return;
   }
 
   if (symbols.length > SCREEN_SCAN_HARD_LIMIT) {
-    alert('❌ 本次區段解析出 ' + symbols.length + ' 檔有效股票。單次掃描不得超過 ' + SCREEN_SCAN_HARD_LIMIT + ' 檔，系統已主動阻擋以保護 API 額度。');
+    alert('❌ 本次條件解析出 ' + symbols.length + ' 檔有效股票。單次掃描不得超過 ' + SCREEN_SCAN_HARD_LIMIT + ' 檔，系統已主動阻擋以保護 API 額度。');
     window.__v3914ScanCancel = true;
     return;
   } else if (symbols.length > SCREEN_SCAN_SOFT_LIMIT) {
-    if (!confirm('⚠️ 本次區段解析出 ' + symbols.length + ' 檔有效股票。數量較多可能需要數十秒時間，確定要繼續掃描技術面嗎？')) {
+    if (!confirm('⚠️ 本次條件解析出 ' + symbols.length + ' 檔有效股票。數量較多可能需要數十秒時間，確定要繼續掃描技術面嗎？')) {
       window.__v3914ScanCancel = true;
       return;
     }
   }
 
+  // === 以下為開始掃描的邏輯，保持不變 ===
   window.__v3914Scanning = true; window.__v3914ScanCancel = false;
   if (_screenScanJob) { _screenScanJob.running = true; _screenScanJob.cancelled = false; }
   setScreenerRunning(true);
@@ -3016,20 +3044,6 @@ async function runScreener() {
   if (body) body.innerHTML = '';
   if (empty) empty.style.display = '';
   if (summary) summary.style.display = 'none';
-
-  var criteria = {
-    simple: Array.from(document.querySelectorAll('[data-screen-filter].active')).map(function (el) { return el.dataset.screenFilter; }),
-    minTotal: Number(document.getElementById('screenMinTotal')?.value) || null,
-    minFund: Number(document.getElementById('screenMinFund')?.value) || null,
-    maxRsi: Number(document.getElementById('screenMaxRsi')?.value) || null,
-    minVolRatio: Number(document.getElementById('screenMinVolRatio')?.value) || null,
-    minRevYoY: Number(document.getElementById('screenMinRevYoY')?.value) || null,
-    minEPS: Number(document.getElementById('screenMinEPS')?.value) || null,
-    sortBy: document.getElementById('screenSortBy')?.value || 'totalDesc',
-    limit: parseInt(document.getElementById('screenLimit')?.value || '20', 10) || 20,
-    universe: uMode
-  };
-  window.__v3914LastCriteria = criteria;
 
   var rows = [], allItems = [], ok = 0, fail = 0, skip = 0;
   var backoffMs = SCREEN_BATCH_DELAY;
@@ -3111,7 +3125,6 @@ async function runScreener() {
       summary.innerHTML = (wasCancelled ? '<span style="color:#ef4444;">已中斷</span>｜' : '') + '完成技術面掃描，符合條件共 <strong>' + hitCount + '</strong> 檔。';
     }
 
-    // 🎯 這裡將「深度篩選」文字改為「載入基本面」
     if (deepBtn && hitCount > 0) {
       deepBtn.disabled = false; deepBtn.innerHTML = '📊 載入基本面 (<span id="btnRunDeepCount">' + hitCount + '</span>)';
       deepBtn.style.display = ''; deepBtn.style.background = '#166534'; deepBtn.style.color = '#fff';
