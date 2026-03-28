@@ -1,4 +1,4 @@
-const APP_VERSION = '3.10.3';   // ← 只改這裡就能更版
+const APP_VERSION = '3.10.2';   // ← 只改這裡就能更版
 
 // --- Screener Limits & Rate Control ---
 const SCREEN_BATCH_SIZE = 5;
@@ -2030,7 +2030,7 @@ async function fetchKLineData(symbol) {
     const target = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}${sfx}?range=3mo&interval=1d`;
     for (const px of PROXIES) {
       try {
-        const r = await timedFetch(px(target), 8000); 
+        const r = await timedFetch(px(target), 8000);
         if (r.status === 429) throw new Error('429 Rate Limit');
         if (!r.ok) continue;
         const text = await r.text(); if (!text || text.startsWith('<')) continue;
@@ -2041,8 +2041,8 @@ async function fetchKLineData(symbol) {
           if (o && h && l && c) out.push({ time: new Date(ts[i] * 1000).toISOString().slice(0, 10), open: o, high: h, low: l, close: c });
         }
         if (out.length) return out;
-      } catch (e) { 
-        if (e && e.message && e.message.includes('429')) throw e; 
+      } catch (e) {
+        if (e && e.message && e.message.includes('429')) throw e;
       }
     }
   }
@@ -2324,7 +2324,7 @@ function updateScreenAdminUI() {
       }
     }
   }
-  
+
   setScreenPoolHint();
 }
 function openScreenAdminModal() {
@@ -2584,8 +2584,8 @@ function setScreenerRunning(running) {
   if (progressCard) progressCard.classList.toggle('show', !!running);
 }
 function syncIndicatorLights() {
-  var active = Array.from(document.querySelectorAll('[data-screen-filter].active')).map(function(el) { return el.dataset.screenFilter; });
-  document.querySelectorAll('.screen-card.indicator-mode[data-screen-filter]').forEach(function(card) {
+  var active = Array.from(document.querySelectorAll('[data-screen-filter].active')).map(function (el) { return el.dataset.screenFilter; });
+  document.querySelectorAll('.screen-card.indicator-mode[data-screen-filter]').forEach(function (card) {
     card.classList.toggle('active', active.indexOf(card.dataset.screenFilter) >= 0);
   });
 }
@@ -2659,7 +2659,7 @@ async function exportScreenerPdf() {
     const now = new Date();
     head.innerHTML = ''
       + '<div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:6px;">台股虛擬操盤系統｜篩選結果報表</div>'
-      + '<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：' + now.toLocaleDateString('zh-TW') + '｜匯出時間：' + now.toLocaleTimeString('zh-TW') + '｜版本：v3.10.3</div>'
+      + '<div style="font-size:12px;color:#9fb4d2;line-height:1.8;">匯出日期：' + now.toLocaleDateString('zh-TW') + '｜匯出時間：' + now.toLocaleTimeString('zh-TW') + '｜版本：v3.9.0</div>'
       + '<div style="font-size:12px;color:#dbeafe;line-height:1.8;margin-bottom:14px;">篩選條件：' + formatScreenCriteria(_screenLastResult.criteria || {}).join('、') + '</div>';
     const clone = source.cloneNode(true);
     clone.style.marginTop = '0';
@@ -2861,10 +2861,10 @@ async function runScreener() {
     var re2 = parseInt((document.getElementById('screenRangeEnd') || {}).value || '0', 10);
     if (rs > 0 && re2 >= rs) {
       for (var ri = rs; ri <= Math.min(re2, rs + 300); ri++) {
-         var symStr = String(ri).padStart(4, '0');
-         if (!_stockInfoLoaded || stockNameCache[symStr] || stockMetaCache[symStr] || (typeof isETF === 'function' && isETF(symStr))) {
-             symbols.push(symStr);
-         }
+        var symStr = String(ri).padStart(4, '0');
+        if (!_stockInfoLoaded || stockNameCache[symStr] || stockMetaCache[symStr] || (typeof isETF === 'function' && isETF(symStr))) {
+          symbols.push(symStr);
+        }
       }
     }
   }
@@ -2920,27 +2920,25 @@ async function runScreener() {
   function relaxedPass(item) {
     var s = criteria.simple || [];
     if (!s.length && !criteria.minTotal && !criteria.minFund && !criteria.maxRsi && !criteria.minVolRatio && !criteria.minRevYoY && !criteria.minEPS) return true;
-    
+
     if (s.length > 0) {
       if (s.includes('buyFit') && !(((item.price != null && item.ma20 != null && item.price >= item.ma20)) || (item.totalScore || 0) >= 55)) return false;
       if (s.includes('sellWatch') && !(((item.price != null && item.ma20 != null && item.price < item.ma20)) || (item.totalScore || 0) <= 45)) return false;
       if (s.includes('volumeSpike') && !((item.volRatio || 0) >= 1.2)) return false;
       if (s.includes('oversold') && !((item.rsi || 999) <= 35)) return false;
     }
-    
+
     var gates = [];
     if (criteria.minTotal && !isNaN(criteria.minTotal)) gates.push((item.totalScore || 0) >= criteria.minTotal);
-    if (criteria.minFund && !isNaN(criteria.minFund)) gates.push((item.fundScore || 0) >= criteria.minFund);
+    // 第一階段不檢查基本面，留在深度篩選才把這些 criteria 拿出來檢查
     if (criteria.maxRsi && !isNaN(criteria.maxRsi) && item.rsi != null) gates.push(item.rsi <= criteria.maxRsi);
     if (criteria.minVolRatio && !isNaN(criteria.minVolRatio) && item.volRatio != null) gates.push(item.volRatio >= criteria.minVolRatio);
-    if (criteria.minRevYoY && !isNaN(criteria.minRevYoY) && item.revYoY != null) gates.push(item.revYoY >= criteria.minRevYoY);
-    if (criteria.minEPS && !isNaN(criteria.minEPS) && item.ttmEPS != null) gates.push(item.ttmEPS >= criteria.minEPS);
     return gates.length ? gates.every(Boolean) : true;
   }
 
   var rows = [], allItems = [], ok = 0, fail = 0, skip = 0;
   var backoffMs = SCREEN_BATCH_DELAY;
-  
+
   try {
     for (var i = 0; i < symbols.length; i++) {
       if (window.__v3914ScanCancel || (_screenScanJob && _screenScanJob.cancelled)) break;
@@ -2950,76 +2948,76 @@ async function runScreener() {
       if (progressBar) progressBar.style.width = pct + '%';
       if (progressText) progressText.textContent = '正在分析 ' + sym + '…';
       if (progressMeta) progressMeta.textContent = (i + 1) + ' / ' + symbols.length + '｜成功 ' + ok + '｜失敗 ' + fail + '｜略過 ' + skip;
-      
+
       let fetchSuccess = false;
       let currentRetries = 0;
-      
+
       while (currentRetries < 2) {
         if (window.__v3914ScanCancel || (_screenScanJob && _screenScanJob.cancelled)) break;
         try {
           var priceRows = await Promise.race([fetchAIReportData(sym), new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, 14000); })]);
-          
+
           if (!priceRows || priceRows.length < 30) {
-              // Not necessarily a rate limit; could be 404 or delisted.
-              // We'll treat an empty response without throwing as a skip.
-              skip++; 
-              fetchSuccess = true; // successfully determined it's empty
-              break; 
+            // Not necessarily a rate limit; could be 404 or delisted.
+            // We'll treat an empty response without throwing as a skip.
+            skip++;
+            fetchSuccess = true; // successfully determined it's empty
+            break;
           }
-          
+
           var tech = analyzeAIData(sym, priceRows);
-          // 第一階段快篩：僅用技術面，不抓基本面 API (速度優先)
-        var fund = { score: 50, metrics: [], summary: '第一階段快篩（僅技術面）', label: '-', newsRows: [], orderHint: '' };
-          
+          // 第一階段【輕量篩選】：不抓取基本面資料，大幅提升掃描速度
+          var fund = { score: 0, metrics: null };
+
           var closes = priceRows.map(function (r) { return r.close; });
           var vols = priceRows.map(function (r) { return num(r.volume) || 0; });
           var lastRow = priceRows[priceRows.length - 1] || {};
           var avg5v = (vols.slice(-6, -1).reduce(function (a, b) { return a + b; }, 0) / Math.max(1, Math.min(5, vols.length - 1))) || 0;
           var volRatio = avg5v > 0 ? ((num(lastRow.volume) || 0) / avg5v) : null;
           var rsi = calcRSI(closes, 14);
-          var totalScore = Math.round((num(tech.comprehensiveScore) || 0) * 0.6 + (num(fund.score) || 0) * 0.4);
-          
+          var totalScore = num(tech.comprehensiveScore) || 0; // 第一階段以技術面分數為主
+
           var item = {
             symbol: sym, name: tech.name || getStockName(sym) || '',
             price: num(lastRow.close), ma20: num(tech.m20),
-            techScore: num(tech.comprehensiveScore) || 0, fundScore: num(fund.score) || 0,
+            techScore: num(tech.comprehensiveScore) || 0, fundScore: 0,
             totalScore: totalScore, rsi: rsi, volRatio: volRatio,
-            revYoY: extractMetricValue(fund.metrics, '月營收年增'),
-            ttmEPS: extractMetricValue(fund.metrics, '近四季 EPS'),
+            revYoY: null,
+            ttmEPS: null,
             tech: tech, fund: fund
           };
-          
+
           ok++; allItems.push(item);
           if (relaxedPass(item)) rows.push(item);
-          
+
           // Reset backoff on success
           backoffMs = SCREEN_BATCH_DELAY;
           fetchSuccess = true;
           break; // success, exit retry loop
-          
-        } catch (e3) { 
+
+        } catch (e3) {
           currentRetries++;
-          console.warn('[screener]', sym, 'try', currentRetries, e3 && e3.message ? e3.message : e3); 
+          console.warn('[screener]', sym, 'try', currentRetries, e3 && e3.message ? e3.message : e3);
           if (e3 && e3.message && (e3.message.includes('429') || e3.message.includes('rate limit') || e3.message.includes('fetch') || e3.message.includes('timeout') || e3.message.includes('Network'))) {
-             if (progressText) progressText.textContent = '觸發頻率限制或逾時，重試中 (' + (backoffMs/1000).toFixed(1) + 's)…';
-             await new Promise(function(r){ setTimeout(r, backoffMs); });
-             backoffMs = Math.min(backoffMs * 2, 5000); // Cap at 5s
+            if (progressText) progressText.textContent = '觸發頻率限制或逾時，重試中 (' + (backoffMs / 1000).toFixed(1) + 's)…';
+            await new Promise(function (r) { setTimeout(r, backoffMs); });
+            backoffMs = Math.min(backoffMs * 2, 5000); // Cap at 5s
           } else {
-             // Unknown error, wait a tiny bit and retry anyway
-             await new Promise(function(r){ setTimeout(r, 1000); });
+            // Unknown error, wait a tiny bit and retry anyway
+            await new Promise(function (r) { setTimeout(r, 1000); });
           }
         }
       }
-      
+
       if (!fetchSuccess && !window.__v3914ScanCancel && !(_screenScanJob && _screenScanJob.cancelled)) {
-         fail++; // exhausted retries
+        fail++; // exhausted retries
       }
-      
+
       if ((i + 1) % SCREEN_BATCH_SIZE === 0 && i < symbols.length - 1) {
         await new Promise(function (r) { setTimeout(r, backoffMs); });
       }
     }
-    
+
     // fallback: if 0 hits but we have items, show top by score
     if (!rows.length && allItems.length) {
       rows = allItems.slice().sort(function (a, b) { return (b.totalScore || 0) - (a.totalScore || 0); }).slice(0, Math.min(criteria.limit || 20, allItems.length));
@@ -3036,12 +3034,12 @@ async function runScreener() {
       summary.style.display = 'block';
       summary.innerHTML = (wasCancelled ? '<span style="color:#ef4444;">已中斷</span>｜' : '') + '完成掃描 ' + symbols.length + ' 檔，符合條件共 <strong>' + hitCount + '</strong> 檔。' + (hitCount > 0 ? '（已按' + (document.getElementById('screenSortBy')?.options[document.getElementById('screenSortBy').selectedIndex]?.text || '設定') + '排序）' : '');
     }
-    if (deepBtn && hitCount >= 5) { 
-        deepBtn.disabled = false; deepBtn.innerHTML = '🧠 深度篩選 (<span id="btnRunDeepCount">' + hitCount + '</span>)'; 
-        deepBtn.style.display = ''; deepBtn.style.background = '#166534'; deepBtn.style.color = '#fff'; 
+    if (deepBtn && hitCount >= 5) {
+      deepBtn.disabled = false; deepBtn.innerHTML = '🧠 深度篩選 (<span id="btnRunDeepCount">' + hitCount + '</span>)';
+      deepBtn.style.display = ''; deepBtn.style.background = '#166534'; deepBtn.style.color = '#fff';
     } else if (deepBtn) {
-        deepBtn.disabled = true; deepBtn.innerHTML = '🧠 深度篩選 (條件不足)';
-        deepBtn.style.display = ''; deepBtn.style.background = '#4b5563'; deepBtn.style.color = '#9ca3af';
+      deepBtn.disabled = true; deepBtn.innerHTML = '🧠 深度篩選 (條件不足)';
+      deepBtn.style.display = ''; deepBtn.style.background = '#4b5563'; deepBtn.style.color = '#9ca3af';
     }
     state.screenHistory = [{ time: new Date().toLocaleString('zh-TW'), poolLabel: uMode, count: hitCount, filters: JSON.stringify(criteria.simple) }].concat(state.screenHistory || []).slice(0, 20);
     saveState(state);
@@ -3070,30 +3068,32 @@ async function runDeepScan() {
   for (var i = 0; i < rows.length; i++) {
     if (window.__v3914DeepCancel) break;
     var r = JSON.parse(JSON.stringify(rows[i]));
-    // 第二階段深篩：補抓真實基本面資料
+    
+    // 第二階段【深度篩選】：補抓基本面資料，並重新計算總分
     try {
-      var fundDeep = await Promise.race([
-        analyzeAIFundamental(r.symbol, r.name || getStockName(r.symbol) || ''),
-        new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, 14000); })
-      ]);
-      r.fundScore = (fundDeep.score || 0) > 0 ? fundDeep.score : (r.fundScore || 50);
-      var revMetric = extractMetricValue(fundDeep.metrics, '營收年增率');
-      var epsMetric = extractMetricValue(fundDeep.metrics, 'EPS');
-      if (revMetric !== null) r.revYoY = revMetric;
-      if (epsMetric !== null) r.ttmEPS = epsMetric;
-      r.fund = fundDeep;
-    } catch (eDeep) {
-      console.warn('深度篩選-基本面', r.symbol, eDeep && eDeep.message ? eDeep.message : eDeep);
-    }
-    // 重新評分：技術面 55% + 基本面 45%
-    var score = Math.round((r.techScore || 0) * 0.55 + (r.fundScore || 50) * 0.45);
+      var fund = await Promise.race([analyzeAIFundamental(r.symbol, r.name), new Promise(function (_, rej) { setTimeout(function () { rej(new Error('timeout')); }, 12000); })]);
+      r.fund = fund;
+      r.fundScore = num(fund.score) || 0;
+      r.revYoY = extractMetricValue(fund.metrics, '月營收年增');
+      r.ttmEPS = extractMetricValue(fund.metrics, '近四季 EPS');
+    } catch(e) { }
+
+    var score = Math.round((r.techScore || 0) * 0.6 + (r.fundScore || 0) * 0.4);
     if (r.price != null && r.ma20 != null && r.price >= r.ma20) score += 8;
     if ((r.volRatio || 0) >= 1.2) score += 5;
     if (r.rsi != null && r.rsi >= 35 && r.rsi <= 68) score += 4;
-    if (r.revYoY != null && r.revYoY > 0) score += 5;
-    if (r.ttmEPS != null && r.ttmEPS > 0) score += 5;
+    if ((r.revYoY || 0) >= 0) score += 3;
+    if ((r.ttmEPS || 0) > 0) score += 3;
     r.totalScore = Math.max(0, Math.min(100, score));
-    out.push(r);
+    
+    // 檢查進階基本面條件過濾
+    var criteria = window.__v3914LastCriteria || {};
+    var pass = true;
+    if (criteria.minFund && !isNaN(criteria.minFund) && r.fundScore < criteria.minFund) pass = false;
+    if (criteria.minRevYoY && !isNaN(criteria.minRevYoY) && r.revYoY != null && r.revYoY < criteria.minRevYoY) pass = false;
+    if (criteria.minEPS && !isNaN(criteria.minEPS) && r.ttmEPS != null && r.ttmEPS < criteria.minEPS) pass = false;
+    
+    if (pass) out.push(r);
     if (progressBar) progressBar.style.width = Math.round(((i + 1) / rows.length) * 100) + '%';
     if (progressText) progressText.textContent = '深度篩選中 ' + (i + 1) + ' / ' + rows.length;
     if (progressMeta) progressMeta.textContent = (i + 1) + ' / ' + rows.length;
@@ -3111,10 +3111,9 @@ async function runDeepScan() {
 }
 
 
-let __screenerUIBound = false;
 function bindScreenerUI() {
-  if (__screenerUIBound) return; // 單次綁定保護：防止重複呼叫產生多個監聽器
-  __screenerUIBound = true;
+  if (window.__screenerBound) return;
+  window.__screenerBound = true;
   // Filter cards are handled via inline HTML onclick to call updateWizFilterSub
   document.getElementById('screenUniverse')?.addEventListener('change', setScreenPoolHint);
   document.getElementById('screenCategoryType')?.addEventListener('change', populateScreenCategoryOptions);
@@ -3245,10 +3244,10 @@ async function fetchAIReportData(symbol) {
   if (!symbol) return null;
   const cached = aiReportCache[symbol];
   if (cached && Date.now() - cached.ts < 15 * 60 * 1000) return cached.data;
-  
+
   let resultJSON = null;
   let sfxList = ['.TW', '.TWO'];
-  
+
   for (let sfx of sfxList) {
     const target = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}${sfx}?range=6mo&interval=1d`;
     try {
@@ -3262,19 +3261,19 @@ async function fetchAIReportData(symbol) {
   }
 
   if (!resultJSON || !resultJSON.chart || !resultJSON.chart.result) throw new Error('AI 資料讀取失敗 (Proxy API 均逾時或無資料)');
-  
+
   const result = resultJSON.chart.result[0];
   const ts = result.timestamp || [];
   const q = result.indicators?.quote?.[0] || {};
   const arr = [];
-  
+
   for (let i = 0; i < ts.length; i++) {
     const o = num(q.open?.[i]), h = num(q.high?.[i]), l = num(q.low?.[i]), c = num(q.close?.[i]), v = num(q.volume?.[i] || 0);
     if (o && h && l && c) {
       arr.push({ date: new Date(ts[i] * 1000).toISOString().slice(0, 10), open: o, high: h, low: l, close: c, volume: v });
     }
   }
-  
+
   arr.sort((a, b) => a.date.localeCompare(b.date));
   aiReportCache[symbol] = { ts: Date.now(), data: arr };
   return arr;
@@ -4041,7 +4040,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /* =========================================================
      v3.10 Step Wizard Controllers
   ========================================================= */
-  window.toggleScreenStep = function(step) {
+  window.toggleScreenStep = function (step) {
     document.querySelectorAll('.screen-step-body').forEach(b => b.classList.remove('open'));
     document.querySelectorAll('.screen-step').forEach(s => s.classList.remove('step-active'));
     document.querySelectorAll('.screen-step-toggle').forEach(t => t.textContent = '▼');
@@ -4056,15 +4055,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  window.nextStep = function(step) {
+  window.nextStep = function (step) {
     document.getElementById('wizStep' + (step - 1))?.classList.add('step-done');
     toggleScreenStep(step);
   };
 
-  window.selectPool = function(pool) {
+  window.selectPool = function (pool) {
     document.querySelectorAll('.screen-pool-card').forEach(c => c.classList.remove('active'));
     document.querySelector('.screen-pool-card[data-pool="' + pool + '"]')?.classList.add('active');
-    
+
     document.querySelectorAll('.screen-pool-extra').forEach(e => e.classList.remove('show'));
     if (pool === 'custom') document.getElementById('poolExtraCustom')?.classList.add('show');
     if (pool === 'range' || pool === 'allStocks') document.getElementById('poolExtraRange')?.classList.add('show');
@@ -4080,7 +4079,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (sub) sub.textContent = '已選：' + (labels[pool] || pool);
   };
 
-  window.updateWizFilterSub = function() {
+  window.updateWizFilterSub = function () {
     const active = document.querySelectorAll('.screen-filter-grid [data-screen-filter].active');
     const sub = document.getElementById('wizStep2Sub');
     if (!sub) return;
@@ -4098,7 +4097,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const vEl = document.getElementById('appVersion');
     if (vEl) vEl.textContent = 'v' + APP_VERSION;
     if (typeof document !== 'undefined') document.title = '台股虛擬操盤 v' + APP_VERSION;
-    
+
     // Init wizard state
     const currentUniverse = document.getElementById('screenUniverse')?.value || 'watchlist';
     selectPool(currentUniverse);
