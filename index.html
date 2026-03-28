@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>台股虛擬操盤 v3.9.17</title>
+  <title>台股虛擬操盤 v3.9.14</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
@@ -1724,7 +1724,173 @@
       }
     }
 
-    /* ── Scan Progress Card ── */
+    /* ═══ v3.10 unified red-up / green-down ═══ */
+    .clr-up   { color: #ef4444 !important; }
+    .clr-down { color: #22c55e !important; }
+    .clr-flat { color: #8b949e !important; }
+
+    /* ═══ Step Wizard ═══ */
+    .screen-step {
+      border: 1px solid rgba(48,54,61,.9);
+      border-radius: 14px;
+      background: rgba(22,27,34,.85);
+      margin-bottom: 12px;
+      overflow: hidden;
+      transition: border-color .25s;
+    }
+    .screen-step.step-active {
+      border-color: rgba(56,139,253,.5);
+    }
+    .screen-step.step-done {
+      border-color: rgba(34,197,94,.35);
+    }
+    .screen-step-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .screen-step-num {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: #1f6feb;
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: .92rem;
+      flex-shrink: 0;
+      transition: background .25s;
+    }
+    .screen-step.step-done .screen-step-num {
+      background: #166534;
+    }
+    .screen-step-info { flex: 1; }
+    .screen-step-title {
+      font-size: .95rem; font-weight: 800; color: #fff;
+    }
+    .screen-step-sub {
+      font-size: .76rem; color: #8b949e; margin-top: 2px;
+    }
+    .screen-step-toggle {
+      font-size: .78rem; color: #60a5fa;
+      transition: transform .2s;
+    }
+    .screen-step-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height .35s ease, padding .35s ease;
+      padding: 0 16px;
+    }
+    .screen-step-body.open {
+      max-height: 2000px;
+      padding: 0 16px 16px;
+    }
+
+    /* ═══ Pool Selection Cards ═══ */
+    .screen-pool-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    @media (max-width:600px) {
+      .screen-pool-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .screen-pool-card {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 6px;
+      padding: 16px 8px;
+      border: 1px solid rgba(48,54,61,.9);
+      border-radius: 12px;
+      background: rgba(22,27,34,.7);
+      cursor: pointer;
+      text-align: center;
+      transition: all .2s;
+      position: relative;
+    }
+    .screen-pool-card:hover {
+      border-color: rgba(96,165,250,.35);
+      background: rgba(30,40,58,.6);
+    }
+    .screen-pool-card.active {
+      border-color: #388bfd;
+      background: linear-gradient(180deg, #1e3a5f, #1a2e4a);
+      box-shadow: 0 0 0 2px rgba(56,139,253,.3) inset, 0 8px 24px rgba(56,139,253,.15);
+    }
+    .screen-pool-card.locked {
+      opacity: .45;
+      pointer-events: none;
+    }
+    .screen-pool-card.locked.admin-unlocked {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .screen-pool-icon {
+      font-size: 1.6rem;
+    }
+    .screen-pool-label {
+      font-size: .82rem; font-weight: 700; color: #dbeafe;
+    }
+    .screen-pool-badge {
+      position: absolute; top: 6px; right: 6px;
+      font-size: .6rem; font-weight: 800;
+      background: #dc2626; color: #fff;
+      padding: 1px 5px; border-radius: 4px;
+    }
+
+    /* ═══ Pool extra inputs (conditional) ═══ */
+    .screen-pool-extra {
+      display: none;
+      margin-bottom: 12px;
+      animation: fadeSlideIn .25s ease;
+    }
+    .screen-pool-extra.show { display: block; }
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .screen-pool-hint {
+      padding: 10px 12px;
+      border: 1px dashed rgba(96,165,250,.25);
+      border-radius: 10px;
+      background: rgba(56,139,253,.06);
+      color: #dbeafe;
+      font-size: .82rem;
+      line-height: 1.7;
+      margin-bottom: 10px;
+    }
+    .screen-step-next {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 22px;
+      background: linear-gradient(135deg, #1f6feb, #388bfd);
+      color: #fff;
+      border: none; border-radius: 8px;
+      font-weight: 800; font-size: .88rem;
+      cursor: pointer;
+      transition: transform .15s, box-shadow .15s;
+    }
+    .screen-step-next:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(56,139,253,.35);
+    }
+
+    /* ═══ Filter condition cards (clickable) ═══ */
+    .screen-filter-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    @media (max-width:900px) {
+      .screen-filter-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width:500px) {
+      .screen-filter-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ═══ Scan Progress Card ═══ */
     .screen-progress-card {
       display: none;
       background: linear-gradient(180deg, #1a2636, #141e2d);
@@ -1735,13 +1901,10 @@
       position: relative;
       overflow: hidden;
     }
-    .screen-progress-card.show {
-      display: block;
-    }
+    .screen-progress-card.show { display: block; }
     .screen-progress-card::before {
       content: '';
-      position: absolute;
-      inset: 0;
+      position: absolute; inset: 0;
       background: linear-gradient(90deg, transparent, rgba(96,165,250,.04), transparent);
       animation: progressShimmer 2s ease-in-out infinite;
     }
@@ -1750,41 +1913,28 @@
       50% { transform: translateX(100%); }
     }
     .screen-progress-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 10px;
-      position: relative;
+      display: flex; align-items: center;
+      justify-content: space-between; gap: 12px;
+      margin-bottom: 10px; position: relative;
     }
     .screen-progress-text {
-      font-size: .9rem;
-      font-weight: 800;
-      color: #dbeafe;
+      font-size: .9rem; font-weight: 800; color: #dbeafe;
     }
     .screen-progress-meta {
-      font-size: .78rem;
-      color: #8fb3e8;
+      font-size: .78rem; color: #8fb3e8;
     }
     .screen-progress-bar-wrap {
-      height: 8px;
-      background: #21262d;
-      border-radius: 4px;
-      overflow: hidden;
-      position: relative;
+      height: 8px; background: #21262d;
+      border-radius: 4px; overflow: hidden; position: relative;
     }
     .screen-progress-bar {
-      height: 100%;
-      width: 0%;
+      height: 100%; width: 0%;
       background: linear-gradient(90deg, #1f6feb, #60a5fa, #93c5fd);
-      border-radius: 4px;
-      transition: width .3s ease;
-      position: relative;
+      border-radius: 4px; transition: width .3s ease; position: relative;
     }
     .screen-progress-bar::after {
       content: '';
-      position: absolute;
-      inset: 0;
+      position: absolute; inset: 0;
       background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
       animation: barPulse 1.5s ease-in-out infinite;
     }
@@ -1794,8 +1944,7 @@
     }
     .screen-progress-spinner {
       display: inline-block;
-      width: 18px;
-      height: 18px;
+      width: 18px; height: 18px;
       border: 2px solid rgba(96,165,250,.2);
       border-top-color: #60a5fa;
       border-radius: 50%;
@@ -1804,26 +1953,7 @@
       vertical-align: middle;
     }
 
-    /* ── Indicator light mode for filter cards ── */
-    .screen-card.indicator-mode {
-      cursor: default;
-      opacity: .55;
-      transform: none !important;
-      pointer-events: none;
-    }
-    .screen-card.indicator-mode:hover {
-      transform: none;
-      border-color: rgba(255,255,255,.08);
-    }
-    .screen-card.indicator-mode.active {
-      opacity: 1;
-      pointer-events: none;
-      border-color: #7fb5ff;
-      box-shadow: 0 0 0 2px rgba(96, 165, 250, .45) inset, 0 0 0 1px rgba(255, 255, 255, .05), 0 16px 34px rgba(56, 139, 253, .22);
-      background: linear-gradient(180deg, #28405f, #1d2c42);
-    }
-
-    /* ── Stop scan button ── */
+    /* ═══ Stop scan button ═══ */
     .btn-stop-scan {
       background: linear-gradient(135deg, #dc2626, #b91c1c) !important;
       color: #fff !important;
@@ -1833,61 +1963,6 @@
     @keyframes stopPulse {
       0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,.4); }
       50% { box-shadow: 0 0 0 8px rgba(220,38,38,0); }
-    }
-
-
-    .screen-step-block {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .screen-job-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
-    }
-    .screen-job-btn {
-      border: 1px solid rgba(96, 165, 250, .22) !important;
-      background: #182233 !important;
-      color: #dbeafe !important;
-      padding: 12px 14px !important;
-      border-radius: 12px !important;
-      font-size: .88rem !important;
-      font-weight: 800 !important;
-    }
-    .screen-job-btn:hover {
-      border-color: #60a5fa !important;
-      transform: translateY(-1px);
-    }
-    .screen-job-btn.active {
-      background: linear-gradient(180deg, #28405f, #1d2c42) !important;
-      border-color: #7fb5ff !important;
-      color: #fff !important;
-      box-shadow: 0 0 0 1px rgba(96, 165, 250, .2) inset, 0 10px 24px rgba(56, 139, 253, .16);
-    }
-    .screen-job-btn.is-disabled {
-      opacity: .48 !important;
-      cursor: not-allowed !important;
-      transform: none !important;
-    }
-    .screen-step-panel {
-      display: none;
-      padding: 12px;
-      border: 1px solid rgba(96, 165, 250, .18);
-      border-radius: 12px;
-      background: rgba(56, 139, 253, .05);
-    }
-    .screen-step-panel.show {
-      display: block;
-    }
-    .screen-step-actions {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-top: 6px;
-    }
-    .screen-step-focus {
-      box-shadow: 0 0 0 2px rgba(96, 165, 250, .3), 0 16px 34px rgba(56, 139, 253, .16);
     }
 
     .screen-action-row {
@@ -1907,7 +1982,7 @@
       <span style="font-size:1.2rem;">📈</span>
       <div>
         <div style="font-weight:800;color:var(--text);font-size:.92rem;line-height:1.2;">
-          台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.9.17</span>
+          台股虛擬操盤系統 <span class="vtag" id="appVersion">v3.9.14</span>
         </div>
         <div id="lastSaved" style="font-size:.65rem;color:#555;line-height:1.2;">最後儲存：—</div>
       </div>
@@ -2452,192 +2527,174 @@
 
 
 
-    <!-- ════ PAGE 5: 篩選器 ════ -->
+    <!-- ════ PAGE 5: 篩選器 (v3.10 Wizard) ════ -->
     <div id="page-screener" class="page">
-      <div class="card" style="margin-bottom:12px;">
-        <div
-          style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;">
-          <div class="sec-title" style="margin:0;">🧭 條件篩選器</div>
-          <div style="display:flex;align-items:center;gap:10px;">
-            <div id="screenAdminStatus" class="screen-admin-status">一般模式｜全掃已鎖定</div>
-            <button class="screen-admin-btn" id="screenAdminEntry" type="button" aria-label="管理員">🛡️</button>
-          </div>
+      <!-- 簡易狀態指示燈 (Non-clickable, synced visually) -->
+      <div class="screen-filter-grid" style="margin-bottom:12px; pointer-events:none;">
+        <div class="card screen-card indicator-mode" data-screen-filter="buyFit">
+          <div class="screen-card-top"><div class="screen-card-title">適合買進</div><span class="screen-tag buy">買入</span></div>
         </div>
-        <div id="screenAdminTools" class="screen-admin-tools">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-            <div>
-              <div style="font-size:.88rem;font-weight:900;color:#fff;">管理員工具</div>
-              <div class="screen-pdf-note">解鎖後才可顯示與啟用管理員模式，前端仍會在執行流程再次驗證權限。</div>
-            </div>
-            <div>
-              <span class="screen-admin-chip">管理模式</span>
-            </div>
-          </div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-            <button class="btn btn-blue" type="button" data-admin-act="fullscan">🔓 開啟全掃選項</button>
-            <button class="btn" type="button" data-admin-act="widerange">📈 允許大範圍掃描</button>
-            <button class="btn" type="button" data-admin-act="lockback">🔒 鎖回一般模式</button>
-          </div>
+        <div class="card screen-card indicator-mode" data-screen-filter="sellWatch">
+          <div class="screen-card-top"><div class="screen-card-title">考慮賣出</div><span class="screen-tag sell">賣出</span></div>
         </div>
-        <div class="screen-step-block">
-          <div class="screen-wizard-wrap">
-            <div class="screen-wizard-step" id="screenJobStep">
-              <div class="screen-wizard-num">1</div>
-              <div style="flex:1;">
-                <div class="screen-wizard-title">步驟 1：選擇掃描工作</div>
-                <div class="screen-wizard-desc">點選 6 個按鈕之一即可選定掃描母體；選到「指定區間」會立即展開起訖代號欄位，選到「指定清單」會立即展開代號清單輸入框。</div>
-                <div class="screen-job-grid">
-                  <button class="btn screen-job-btn" type="button" data-screen-job="allStocks">全台股</button>
-                  <button class="btn screen-job-btn" type="button" data-screen-job="watchlist">自選清單</button>
-                  <button class="btn screen-job-btn" type="button" data-screen-job="holdings">持股清單</button>
-                  <button class="btn screen-job-btn" type="button" data-screen-job="union">自選 + 持股</button>
-                  <button class="btn screen-job-btn" type="button" data-screen-job="custom">指定清單</button>
-                  <button class="btn screen-job-btn" type="button" data-screen-job="range">指定區間</button>
-                </div>
-                <div id="screenCustomPanel" class="screen-step-panel">
-                  <label class="screen-field-label">指定清單代號</label>
-                  <textarea id="screenCustomList" class="inp" rows="3" placeholder="輸入代號，以逗號、空白或換行分隔，例如：2330, 2317, 0050" style="width:100%;resize:vertical;"></textarea>
-                  <div class="screen-inline-note">只有在「指定清單」模式下會使用這個欄位。</div>
-                </div>
-                <div id="screenRangePanel" class="screen-step-panel">
-                  <div class="screen-extra-grid" style="margin-top:0;">
-                    <div>
-                      <label class="screen-field-label">代號起始</label>
-                      <input id="screenRangeStart" class="inp" type="number" min="1" max="9999" placeholder="例如 1 或 1101" />
-                    </div>
-                    <div>
-                      <label class="screen-field-label">代號結束</label>
-                      <input id="screenRangeEnd" class="inp" type="number" min="1" max="9999" placeholder="例如 3000 或 9999" />
-                    </div>
-                    <div>
-                      <label class="screen-field-label">類別模式</label>
-                      <select id="screenCategoryType" class="inp">
-                        <option value="none">不指定</option>
-                        <option value="industry">官方產業</option>
-                        <option value="concept">主流概念</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label class="screen-field-label">類別值</label>
-                      <select id="screenCategoryValue" class="inp">
-                        <option value=""></option>
-                      </select>
-                    </div>
-                  </div>
-                  <div class="screen-inline-note">「指定區間」會依起訖代號建立候選池，再套用條件與分類篩選。</div>
-                </div>
-                <div class="screen-step-actions">
-                  <button class="btn btn-blue" id="btnConfirmScreenWork" type="button">確認工作，下一步 →</button>
-                </div>
-                <select id="screenUniverse" class="inp" style="display:none;">
-                  <option value="watchlist">追蹤清單</option>
-                  <option value="holdings">持股庫存</option>
-                  <option value="union">追蹤 + 持股</option>
-                  <option value="custom">自訂清單</option>
-                  <option value="allStocks" hidden disabled>全部股票（管理員）</option>
-                  <option value="range">代號範圍</option>
+        <div class="card screen-card indicator-mode" data-screen-filter="volumeSpike">
+          <div class="screen-card-top"><div class="screen-card-title">量能異動</div><span class="screen-tag filter">篩選</span></div>
+        </div>
+        <div class="card screen-card indicator-mode" data-screen-filter="oversold">
+          <div class="screen-card-top"><div class="screen-card-title">超跌反彈</div><span class="screen-tag buy">買入</span></div>
+        </div>
+      </div>
+
+      <!-- ── 步驟 1：選擇掃描母體 ── -->
+      <div class="screen-step step-active" id="wizStep1">
+        <div class="screen-step-header" onclick="toggleScreenStep(1)">
+          <div class="screen-step-num" id="wizStep1Num">1</div>
+          <div class="screen-step-info">
+            <div class="screen-step-title">選擇掃描母體</div>
+            <div class="screen-step-sub" id="wizStep1Sub">請選擇要從哪裡開始篩選</div>
+          </div>
+          <div class="screen-step-toggle">▲</div>
+        </div>
+        <div class="screen-step-body open" id="wizStep1Body">
+          <div class="screen-pool-grid" id="screenPoolGrid">
+            <div class="screen-pool-card active" data-pool="watchlist" onclick="selectPool('watchlist')">
+              <div class="screen-pool-icon">⭐</div>
+              <div class="screen-pool-label">自選清單</div>
+            </div>
+            <div class="screen-pool-card" data-pool="holdings" onclick="selectPool('holdings')">
+              <div class="screen-pool-icon">📦</div>
+              <div class="screen-pool-label">持股庫存</div>
+            </div>
+            <div class="screen-pool-card" data-pool="union" onclick="selectPool('union')">
+              <div class="screen-pool-icon">🔗</div>
+              <div class="screen-pool-label">自選 + 持股</div>
+            </div>
+            <div class="screen-pool-card" data-pool="custom" onclick="selectPool('custom')">
+              <div class="screen-pool-icon">📝</div>
+              <div class="screen-pool-label">指定清單</div>
+            </div>
+            <div class="screen-pool-card" data-pool="range" onclick="selectPool('range')">
+              <div class="screen-pool-icon">🔢</div>
+              <div class="screen-pool-label">指定區間</div>
+            </div>
+            <div class="screen-pool-card locked" id="cardAllStocks" data-pool="allStocks" onclick="if(!this.classList.contains('locked'))selectPool('allStocks')">
+              <div class="screen-pool-badge">需解鎖</div>
+              <div class="screen-pool-icon">🇹🇼</div>
+              <div class="screen-pool-label">全台股</div>
+            </div>
+          </div>
+
+          <!-- 指定清單輸入 -->
+          <div id="poolExtraCustom" class="screen-pool-extra">
+            <label class="screen-field-label">自訂代號清單</label>
+            <textarea id="screenCustomList" class="inp" rows="2" placeholder="輸入代號，以逗號、空白或換行分隔，例如：2330, 2317" style="width:100%;resize:vertical;"></textarea>
+          </div>
+
+          <!-- 指定區間輸入 -->
+          <div id="poolExtraRange" class="screen-pool-extra">
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+              <div style="flex:1;min-width:120px;">
+                <label class="screen-field-label">代號起始</label>
+                <input id="screenRangeStart" class="inp" type="number" min="1" max="9999" placeholder="例如 1101" />
+              </div>
+              <div style="flex:1;min-width:120px;">
+                <label class="screen-field-label">代號結束</label>
+                <input id="screenRangeEnd" class="inp" type="number" min="1" max="9999" placeholder="例如 9999" />
+              </div>
+            </div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+              <div style="flex:1;min-width:120px;">
+                <label class="screen-field-label">類別模式</label>
+                <select id="screenCategoryType" class="inp">
+                  <option value="none">不指定</option>
+                  <option value="industry">官方產業</option>
+                  <option value="concept">主流概念</option>
                 </select>
-                <div class="screen-stat" style="margin-top:10px;">
-                  <span id="screenPoolHint">目前將使用追蹤清單作為篩選資料池。</span>
-                </div>
+              </div>
+              <div style="flex:1;min-width:120px;">
+                <label class="screen-field-label">類別選項</label>
+                <select id="screenCategoryValue" class="inp"><option value="">全部類別</option></select>
               </div>
             </div>
           </div>
-      </div>
 
-      <!-- ── 步驟 2：勾選篩選條件 ── -->
-      <div class="card" id="screenFilterCard" style="margin-bottom:12px;">
-        <div class="sec-title">步驟 2：勾選篩選條件</div>
-        <div class="screen-inline-note" style="margin-bottom:10px;">適合買進 / 考慮賣出 / 量能異動 / 超跌反彈，點擊卡片即可切換開關；不勾選也能直接進行全母體掃描。</div>
-        <div class="screen-grid">
-          <div class="card screen-card" data-screen-filter="buyFit">
-            <div class="screen-card-top">
-              <div class="screen-card-title">適合買進</div><span class="screen-tag buy">買入</span>
-            </div>
-            <div class="screen-card-desc">收盤站上 MA20，且綜合評分偏高。</div>
-          </div>
-          <div class="card screen-card" data-screen-filter="sellWatch">
-            <div class="screen-card-top">
-              <div class="screen-card-title">考慮賣出</div><span class="screen-tag sell">賣出</span>
-            </div>
-            <div class="screen-card-desc">收盤跌破 MA20，且綜合評分偏弱。</div>
-          </div>
-          <div class="card screen-card" data-screen-filter="volumeSpike">
-            <div class="screen-card-top">
-              <div class="screen-card-title">量能異動</div><span class="screen-tag filter">篩選</span>
-            </div>
-            <div class="screen-card-desc">今日成交量大於 5 日均量 1.5 倍。</div>
-          </div>
-          <div class="card screen-card" data-screen-filter="oversold">
-            <div class="screen-card-top">
-              <div class="screen-card-title">超跌反彈</div><span class="screen-tag buy">買入</span>
-            </div>
-            <div class="screen-card-desc">RSI(14) 小於 30，觀察是否出現反彈。</div>
+          <div class="screen-pool-hint" id="screenPoolHintText">將使用你的「自選清單」作為掃描母體，適合快速確認手上關注標的狀態。</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <button class="screen-step-next" onclick="nextStep(2)">確認母體，下一步 →</button>
+            <button class="btn" id="screenAdminEntry" style="padding:10px; background:transparent; border:1px solid rgba(255,255,255,.1); font-size:.8rem;" aria-label="管理員解鎖">🛡️</button>
           </div>
         </div>
       </div>
 
-      <!-- ── 進階篩選 ── -->
-      <div class="card" style="margin-bottom:12px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-          <div class="sec-title" style="margin:0;">⚙️ 進階篩選</div>
-          <div id="btnToggleScreenAdv" class="screen-adv-toggle">展開進階條件 ▼</div>
+      <!-- ── 步驟 2：篩選條件與操作 ── -->
+      <div class="screen-step" id="wizStep2">
+        <div class="screen-step-header" onclick="toggleScreenStep(2)">
+          <div class="screen-step-num" id="wizStep2Num">2</div>
+          <div class="screen-step-info">
+            <div class="screen-step-title">勾選篩選條件並開始篩選</div>
+            <div class="screen-step-sub" id="wizStep2Sub">尚未勾選條件（可選填）</div>
+          </div>
+          <div class="screen-step-toggle">▼</div>
         </div>
-        <div class="screen-adv-panel" id="screenAdvPanel">
-          <div class="screen-adv-grid">
-            <div>
-              <label class="screen-field-label">綜合分數最低</label>
-              <input id="screenMinTotal" class="inp" type="number" min="0" max="100" placeholder="例如 65" />
+        <div class="screen-step-body" id="wizStep2Body">
+          <!-- Filter Grid -->
+          <div class="screen-filter-grid">
+            <div class="card screen-card" data-screen-filter="buyFit" onclick="this.classList.toggle('active');updateWizFilterSub();">
+              <div class="screen-card-top"><div class="screen-card-title">適合買進</div><span class="screen-tag buy">買入</span></div>
+              <div class="screen-card-desc">收盤站上 MA20，且綜合評分偏高。</div>
             </div>
-            <div>
-              <label class="screen-field-label">基本面分數最低</label>
-              <input id="screenMinFund" class="inp" type="number" min="0" max="100" placeholder="例如 60" />
+            <div class="card screen-card" data-screen-filter="sellWatch" onclick="this.classList.toggle('active');updateWizFilterSub();">
+              <div class="screen-card-top"><div class="screen-card-title">考慮賣出</div><span class="screen-tag sell">賣出</span></div>
+              <div class="screen-card-desc">收盤跌破 MA20，且綜合評分偏弱。</div>
             </div>
-            <div>
-              <label class="screen-field-label">RSI 上限</label>
-              <input id="screenMaxRsi" class="inp" type="number" min="0" max="100" placeholder="例如 30" />
+            <div class="card screen-card" data-screen-filter="volumeSpike" onclick="this.classList.toggle('active');updateWizFilterSub();">
+              <div class="screen-card-top"><div class="screen-card-title">量能異動</div><span class="screen-tag filter">篩選</span></div>
+              <div class="screen-card-desc">成交量大於 5 日均量 1.5 倍。</div>
             </div>
-            <div>
-              <label class="screen-field-label">量比最低</label>
-              <input id="screenMinVolRatio" class="inp" type="number" step="0.1" min="0" placeholder="例如 1.5" />
+            <div class="card screen-card" data-screen-filter="oversold" onclick="this.classList.toggle('active');updateWizFilterSub();">
+              <div class="screen-card-top"><div class="screen-card-title">超跌反彈</div><span class="screen-tag buy">買入</span></div>
+              <div class="screen-card-desc">RSI(14) 小於 30，觀察是否出現反彈。</div>
             </div>
-            <div>
-              <label class="screen-field-label">月營收年增最低%</label>
-              <input id="screenMinRevYoY" class="inp" type="number" step="0.1" placeholder="例如 10" />
+          </div>
+
+          <!-- Advanced Panel Toggle -->
+          <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+            <div id="btnToggleScreenAdv" class="screen-adv-toggle">⚙ 展開進階條件 ▼</div>
+          </div>
+          
+          <div class="screen-adv-panel" id="screenAdvPanel">
+            <div class="screen-adv-grid">
+              <div><label class="screen-field-label">綜合分數最低</label><input id="screenMinTotal" class="inp" type="number" min="0" max="100" placeholder="例如 65" /></div>
+              <div><label class="screen-field-label">基本面分數最低</label><input id="screenMinFund" class="inp" type="number" min="0" max="100" placeholder="例如 60" /></div>
+              <div><label class="screen-field-label">RSI 上限</label><input id="screenMaxRsi" class="inp" type="number" min="0" max="100" placeholder="例如 30" /></div>
+              <div><label class="screen-field-label">量比最低</label><input id="screenMinVolRatio" class="inp" type="number" step="0.1" min="0" placeholder="例如 1.5" /></div>
+              <div><label class="screen-field-label">月營收年增最低%</label><input id="screenMinRevYoY" class="inp" type="number" step="0.1" placeholder="例如 10" /></div>
+              <div><label class="screen-field-label">近四季 EPS 最低</label><input id="screenMinEPS" class="inp" type="number" step="0.01" placeholder="例如 8" /></div>
+              <div>
+                <label class="screen-field-label">結果排序</label>
+                <select id="screenSortBy" class="inp">
+                  <option value="totalDesc">綜合分數高到低</option>
+                  <option value="rsiAsc">RSI 低到高</option>
+                  <option value="volDesc">量比高到低</option>
+                  <option value="revDesc">營收年增高到低</option>
+                </select>
+              </div>
+              <div><label class="screen-field-label">最多顯示筆數</label><input id="screenLimit" class="inp" type="number" min="5" max="100" step="1" value="20" /></div>
             </div>
-            <div>
-              <label class="screen-field-label">近四季 EPS 最低</label>
-              <input id="screenMinEPS" class="inp" type="number" step="0.01" placeholder="例如 8" />
-            </div>
-            <div>
-              <label class="screen-field-label">結果排序</label>
-              <select id="screenSortBy" class="inp">
-                <option value="totalDesc">綜合分數高到低</option>
-                <option value="rsiAsc">RSI 低到高</option>
-                <option value="volDesc">量比高到低</option>
-                <option value="revDesc">營收年增高到低</option>
-              </select>
-            </div>
-            <div>
-              <label class="screen-field-label">最多顯示筆數</label>
-              <input id="screenLimit" class="inp" type="number" min="5" max="100" step="1" value="20" />
-            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="screen-action-row" style="margin-top: 6px;">
+            <button class="btn btn-blue" id="btnRunScreener" style="padding:12px 24px;font-size:.96rem;">⚡ 開始篩選</button>
+            <button class="btn" id="btnRunDeepScan" style="padding:12px 22px;background:#166534;color:#fff;display:none;">🧠 深度篩選 (<span id="btnRunDeepCount">0</span>)</button>
+            <button class="btn" id="btnExportScreenPdf" style="padding:12px 22px;">🧾 匯出 PDF</button>
+            <button class="btn" id="btnClearScreener" style="padding:12px 22px;">🗑️ 一鍵清除</button>
           </div>
         </div>
       </div>
 
-      <!-- ── 操作步驟 ── -->
-      <div id="screenInteractiveWizard" class="card" style="margin-bottom:12px;"></div>
-
-      <!-- ── 動作按鈕列（移到操作步驟之下） ── -->
-      <div class="screen-action-row">
-        <button class="btn btn-blue" id="btnRunScreener" style="padding:12px 24px;font-size:.96rem;">⚡ 開始篩選</button>
-        <button class="btn" id="btnRunDeepScan"
-          style="padding:12px 22px;background:#166534;color:#fff;display:none;">🧠 深度篩選</button>
-        <button class="btn" id="btnExportScreenPdf" style="padding:12px 22px;">🧾 匯出 PDF</button>
-        <button class="btn" id="btnClearScreener" style="padding:12px 22px;">🗑️ 一鍵清除</button>
-      </div>
-      <!-- hidden legacy stop button -->
+      <!-- hidden old fields (kept for compatibility in app.js for now) -->
+      <input type="hidden" id="screenUniverse" value="watchlist" />
       <button id="btnStopScreener" style="display:none;"></button>
 
       <!-- ── 掃描進度卡 ── -->
@@ -2658,9 +2715,9 @@
       <div class="card" id="screenResultCard" style="margin-bottom:12px;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
           <div class="sec-title" style="margin:0;">📋 篩選結果</div>
-          <div id="screenRunStatus" class="muted" style="font-size:.78rem;">尚未開始篩選</div>
+          <div id="screenRunStatus" class="muted" style="font-size:.78rem;">請先依步驟選股票池與條件，再按「開始篩選」。</div>
         </div>
-        <div id="screenResultSummary" class="screen-stat" style="margin:10px 0 12px;">尚未開始篩選。</div>
+        <div id="screenResultSummary" class="screen-stat" style="margin:10px 0 12px;display:none;"></div>
         <div class="tbl-wrap">
           <table>
             <thead>
@@ -2689,7 +2746,6 @@
         <div id="screenHistoryList" style="margin-top:12px;"></div>
       </div>
     </div>
-
     <!-- ════ PAGE 6: AI 診斷報告 (v3.3) ════ -->
     <div id="page-aiReport" class="page">
       <div class="card" style="margin-bottom:12px;">
@@ -2796,7 +2852,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
   <!-- App -->
-  <script src="app.v3.9.17.js?v=v3.9.17"></script>
+  <script src="app.js"></script>
 
   <!-- SPA 導覽 -->
   <script>
