@@ -2310,7 +2310,7 @@ function updateScreenAdminUI() {
     _screenAdmin.widerange = true;
   }
 
-  const poolAll = document.getElementById('poolAllStocks');
+  const poolAll = document.getElementById('cardAllStocks');
   if (poolAll) {
     if (isUnlocked) {
       poolAll.classList.remove('locked');
