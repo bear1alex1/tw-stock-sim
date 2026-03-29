@@ -2410,8 +2410,8 @@ function setScreenPoolHint() {
   rs.style.opacity = rangeOn ? '1' : '.55';
   re.style.opacity = rangeOn ? '1' : '.55';
   if (v === 'watchlist') hint.textContent = '目前將使用追蹤清單作為篩選資料池。';
-  else if (v === 'holdings') hint.textContent = '目前將使用持股庫存作為篩選資料池。';
-  else if (v === 'union') hint.textContent = '目前將合併追蹤清單與持股庫存進行篩選。';
+  else if (v === 'holdings') hint.textContent = '目前將使用持股清單作為篩選資料池。';
+  else if (v === 'union') hint.textContent = '目前將合併追蹤清單與持股清單進行篩選。';
   else if (v === 'custom') hint.textContent = '目前將使用你手動輸入的自訂代號清單進行篩選。';
   else if (v === 'allStocks') hint.textContent = canUseAllStocks() ? '目前將以全部股票代號作為候選池，再套用類別與條件篩選。' : '全部股票模式已被鎖定，僅限管理員開啟。';
   else hint.textContent = canUseWideRange() ? '目前將依代號範圍建立候選池，再套用類別與條件篩選。' : '目前將依代號範圍建立候選池；一般模式建議控制在 100 檔內。';
@@ -2501,7 +2501,7 @@ function getScreenerCriteria() {
 }
 function formatScreenCriteria(criteria) {
   const tags = [];
-  const universeMap = { watchlist: '追蹤清單', holdings: '持股庫存', union: '追蹤+持股', custom: '自訂清單', allStocks: '全部股票', range: '代號範圍' };
+  const universeMap = { watchlist: '追蹤清單', holdings: '持股清單', union: '追蹤+持股', custom: '自訂清單', allStocks: '全部股票', range: '代號範圍' };
   tags.push('資料池：' + (universeMap[criteria.universe] || criteria.universe));
   if (criteria.universe === 'range' && criteria.rangeStart && criteria.rangeEnd) tags.push('代號 ' + criteria.rangeStart + '~' + criteria.rangeEnd);
   if (criteria.categoryType === 'industry' && criteria.categoryValue) tags.push('產業：' + criteria.categoryValue);
@@ -2737,7 +2737,7 @@ function clearScreenerInputs() {
 }
 
 function poolLabelByValue(v) {
-  return v === 'holdings' ? '持股庫存' : v === 'union' ? '追蹤+持股' : v === 'custom' ? '自訂清單' : '追蹤清單';
+  return v === 'holdings' ? '持股清單' : v === 'union' ? '追蹤+持股' : v === 'custom' ? '自訂清單' : '追蹤清單';
 }
 function bindScreenerResultEvents() {
   const tbody = document.getElementById('screenResultBody');
@@ -3204,15 +3204,81 @@ async function runDeepScan() {
 function bindScreenerUI() {
   if (window.__screenerBound) return;
   window.__screenerBound = true;
-  // Filter cards are handled via inline HTML onclick to call updateWizFilterSub
+  
+  // 🎯 動態注入 CSS：將過濾大卡片改造成霓虹小燈號
+  const style = document.createElement('style');
+  style.innerHTML = `
+    /* 調整容器排版 */
+    .screen-filter-grid {
+       display: flex !important;
+       gap: 12px !important;
+       flex-wrap: wrap !important;
+       margin-bottom: 15px !important;
+    }
+    /* 縮小卡片變成小燈號 */
+    .indicator-mode {
+       padding: 6px 14px !important;
+       border-radius: 6px !important;
+       display: inline-flex !important;
+       align-items: center;
+       justify-content: center;
+       background: #21262d !important; /* 未勾選時反灰 */
+       color: #8b949e !important;
+       border: 1px solid #30363d !important;
+       transition: all 0.2s;
+       min-height: unset !important;
+       height: auto !important;
+       width: auto !important;
+       cursor: pointer;
+    }
+    /* 隱藏多餘文字與標籤 */
+    .indicator-mode .screen-card-desc,
+    .indicator-mode .screen-card-badge {
+       display: none !important;
+    }
+    .indicator-mode .screen-card-title {
+       font-size: 0.9rem !important;
+       margin: 0 !important;
+       color: inherit !important;
+       font-weight: bold !important;
+    }
+    /* 適合買進 (紅) */
+    .indicator-mode[data-screen-filter="buyFit"].active {
+       background: rgba(255, 77, 77, 0.15) !important;
+       color: #ff4d4d !important;
+       border-color: #ff4d4d !important;
+       box-shadow: 0 0 8px rgba(255, 77, 77, 0.3);
+    }
+    /* 考慮賣出 (綠) */
+    .indicator-mode[data-screen-filter="sellWatch"].active {
+       background: rgba(46, 204, 113, 0.15) !important;
+       color: #2ecc71 !important;
+       border-color: #2ecc71 !important;
+       box-shadow: 0 0 8px rgba(46, 204, 113, 0.3);
+    }
+    /* 量能異動 (紫) */
+    .indicator-mode[data-screen-filter="volumeSpike"].active {
+       background: rgba(155, 89, 182, 0.15) !important;
+       color: #d288ec !important;
+       border-color: #9b59b6 !important;
+       box-shadow: 0 0 8px rgba(155, 89, 182, 0.3);
+    }
+    /* 超跌反彈 (黃) */
+    .indicator-mode[data-screen-filter="oversold"].active {
+       background: rgba(243, 156, 18, 0.15) !important;
+       color: #f1c40f !important;
+       border-color: #f39c12 !important;
+       box-shadow: 0 0 8px rgba(243, 156, 18, 0.3);
+    }
+  `;
+  document.head.appendChild(style);
+
   document.getElementById('screenUniverse')?.addEventListener('change', setScreenPoolHint);
   document.getElementById('screenCategoryType')?.addEventListener('change', populateScreenCategoryOptions);
   document.getElementById('screenCustomList')?.addEventListener('input', function () { state.screenCustomList = this.value; saveState(state); });
 
-  // Toggle: run button acts as start OR stop
   document.getElementById('btnRunScreener')?.addEventListener('click', function () {
     if (window.__v3914Scanning || (_screenScanJob && _screenScanJob.running)) {
-      // Stop scan
       window.__v3914ScanCancel = true;
       if (_screenScanJob) _screenScanJob.cancelled = true;
       var s = document.getElementById('screenRunStatus');
@@ -3225,7 +3291,6 @@ function bindScreenerUI() {
     window.__v3914ScanCancel = true;
     if (_screenScanJob) _screenScanJob.cancelled = true;
   });
-  // Deep scan toggle: click again while running → stop
   document.getElementById('btnRunDeepScan')?.addEventListener('click', function () {
     if (window.__v3914DeepCancel === false && this.classList.contains('btn-stop-scan')) {
       window.__v3914DeepCancel = true;
@@ -3250,7 +3315,6 @@ function bindScreenerUI() {
   setScreenerRunning(false);
   syncIndicatorLights();
 }
-
 function navigateToPage(page) {
   document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('active'); });
   const target = document.getElementById('page-' + page);
@@ -3788,7 +3852,7 @@ function renderScenarioHoldingOptions() {
   var sel = document.getElementById('scenarioHoldingSelect');
   if (!sel) return;
   var items = getHoldingScenarioItems();
-  sel.innerHTML = '<option value="">請選擇持股庫存（可自動帶入買入價與股數）</option>' + items.map(function (it) {
+  sel.innerHTML = '<option value="">請選擇持股清單（可自動帶入買入價與股數）</option>' + items.map(function (it) {
     return '<option value="' + it.symbol + '">' + it.symbol + (it.name ? ' ' + it.name : '') + '｜' + it.shares + '股｜均價 ' + formatPrice(it.avgPrice) + '</option>';
   }).join('');
 }
@@ -3797,7 +3861,7 @@ function fillScenarioFromHolding(symbol, keepExit) {
   var h = (state.holdings || {})[sym];
   var hint = document.getElementById('scenarioHoldingHint');
   if (!h) {
-    if (hint) hint.textContent = '目前選取的代號不在持股庫存中，可手動輸入買入價、股數與賣出價進行試算。';
+    if (hint) hint.textContent = '目前選取的代號不在持股清單中，可手動輸入買入價、股數與賣出價進行試算。';
     return false;
   }
   var avg = num(h.avgPrice) || 0;
@@ -3810,7 +3874,7 @@ function fillScenarioFromHolding(symbol, keepExit) {
   if (inpEntry && avg > 0) inpEntry.value = avg.toFixed(2);
   if (inpShares && shares > 0) inpShares.value = shares;
   if (sel) sel.value = sym;
-  if (hint) hint.textContent = '已從持股庫存帶入：' + sym + (getStockName(sym) ? ' ' + getStockName(sym) : '') + '，均價 ' + formatPrice(avg) + '，股數 ' + shares + ' 股。請手動輸入賣出價進行試算。';
+  if (hint) hint.textContent = '已從持股清單帶入：' + sym + (getStockName(sym) ? ' ' + getStockName(sym) : '') + '，均價 ' + formatPrice(avg) + '，股數 ' + shares + ' 股。請手動輸入賣出價進行試算。';
   _scenarioUpdateSymbolLabel();
   if (!keepExit) {
     var exit = document.getElementById('scenarioExitPrice');
@@ -3846,8 +3910,8 @@ function _scenarioUpdateSymbolLabel() {
   syncScenarioHoldingSelect();
   var h = (state.holdings || {})[sym];
   if (hint) {
-    if (sym && h) hint.textContent = '此代號在持股庫存中，均價 ' + formatPrice(h.avgPrice) + '，股數 ' + h.shares + ' 股，可一鍵帶入試算。';
-    else if (sym) hint.textContent = '目前選取的代號不在持股庫存中，可手動輸入買入價、股數與賣出價進行試算。';
+    if (sym && h) hint.textContent = '此代號在持股清單中，均價 ' + formatPrice(h.avgPrice) + '，股數 ' + h.shares + ' 股，可一鍵帶入試算。';
+    else if (sym) hint.textContent = '目前選取的代號不在持股清單中，可手動輸入買入價、股數與賣出價進行試算。';
     else hint.textContent = '若選擇已持有股票，系統會自動帶入均價與股數，你只需輸入賣出價即可試算。';
   }
   if (sym && !n) {
@@ -3930,7 +3994,7 @@ function openHoldingScenarioModal() {
   var sym = normalizeSymbol(document.getElementById('tradeSymbol')?.value || '');
   var items = getHoldingScenarioItems();
   if ((!sym || !state.holdings[sym]) && items.length) sym = items[0].symbol;
-  if (!sym || !state.holdings[sym]) { showToast('❌ 目前沒有持股庫存可帶入'); openScenarioModal(); return; }
+  if (!sym || !state.holdings[sym]) { showToast('❌ 目前沒有持股清單可帶入'); openScenarioModal(); return; }
   fillScenarioFromHolding(sym, false);
   modal.style.display = 'flex';
   modal.classList.add('show');
@@ -4153,16 +4217,13 @@ document.addEventListener('DOMContentLoaded', () => {
   window.selectPool = function (pool) {
     document.querySelectorAll('.screen-pool-card').forEach(c => c.classList.remove('active'));
     document.querySelector('.screen-pool-card[data-pool="' + pool + '"]')?.classList.add('active');
-
     document.querySelectorAll('.screen-pool-extra').forEach(e => e.classList.remove('show'));
     if (pool === 'custom') document.getElementById('poolExtraCustom')?.classList.add('show');
     if (pool === 'range' || pool === 'allStocks') document.getElementById('poolExtraRange')?.classList.add('show');
-
     const uSel = document.getElementById('screenUniverse');
     if (uSel) { uSel.value = pool; setScreenPoolHint(); }
-
     const labels = {
-      watchlist: '自選清單', holdings: '持股庫存', union: '自選 + 持股',
+      watchlist: '追蹤清單', holdings: '持股清單', union: '追蹤 + 持股',
       custom: '指定清單', range: '指定區間', allStocks: '全台股'
     };
     const sub = document.getElementById('wizStep1Sub');
