@@ -3026,7 +3026,14 @@ async function runScreener() {
     renderScreenResults(rows, criteria, stats);
 
     var hitCount = rows.length;
-    if (status) status.textContent = wasCancelled ? '已停止' : '掃描完成｜命中 ' + hitCount + ' 檔';
+    
+    // 🎯 重點修改：在這裡將使用者勾選的條件轉換為彩色標籤，並拼接到命中字串後方
+    var tagsHtml = formatScreenCriteria(criteria).map(function(t) {
+      return '<span style="display:inline-block; margin-left:6px; padding:2px 8px; background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.3); border-radius:6px; font-size:0.7rem; color:#93c5fd; font-weight:700; transform:translateY(-1px);">' + t + '</span>';
+    }).join('');
+    
+    if (status) status.innerHTML = (wasCancelled ? '已停止' : '掃描完成｜命中 ' + hitCount + ' 檔') + tagsHtml;
+    
     if (progressBar) progressBar.style.width = '100%';
     if (progressText) progressText.textContent = wasCancelled ? '已停止' : '✅ 掃描完成';
     
@@ -3043,6 +3050,7 @@ async function runScreener() {
     setScreenerRunning(false);
   }
 }
+
 async function runDeepScan() {
   if (!window.__screenLastResult || !window.__screenLastResult.rows || window.__screenLastResult.rows.length === 0) {
     alert('基本面載入需要針對第一階段的結果進行分析，請先執行「開始篩選」！');
@@ -3060,7 +3068,6 @@ async function runDeepScan() {
   var progressMeta = document.getElementById('screenProgressMeta');
   
   window.__v3914DeepCancel = false;
-  // 🎯 修改按鈕文字
   if (deepBtn) { deepBtn.textContent = '⏹️ 停止載入'; deepBtn.classList.add('btn-stop-scan'); }
   
   var out = [];
@@ -3087,12 +3094,16 @@ async function runDeepScan() {
   snapshotScreenResults(out, criteria, stats, label);
   renderScreenResults(out, criteria, stats);
 
-  if (status) status.textContent = window.__v3914DeepCancel ? '基本面載入已停止' : '基本面載入完成｜保留 ' + out.length + ' 檔';
+  // 🎯 同樣生成彩色標籤
+  var tagsHtml = formatScreenCriteria(criteria).map(function(t) {
+    return '<span style="display:inline-block; margin-left:6px; padding:2px 8px; background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.3); border-radius:6px; font-size:0.7rem; color:#93c5fd; font-weight:700; transform:translateY(-1px);">' + t + '</span>';
+  }).join('');
+
+  if (status) status.innerHTML = (window.__v3914DeepCancel ? '基本面載入已停止' : '基本面載入完成｜保留 ' + out.length + ' 檔') + tagsHtml;
   if (progressText) progressText.textContent = window.__v3914DeepCancel ? '基本面載入已停止' : '✅ 基本面載入完成';
   if (progressBar) progressBar.style.width = '100%';
   if (progressMeta) progressMeta.textContent = '保留 ' + out.length + ' 檔';
   
-  // 🎯 完成後鎖定按鈕並改字
   if (deepBtn) { 
     deepBtn.disabled = true;
     deepBtn.textContent = window.__v3914DeepCancel ? '📊 載入基本面 (已中斷)' : '✅ 基本面載入完成'; 
@@ -3108,7 +3119,8 @@ function bindScreenerUI() {
   
   const style = document.createElement('style');
   style.innerHTML = `
-    .screen-filter-grid { display: flex !important; gap: 12px !important; flex-wrap: wrap !important; margin-bottom: 15px !important; }
+    /* 將原本覆蓋全域的網格，改為只針對頂部指示燈，恢復下方按鈕的整齊排列 */
+    .screen-indicator-wrap { display: flex !important; gap: 12px !important; flex-wrap: wrap !important; margin-bottom: 15px !important; }
     .indicator-mode {
        padding: 6px 14px !important; border-radius: 6px !important; display: inline-flex !important;
        align-items: center; justify-content: center; background: #21262d !important; color: #8b949e !important;
@@ -3147,7 +3159,6 @@ function bindScreenerUI() {
     runDeepScan();
   });
   
-  // 新增清單操作綁定
   document.getElementById('screenResultSort')?.addEventListener('change', () => renderScreenResults(_screenLastResult.rows || [], _screenLastResult.criteria || {}, _screenLastResult.stats));
   document.getElementById('screenResultLimit')?.addEventListener('change', () => renderScreenResults(_screenLastResult.rows || [], _screenLastResult.criteria || {}, _screenLastResult.stats));
   document.getElementById('screenSavedSort')?.addEventListener('change', renderScreenSaved);
@@ -3164,7 +3175,7 @@ function bindScreenerUI() {
   document.getElementById('screenAdminModal')?.addEventListener('click', function (e) { if (e.target === this) closeScreenAdminModal(); });
   setScreenerRunning(false);
   syncIndicatorLights();
-  renderScreenSaved();
+  if (typeof renderScreenSaved === 'function') renderScreenSaved();
 }
 function navigateToPage(page) {
   document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('active'); });
