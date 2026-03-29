@@ -2149,8 +2149,8 @@
   <nav id="sideNav">
     <div class="side-logo">📈 台股<span>操盤</span></div>
     <button class="side-item active" data-page="overview"><span class="icon">🏠</span>資產總覽</button>
-    <button class="side-item" data-page="market"><span class="icon">📡</span>行情追蹤</button>
-    <button class="side-item" data-page="portfolio"><span class="icon">📦</span>持股帳務</button>
+    <button class="side-item" data-page="market"><span class="icon">📡</span>追蹤清單</button>
+    <button class="side-item" data-page="portfolio"><span class="icon">📦</span>持股清單</button>
     <button class="side-item" data-page="trade"><span class="icon">💹</span>交易設定</button>
     <button class="side-item" data-page="screener"><span class="icon">🧭</span>篩選器</button>
     <button class="side-item" data-page="aiReport"><span class="icon">🤖</span>AI 診斷</button>
@@ -2238,13 +2238,13 @@
           <div style="font-size:2rem;margin-bottom:8px;">📭</div>
           <p class="muted" style="font-size:.85rem;margin-bottom:12px;">目前尚無持股</p>
           <button class="btn btn-blue" id="btnGoMarket" style="font-size:.82rem;padding:8px 18px;">
-            📡 前往行情追蹤下單 →
+            📡 前往追蹤清單下單 →
           </button>
         </div>
       </div>
     </div>
 
-    <!-- ════ PAGE 2: 行情追蹤 ════ -->
+    <!-- ════ PAGE 2: 追蹤清單 ════ -->
     <div id="page-market" class="page">
       <div class="card" style="margin-bottom:12px;">
         <div class="sec-title">🔍 股票搜尋</div>
@@ -2290,10 +2290,10 @@
       </div>
     </div>
 
-    <!-- ════ PAGE 3: 持股帳務 ════ -->
+    <!-- ════ PAGE 3: 持股清單 ════ -->
     <div id="page-portfolio" class="page">
       <div class="card" style="margin-bottom:12px;">
-        <div class="sec-title">📦 持股庫存</div>
+        <div class="sec-title">📦 持股清單</div>
         <div class="tbl-wrap">
           <table>
             <thead>
@@ -2559,11 +2559,11 @@
           <div class="screen-pool-grid" id="screenPoolGrid">
             <div class="screen-pool-card active" data-pool="watchlist" onclick="selectPool('watchlist')">
               <div class="screen-pool-icon">⭐</div>
-              <div class="screen-pool-label">自選清單</div>
+              <div class="screen-pool-label">追蹤清單</div>
             </div>
             <div class="screen-pool-card" data-pool="holdings" onclick="selectPool('holdings')">
               <div class="screen-pool-icon">📦</div>
-              <div class="screen-pool-label">持股庫存</div>
+              <div class="screen-pool-label">持股清單</div>
             </div>
             <div class="screen-pool-card" data-pool="union" onclick="selectPool('union')">
               <div class="screen-pool-icon">🔗</div>
@@ -2618,7 +2618,7 @@
             </div>
           </div>
 
-          <div class="screen-pool-hint" id="screenPoolHintText">將使用你的「自選清單」作為掃描母體，適合快速確認手上關注標的狀態。</div>
+          <div class="screen-pool-hint" id="screenPoolHintText">將使用你的「追蹤清單」作為掃描母體，適合快速確認手上關注標的狀態。</div>
           <div style="display:flex;align-items:center;justify-content:space-between;">
             <button class="screen-step-next" onclick="nextStep(2)">確認母體，下一步 →</button>
             <button class="btn" id="screenAdminEntry" style="padding:10px; background:transparent; border:1px solid rgba(255,255,255,.1); font-size:.8rem;" aria-label="管理員解鎖">🛡️</button>
@@ -2898,9 +2898,9 @@
         </div>
         <datalist id="scenarioSymbols"></datalist>
         <div style="margin-top:8px;">
-          <div class="scenario-label">持股庫存快速帶入</div>
+          <div class="scenario-label">持股清單快速帶入</div>
           <select id="scenarioHoldingSelect" class="scenario-inp">
-            <option value="">請選擇持股庫存（可自動帶入買入價與股數）</option>
+            <option value="">請選擇持股清單（可自動帶入買入價與股數）</option>
           </select>
           <div id="scenarioHoldingHint" class="symbol-inline-name" style="margin-top:6px;">
             若選擇已持有股票，系統會自動帶入均價與股數，你只需輸入賣出價即可試算。</div>
