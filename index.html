@@ -2528,8 +2528,7 @@
 
 
     <!-- ════ PAGE 5: 篩選器 (v3.10 Wizard) ════ -->
-    <div id="page-screener" class="page">
-      <!-- 簡易狀態指示燈 (Non-clickable, synced visually) -->
+<div id="page-screener" class="page">
       <div class="screen-filter-grid" style="margin-bottom:12px; pointer-events:none;">
         <div class="card screen-card indicator-mode" data-screen-filter="buyFit">
           <div class="screen-card-top"><div class="screen-card-title">適合買進</div><span class="screen-tag buy">買入</span></div>
@@ -2543,14 +2542,25 @@
         <div class="card screen-card indicator-mode" data-screen-filter="oversold">
           <div class="screen-card-top"><div class="screen-card-title">超跌反彈</div><span class="screen-tag buy">買入</span></div>
         </div>
+        <div class="card screen-card indicator-mode" data-screen-filter="foreignBuy">
+          <div class="screen-card-top"><div class="screen-card-title">外資買超</div><span class="screen-tag buy">買入</span></div>
+        </div>
+        <div class="card screen-card indicator-mode" data-screen-filter="foreignSell">
+          <div class="screen-card-top"><div class="screen-card-title">外資賣超</div><span class="screen-tag sell">賣出</span></div>
+        </div>
+        <div class="card screen-card indicator-mode" data-screen-filter="trustBuy">
+          <div class="screen-card-top"><div class="screen-card-title">投信買超</div><span class="screen-tag buy">買入</span></div>
+        </div>
+        <div class="card screen-card indicator-mode" data-screen-filter="trustSell">
+          <div class="screen-card-top"><div class="screen-card-title">投信賣超</div><span class="screen-tag sell">賣出</span></div>
+        </div>
       </div>
 
-      <!-- ── 步驟 1：選擇掃描清單 ── -->
       <div class="screen-step step-active" id="wizStep1">
         <div class="screen-step-header" onclick="toggleScreenStep(1)">
           <div class="screen-step-num" id="wizStep1Num">1</div>
           <div class="screen-step-info">
-            <div class="screen-step-title">選擇掃描清單</div>
+            <div class="screen-step-title">選擇掃描母體</div>
             <div class="screen-step-sub" id="wizStep1Sub">請選擇要從哪裡開始篩選</div>
           </div>
           <div class="screen-step-toggle">▲</div>
@@ -2584,49 +2594,30 @@
             </div>
           </div>
 
-          <!-- 指定清單輸入 -->
           <div id="poolExtraCustom" class="screen-pool-extra">
             <label class="screen-field-label">自訂代號清單</label>
             <textarea id="screenCustomList" class="inp" rows="2" placeholder="輸入代號，以逗號、空白或換行分隔，例如：2330, 2317" style="width:100%;resize:vertical;"></textarea>
           </div>
 
-          <!-- 指定區間輸入 -->
           <div id="poolExtraRange" class="screen-pool-extra">
             <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
-              <div style="flex:1;min-width:120px;">
-                <label class="screen-field-label">代號起始</label>
-                <input id="screenRangeStart" class="inp" type="number" min="1" max="9999" placeholder="例如 1101" />
-              </div>
-              <div style="flex:1;min-width:120px;">
-                <label class="screen-field-label">代號結束</label>
-                <input id="screenRangeEnd" class="inp" type="number" min="1" max="9999" placeholder="例如 9999" />
-              </div>
+              <div style="flex:1;min-width:120px;"><label class="screen-field-label">代號起始</label><input id="screenRangeStart" class="inp" type="number" min="1" max="9999" placeholder="例如 1101" /></div>
+              <div style="flex:1;min-width:120px;"><label class="screen-field-label">代號結束</label><input id="screenRangeEnd" class="inp" type="number" min="1" max="9999" placeholder="例如 9999" /></div>
             </div>
             <div style="display:flex;gap:12px;flex-wrap:wrap;">
-              <div style="flex:1;min-width:120px;">
-                <label class="screen-field-label">類別模式</label>
-                <select id="screenCategoryType" class="inp">
-                  <option value="none">不指定</option>
-                  <option value="industry">官方產業</option>
-                  <option value="concept">主流概念</option>
-                </select>
-              </div>
-              <div style="flex:1;min-width:120px;">
-                <label class="screen-field-label">類別選項</label>
-                <select id="screenCategoryValue" class="inp"><option value="">全部類別</option></select>
-              </div>
+              <div style="flex:1;min-width:120px;"><label class="screen-field-label">類別模式</label><select id="screenCategoryType" class="inp"><option value="none">不指定</option><option value="industry">官方產業</option><option value="concept">主流概念</option></select></div>
+              <div style="flex:1;min-width:120px;"><label class="screen-field-label">類別選項</label><select id="screenCategoryValue" class="inp"><option value="">全部類別</option></select></div>
             </div>
           </div>
 
           <div class="screen-pool-hint" id="screenPoolHintText">將使用你的「勾選項目」作為掃描清單。</div>
           <div style="display:flex;align-items:center;justify-content:space-between;">
-            <button class="screen-step-next" onclick="nextStep(2)">確認清單，下一步 →</button>
+            <button class="screen-step-next" onclick="nextStep(2)">確認母體，下一步 →</button>
             <button class="btn" id="screenAdminEntry" style="padding:10px; background:transparent; border:1px solid rgba(255,255,255,.1); font-size:.8rem;" aria-label="管理員解鎖">🛡️</button>
           </div>
         </div>
       </div>
 
-      <!-- ── 步驟 2：篩選條件與操作 ── -->
       <div class="screen-step" id="wizStep2">
         <div class="screen-step-header" onclick="toggleScreenStep(2)">
           <div class="screen-step-num" id="wizStep2Num">2</div>
@@ -2637,67 +2628,44 @@
           <div class="screen-step-toggle">▼</div>
         </div>
         <div class="screen-step-body" id="wizStep2Body">
-          <!-- Filter Grid -->
-          <div class="screen-filter-grid">
+          <div class="screen-filter-grid" style="grid-template-columns: repeat(4, 1fr);">
             <div class="card screen-card" data-screen-filter="buyFit" onclick="this.classList.toggle('active');updateWizFilterSub();">
-              <div class="screen-card-top"><div class="screen-card-title">適合買進</div><span class="screen-tag buy">買入</span></div>
-              <div class="screen-card-desc">收盤站上 MA20，且綜合評分偏高。</div>
+              <div class="screen-card-top"><div class="screen-card-title">適合買進</div><span class="screen-tag buy">買入</span></div><div class="screen-card-desc">收盤站上 MA20，且綜合評分偏高。</div>
             </div>
             <div class="card screen-card" data-screen-filter="sellWatch" onclick="this.classList.toggle('active');updateWizFilterSub();">
-              <div class="screen-card-top"><div class="screen-card-title">考慮賣出</div><span class="screen-tag sell">賣出</span></div>
-              <div class="screen-card-desc">收盤跌破 MA20，且綜合評分偏弱。</div>
+              <div class="screen-card-top"><div class="screen-card-title">考慮賣出</div><span class="screen-tag sell">賣出</span></div><div class="screen-card-desc">收盤跌破 MA20，且綜合評分偏弱。</div>
             </div>
             <div class="card screen-card" data-screen-filter="volumeSpike" onclick="this.classList.toggle('active');updateWizFilterSub();">
-              <div class="screen-card-top"><div class="screen-card-title">量能異動</div><span class="screen-tag filter">篩選</span></div>
-              <div class="screen-card-desc">成交量大於 5 日均量 1.5 倍。</div>
+              <div class="screen-card-top"><div class="screen-card-title">量能異動</div><span class="screen-tag filter">篩選</span></div><div class="screen-card-desc">成交量大於 5 日均量 1.5 倍。</div>
             </div>
             <div class="card screen-card" data-screen-filter="oversold" onclick="this.classList.toggle('active');updateWizFilterSub();">
-              <div class="screen-card-top"><div class="screen-card-title">超跌反彈</div><span class="screen-tag buy">買入</span></div>
-              <div class="screen-card-desc">RSI(14) 小於 30，觀察是否出現反彈。</div>
+              <div class="screen-card-top"><div class="screen-card-title">超跌反彈</div><span class="screen-tag buy">買入</span></div><div class="screen-card-desc">RSI(14) 小於 30，觀察是否出現反彈。</div>
+            </div>
+            <div class="card screen-card" data-screen-filter="foreignBuy" onclick="this.classList.toggle('active');updateWizFilterSub();">
+              <div class="screen-card-top"><div class="screen-card-title" style="font-size:1.1rem;">外資買超 ❔</div><span class="screen-tag buy">買入</span></div><div class="screen-card-desc">最新真實籌碼(需資料源)</div>
+            </div>
+            <div class="card screen-card" data-screen-filter="foreignSell" onclick="this.classList.toggle('active');updateWizFilterSub();">
+              <div class="screen-card-top"><div class="screen-card-title" style="font-size:1.1rem;">外資賣超 ❔</div><span class="screen-tag sell">賣出</span></div><div class="screen-card-desc">最新真實籌碼(需資料源)</div>
+            </div>
+            <div class="card screen-card" data-screen-filter="trustBuy" onclick="this.classList.toggle('active');updateWizFilterSub();">
+              <div class="screen-card-top"><div class="screen-card-title" style="font-size:1.1rem;">投信買超 ❔</div><span class="screen-tag buy">買入</span></div><div class="screen-card-desc">最新真實籌碼(需資料源)</div>
+            </div>
+            <div class="card screen-card" data-screen-filter="trustSell" onclick="this.classList.toggle('active');updateWizFilterSub();">
+              <div class="screen-card-top"><div class="screen-card-title" style="font-size:1.1rem;">投信賣超 ❔</div><span class="screen-tag sell">賣出</span></div><div class="screen-card-desc">最新真實籌碼(需資料源)</div>
             </div>
           </div>
 
-          <!-- Advanced Panel Toggle -->
-          <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
-            <div id="btnToggleScreenAdv" class="screen-adv-toggle">⚙ 展開進階條件 ▼</div>
-          </div>
-          
-          <div class="screen-adv-panel" id="screenAdvPanel">
-            <div class="screen-adv-grid">
-              <div><label class="screen-field-label">綜合分數最低</label><input id="screenMinTotal" class="inp" type="number" min="0" max="100" placeholder="例如 65" /></div>
-              <div><label class="screen-field-label">基本面分數最低</label><input id="screenMinFund" class="inp" type="number" min="0" max="100" placeholder="例如 60" /></div>
-              <div><label class="screen-field-label">RSI 上限</label><input id="screenMaxRsi" class="inp" type="number" min="0" max="100" placeholder="例如 30" /></div>
-              <div><label class="screen-field-label">量比最低</label><input id="screenMinVolRatio" class="inp" type="number" step="0.1" min="0" placeholder="例如 1.5" /></div>
-              <div><label class="screen-field-label">月營收年增最低%</label><input id="screenMinRevYoY" class="inp" type="number" step="0.1" placeholder="例如 10" /></div>
-              <div><label class="screen-field-label">近四季 EPS 最低</label><input id="screenMinEPS" class="inp" type="number" step="0.01" placeholder="例如 8" /></div>
-              <div>
-                <label class="screen-field-label">結果排序</label>
-                <select id="screenSortBy" class="inp">
-                  <option value="totalDesc">綜合分數高到低</option>
-                  <option value="rsiAsc">RSI 低到高</option>
-                  <option value="volDesc">量比高到低</option>
-                  <option value="revDesc">營收年增高到低</option>
-                </select>
-              </div>
-              <div><label class="screen-field-label">最多顯示筆數</label><input id="screenLimit" class="inp" type="number" min="5" max="100" step="1" value="20" /></div>
-            </div>
-          </div>
-
-          <!-- Action Buttons -->
-          <div class="screen-action-row" style="margin-top: 6px;">
+          <div class="screen-action-row" style="margin-top: 12px;">
             <button class="btn btn-blue" id="btnRunScreener" style="padding:12px 24px;font-size:.96rem;">⚡ 開始篩選</button>
-            <button class="btn" id="btnRunDeepScan" disabled style="padding:12px 22px;background:#4b5563;color:#9ca3af;cursor:not-allowed;">🧠 深度篩選 (條件不足)</button>
-            <button class="btn" id="btnExportScreenPdf" style="padding:12px 22px;">🧾 匯出 PDF</button>
-            <button class="btn" id="btnClearScreener" style="padding:12px 22px;">🗑️ 一鍵清除</button>
+            <button class="btn" id="btnRunDeepScan" disabled style="padding:12px 22px;background:#4b5563;color:#9ca3af;cursor:not-allowed;">📊 載入基本面 (條件不足)</button>
+            <button class="btn" id="btnClearScreener" style="padding:12px 22px;">🗑️ 一鍵清除條件</button>
           </div>
         </div>
       </div>
 
-      <!-- hidden old fields (kept for compatibility in app.js for now) -->
       <input type="hidden" id="screenUniverse" value="watchlist" />
       <button id="btnStopScreener" style="display:none;"></button>
 
-      <!-- ── 掃描進度卡 ── -->
       <div id="screenProgressCard" class="screen-progress-card">
         <div class="screen-progress-header">
           <div>
@@ -2711,24 +2679,33 @@
         </div>
       </div>
 
-      <!-- ── 篩選結果 ── -->
       <div class="card" id="screenResultCard" style="margin-bottom:12px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-          <div class="sec-title" style="margin:0;">⭐ 篩選結果</div>
-          <div id="screenRunStatus" class="muted" style="font-size:.78rem;">請先依步驟選股票池與條件，再按「開始篩選」。</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="sec-title" style="margin:0;">📄 篩選結果</div>
+            <div id="screenRunStatus" class="muted" style="font-size:.78rem;">尚未開始篩選。</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+             <select id="screenResultSort" class="inp" style="padding:4px 8px;font-size:.8rem;width:auto;">
+                <option value="totalDesc">綜合分數高到低</option>
+                <option value="rsiAsc">RSI 低到高</option>
+                <option value="volDesc">量比高到低</option>
+                <option value="revDesc">營收年增高到低</option>
+             </select>
+             <select id="screenResultLimit" class="inp" style="padding:4px 8px;font-size:.8rem;width:auto;">
+                <option value="9999">筆數不限</option>
+                <option value="50">最多 50 筆</option>
+                <option value="20">最多 20 筆</option>
+                <option value="10">最多 10 筆</option>
+             </select>
+          </div>
         </div>
-        <div id="screenResultSummary" class="screen-stat" style="margin:10px 0 12px;display:none;"></div>
+        <div id="screenResultSummary" class="screen-stat" style="margin:0 0 12px;display:none;"></div>
         <div class="tbl-wrap">
           <table>
             <thead>
               <tr>
-                <th>代號 / 名稱</th>
-                <th>綜合分數</th>
-                <th>技術 / 基本面</th>
-                <th>現價 / MA20</th>
-                <th>RSI / 量比</th>
-                <th>月營收年增 / EPS</th>
-                <th></th>
+                <th>代號 / 名稱</th><th>綜合分數</th><th>技術 / 基本面</th><th>現價 / MA20</th><th>RSI / 量比</th><th>月營收年增 / EPS</th><th>操作</th>
               </tr>
             </thead>
             <tbody id="screenResultBody"></tbody>
@@ -2737,13 +2714,32 @@
         <div id="screenResultEmpty" class="screen-empty">尚無篩選結果</div>
       </div>
 
-      <!-- ── 篩選紀錄 ── -->
-      <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-          <div class="sec-title" style="margin:0;">🕘 篩選紀錄</div>
-          <button class="btn-xs btn-xs-gray" id="btnClearScreenHistory">清除紀錄</button>
+      <div class="card" id="screenSavedCard">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="sec-title" style="margin:0;">🕘 篩選紀錄 (個人收藏)</div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;">
+             <select id="screenSavedSort" class="inp" style="padding:4px 8px;font-size:.8rem;width:auto;">
+                <option value="totalDesc">綜合分數高到低</option>
+                <option value="rsiAsc">RSI 低到高</option>
+                <option value="volDesc">量比高到低</option>
+             </select>
+             <button class="btn-xs btn-xs-gray" id="btnExportSavedPdf">🧾 匯出 PDF</button>
+             <button class="btn-xs btn-xs-red" id="btnClearSaved">清空紀錄</button>
+          </div>
         </div>
-        <div id="screenHistoryList" style="margin-top:12px;"></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>代號 / 名稱</th><th>綜合分數</th><th>技術 / 基本面</th><th>現價 / MA20</th><th>RSI / 量比</th><th>月營收年增 / EPS</th><th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="screenSavedBody"></tbody>
+          </table>
+        </div>
+        <div id="screenSavedEmpty" class="screen-empty">尚無儲存的篩選紀錄，請在上方結果中點擊「⭐紀錄」加入。</div>
       </div>
     </div>
     <!-- ════ PAGE 6: AI 診斷報告 (v3.3) ════ -->
